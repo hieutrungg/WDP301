@@ -1,3 +1,5 @@
+import mongoose from "mongoose";
+
 const accountSchema = new mongoose.Schema({
   username: {
     type: String,
@@ -14,6 +16,7 @@ const accountSchema = new mongoose.Schema({
   passwordHash: {
     type: String,
     required: true,
+    select: false,
   },
 
   phone: String,
@@ -39,4 +42,13 @@ const accountSchema = new mongoose.Schema({
     dateOfBirth: Date,
     address: String,
   },
+
+  employeeProfile: {
+    branchId: mongoose.Schema.Types.ObjectId,
+    position: String,
+  },
+}, {
+  timestamps: true,
 });
+
+export const Account = mongoose.model("Account", accountSchema);

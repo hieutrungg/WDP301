@@ -1,11 +1,34 @@
 import { useState } from 'react'
-import { ChevronDown, MapPin, Menu, Search, UserRound, X } from 'lucide-react'
+import { ChevronDown, LogOut, MapPin, Menu, Search, X } from 'lucide-react'
 import AppLogo from './AppLogo'
+import { Link, useNavigate } from 'react-router'
+import { toast } from 'sonner'
+import { useAuth } from '../../features/auth/hooks/useAuth'
 
 const navItems = ['Home', 'Movies', 'Showtimes', 'Theatres & Tickets', 'Offers']
 
 function Header() {
   const [menuOpen, setMenuOpen] = useState(false)
+  const [isLoggingOut, setIsLoggingOut] = useState(false)
+  const { account, initialized, isAuthenticated, logout } = useAuth()
+  const navigate = useNavigate()
+  const displayName = account?.username || account?.email || ''
+  const avatarLabel = displayName.charAt(0).toUpperCase()
+
+  const handleLogout = async () => {
+    setIsLoggingOut(true)
+
+    try {
+      await logout()
+      setMenuOpen(false)
+      toast.success('Signed out successfully')
+      navigate('/', { replace: true })
+    } catch {
+      toast.error('Unable to sign out. Please try again.')
+    } finally {
+      setIsLoggingOut(false)
+    }
+  }
 
   return (
     <header className="fixed inset-x-0 top-0 z-50 border-b border-white/5 bg-surface/90 backdrop-blur-xl">
@@ -37,15 +60,40 @@ function Header() {
             <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-on-surface-variant" />
             <input type="search" placeholder="Search movies, actors..." className="w-full rounded-lg border-0 bg-surface-container-low py-2 pl-9 pr-3 text-xs text-on-surface outline-none placeholder:text-on-surface-variant/60 focus:bg-surface-container-high" />
           </label>
-          <a href="/login" className="hidden rounded-lg bg-primary-container px-4 py-2 text-xs font-bold text-white shadow-crimson transition-opacity hover:opacity-90 md:inline-flex">
-            Sign In
-          </a>
-          <a href="#register" className="hidden rounded-lg bg-surface-container px-4 py-2 text-xs text-on-surface transition-colors hover:bg-surface-container-high xl:inline-flex">
-            Register
-          </a>
-          <span className="hidden size-8 items-center justify-center rounded-full bg-primary text-on-primary md:flex">
-            <UserRound className="size-4" />
-          </span>
+          {initialized && !isAuthenticated && (
+            <>
+              <Link to="/login" className="hidden rounded-lg bg-primary-container px-4 py-2 text-xs font-bold text-white shadow-crimson transition-opacity hover:opacity-90 md:inline-flex">
+                Sign In
+              </Link>
+              <Link to="/register" className="hidden rounded-lg bg-surface-container px-4 py-2 text-xs text-on-surface transition-colors hover:bg-surface-container-high xl:inline-flex">
+                Register
+              </Link>
+            </>
+          )}
+          {initialized && isAuthenticated && (
+            <div className="hidden items-center gap-2 md:flex">
+              <div className="flex min-w-0 items-center gap-2 rounded-lg bg-surface-container px-2.5 py-1.5">
+                <span className="grid size-8 shrink-0 place-items-center rounded-full bg-primary text-sm font-bold text-on-primary">
+                  {avatarLabel}
+                </span>
+                <span className="max-w-32 truncate text-xs font-semibold text-on-surface xl:max-w-44">
+                  {displayName}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={handleLogout}
+                disabled={isLoggingOut}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-surface-container px-3 py-2 text-xs text-on-surface transition-colors hover:bg-surface-container-high disabled:cursor-wait disabled:opacity-60"
+              >
+                <LogOut className="size-4" />
+                {isLoggingOut ? 'Signing out...' : 'Logout'}
+              </button>
+            </div>
+          )}
+          {!initialized && (
+            <span className="hidden size-8 animate-pulse rounded-full bg-surface-container-high md:block" />
+          )}
           <button type="button" onClick={() => setMenuOpen((open) => !open)} className="grid size-10 place-items-center rounded-lg bg-surface-container text-on-surface lg:hidden" aria-label="Toggle navigation" aria-expanded={menuOpen}>
             {menuOpen ? <X className="size-5" /> : <Menu className="size-5" />}
           </button>
@@ -60,10 +108,34 @@ function Header() {
                 {item}
               </a>
             ))}
-            <div className="mt-2 flex gap-2 border-t border-white/5 pt-3">
-              <a href="/login" className="flex-1 rounded-lg bg-primary-container px-4 py-2.5 text-center text-sm font-bold text-white">Sign In</a>
-              <a href="#register" className="flex-1 rounded-lg bg-surface-container-high px-4 py-2.5 text-center text-sm text-on-surface">Register</a>
-            </div>
+            {initialized && !isAuthenticated && (
+              <div className="mt-2 flex gap-2 border-t border-white/5 pt-3">
+                <Link to="/login" onClick={() => setMenuOpen(false)} className="flex-1 rounded-lg bg-primary-container px-4 py-2.5 text-center text-sm font-bold text-white">Sign In</Link>
+                <Link to="/register" onClick={() => setMenuOpen(false)} className="flex-1 rounded-lg bg-surface-container-high px-4 py-2.5 text-center text-sm text-on-surface">Register</Link>
+              </div>
+            )}
+            {initialized && isAuthenticated && (
+              <div className="mt-2 grid gap-2 border-t border-white/5 pt-3">
+                <div className="flex items-center gap-3 rounded-lg bg-surface-container-high px-3 py-2.5">
+                  <span className="grid size-9 shrink-0 place-items-center rounded-full bg-primary text-sm font-bold text-on-primary">
+                    {avatarLabel}
+                  </span>
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-on-surface">{displayName}</p>
+                    <p className="truncate text-xs text-on-surface-variant">{account.email}</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  disabled={isLoggingOut}
+                  className="flex items-center justify-center gap-2 rounded-lg bg-primary-container px-4 py-2.5 text-sm font-bold text-white disabled:cursor-wait disabled:opacity-60"
+                >
+                  <LogOut className="size-4" />
+                  {isLoggingOut ? 'Signing out...' : 'Logout'}
+                </button>
+              </div>
+            )}
           </nav>
         </div>
       )}
