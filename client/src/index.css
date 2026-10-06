@@ -1,0 +1,88 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --color-background: #121317;
+  --color-surface: #121317;
+  --color-surface-container-lowest: #0d0e12;
+  --color-surface-container-low: #1a1b20;
+  --color-surface-container: #1f1f24;
+  --color-surface-container-high: #292a2e;
+  --color-surface-container-highest: #343439;
+  --color-surface-variant: #343439;
+  --color-on-surface: #e3e2e8;
+  --color-on-surface-variant: #e9bcb6;
+  --color-primary: #ffb4aa;
+  --color-on-primary: #690003;
+  --color-primary-container: #e50914;
+  --color-on-primary-container: #fff7f6;
+  --color-secondary: #ffd65b;
+  --color-secondary-container: #e7b900;
+  --color-on-secondary-container: #5f4a00;
+  --color-tertiary: #c3c6d8;
+  --color-tertiary-fixed: #dfe1f5;
+  --color-tertiary-container: #6e7283;
+  --color-on-tertiary-container: #faf8ff;
+  --color-error-container: #93000a;
+  --color-on-error-container: #ffdad6;
+  --font-sans: 'Inter', sans-serif;
+  --font-heading: 'Plus Jakarta Sans', sans-serif;
+  --shadow-crimson: 0 0 16px rgba(229, 9, 20, 0.4);
+  --shadow-crimson-strong: 0 0 24px rgba(229, 9, 20, 0.5);
+}
+
+@layer base {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  html {
+    scroll-behavior: smooth;
+    background: #121317;
+  }
+
+  body {
+    margin: 0;
+    min-width: 320px;
+    min-height: 100vh;
+    overflow-x: hidden;
+    background: #121317;
+    color: #e3e2e8;
+    font-family: 'Inter', sans-serif;
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  button,
+  input {
+    font: inherit;
+  }
+
+  button,
+  a {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  a {
+    text-decoration: none;
+  }
+
+  ::selection {
+    background: rgba(229, 9, 20, 0.65);
+    color: white;
+  }
+}
+
+@layer utilities {
+  .scrollbar-none {
+    scrollbar-width: none;
+  }
+
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
+}
