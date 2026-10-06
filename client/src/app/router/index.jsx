@@ -2,6 +2,8 @@ import { BrowserRouter, Route, Routes } from 'react-router'
 import PublicLayout from '../../layouts/PublicLayout'
 import LandingPage from '../../pages/public/LandingPage'
 import LoginPage from '../../pages/public/LoginPage'
+import RegisterPage from '../../pages/public/RegisterPage'
+import VerifyEmailPage from '../../pages/public/VerifyEmailPage'
 
 function AppRouter() {
   return (
@@ -10,6 +12,8 @@ function AppRouter() {
         <Route element={<PublicLayout />}>
           <Route index element={<LandingPage />} />
           <Route path="login" element={<LoginPage />} />
+          <Route path="register" element={<RegisterPage />} />
+          <Route path="verify-email" element={<VerifyEmailPage />} />
         </Route>
       </Routes>
     </BrowserRouter>

@@ -14,3 +14,20 @@ export const logoutRequest = async () => {
   const response = await httpClient.post('/auth/logout')
   return response.data
 }
+
+export const registerRequest = async (account) => {
+  const payload = { ...account }
+  delete payload.termsAccepted
+  const response = await httpClient.post('/auth/register', payload)
+  return response.data
+}
+
+export const verifyEmailRequest = async (verification) => {
+  const response = await httpClient.post('/auth/verify-email', verification)
+  return response.data
+}
+
+export const resendVerificationRequest = async (email) => {
+  const response = await httpClient.post('/auth/resend-verification', { email })
+  return response.data
+}
