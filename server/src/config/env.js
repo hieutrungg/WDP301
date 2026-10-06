@@ -28,4 +28,22 @@ export const env = {
   get isProduction() {
     return process.env.NODE_ENV === "production";
   },
+  get isTest() {
+    return process.env.NODE_ENV === "test";
+  },
+  get emailHost() {
+    return process.env.EMAIL_HOST;
+  },
+  get emailPort() {
+    return Number(process.env.EMAIL_PORT) || 587;
+  },
+  get emailUser() {
+    return process.env.EMAIL_USER;
+  },
+  get emailPass() {
+    return process.env.EMAIL_PASS;
+  },
+  get emailFrom() {
+    return process.env.EMAIL_FROM;
+  },
 };

@@ -4,7 +4,9 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "node --test --test-concurrency=1",
+    "lint": "eslint src test",
+    "lint:auth": "eslint src/modules/auth src/modules/account src/modules/role-permission src/config src/middlewares src/app.js src/utils test",
     "dev": "nodemon src/server.js",
     "start": "node src/server.js"
   },
@@ -22,11 +24,14 @@
     "helmet": "^8.3.0",
     "jsonwebtoken": "^9.0.3",
     "mongoose": "^9.11.0",
+    "nodemailer": "^10.0.15",
     "zod": "^4.6.5"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "eslint": "^10.12.0",
     "eslint-config-prettier": "^10.1.8",
+    "globals": "^17.13.0",
     "nodemon": "^3.1.14",
     "prettier": "^3.9.9"
   }

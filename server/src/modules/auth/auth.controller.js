@@ -40,3 +40,37 @@ export const logout = (_req, res) => {
     message: "Signed out successfully",
   });
 };
+
+export const register = async (req, res, next) => {
+  try {
+    const data = await authService.register(req.body);
+    res.status(201).json({
+      success: true,
+      message: "Account created. Check your email for the verification code.",
+      data,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const verifyEmail = async (req, res, next) => {
+  try {
+    await authService.verifyEmail(req.body);
+    res.json({ success: true, message: "Email verified successfully" });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const resendVerification = async (req, res, next) => {
+  try {
+    await authService.resendVerification(req.body);
+    res.json({
+      success: true,
+      message: "If the account is awaiting verification, a new code has been sent.",
+    });
+  } catch (error) {
+    next(error);
+  }
+};
