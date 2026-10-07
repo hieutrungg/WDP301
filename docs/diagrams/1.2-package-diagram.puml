@@ -1,0 +1,67 @@
+@startuml
+title Cinema Management System - Proposed Package Dependencies
+left to right direction
+skinparam packageStyle rectangle
+skinparam shadowing false
+
+package "server/src" {
+  package "modules/<module>" {
+    package "api/http" as Api
+    package "application" as Application
+    package "domain" as Domain
+    package "infrastructure" as Infrastructure
+    Api --> Application
+    Application --> Domain
+    Infrastructure --> Application : implements ports
+    Infrastructure --> Domain : maps/persists
+  }
+
+  package "shared" {
+    package "kernel" as Kernel
+    package "api" as SharedApi
+    package "infrastructure" as SharedInfra
+  }
+  Api --> SharedApi
+  Domain --> Kernel
+  Application --> Kernel
+  Infrastructure --> SharedInfra
+  SharedApi --> Kernel
+  SharedInfra --> Kernel
+  package "composition root" as Bootstrap
+  Bootstrap ..> Api : wire
+  Bootstrap ..> Infrastructure : wire
+}
+
+package "client/src" {
+  package "app" as ClientApp
+  package "features/<feature>" as Feature {
+    package "pages" as Pages
+    package "ui" as FeatureUi
+    package "model" as Model
+    package "api" as FeatureApi
+    Pages --> FeatureUi
+    Pages --> Model
+    Model --> FeatureApi
+  }
+  package "components/ui" as Ui
+  package "lib" as Lib
+  package "layouts" as Layouts
+  ClientApp --> Pages
+  ClientApp --> Layouts
+  FeatureUi --> Ui
+  FeatureApi --> Lib
+}
+
+Api ..> FeatureApi : HTTPS / JSON
+
+note bottom of Domain
+Framework-free.
+Owns aggregates, policies,
+repository ports and domain events.
+end note
+
+note bottom of Infrastructure
+Never imported by another module.
+end note
+@enduml
+

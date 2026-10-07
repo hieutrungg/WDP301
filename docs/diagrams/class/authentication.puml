@@ -1,0 +1,75 @@
+@startuml
+title Authentication
+skinparam classAttributeIconSize 0
+interface AccountRepository {
+  +findByLogin(login: String): Account?
+  +existsByEmailOrUsername(email: Email, username: String): boolean
+  +save(account: Account): void
+}
+interface VerificationTokenRepository {
+  +save(token: EmailVerificationToken): void
+  +findActiveByDigest(digest: String): EmailVerificationToken?
+}
+interface PasswordHasher {
++hash(raw: String): String
++verify(raw: String, hash: String): boolean
+}
+interface AccessTokenIssuer {
++issue(accountId: AccountId, authorities: Set<String>): TokenPair
+}
+interface NotificationPort {
++sendVerification(email: Email, otp: String): void
+}
+interface Clock {
++now(): Instant
+}
+class AuthController <<api>>
+class RegisterAccount <<application>> {
++execute(cmd: RegisterAccountCommand): AccountId
+}
+class AuthenticateAccount <<application>> {
++execute(cmd: LoginCommand): TokenPair
+}
+class VerifyEmail <<application>> {
++execute(cmd: VerifyEmailCommand): void
+}
+class ResetPassword <<application>> {
++execute(cmd: ResetPasswordCommand): void
+}
+class Account <<aggregate>> {
+  -id: AccountId
+  -username: String
+  -email: Email
+  -passwordHash: String
+  -status: AccountStatus
+  +activate(): void
+  +ensureCanAuthenticate(): void
+  +changePassword(newHash: String): void
+}
+class EmailVerificationToken <<entity>> {
+  -digest: String
+  -expiresAt: Instant
+  -usedAt: Instant?
+  +consume(now: Instant): void
+}
+AuthController --> RegisterAccount
+AuthController --> AuthenticateAccount
+AuthController --> VerifyEmail
+AuthController --> ResetPassword
+RegisterAccount --> AccountRepository
+RegisterAccount --> VerificationTokenRepository
+RegisterAccount --> PasswordHasher
+RegisterAccount --> NotificationPort
+AuthenticateAccount --> AccountRepository
+AuthenticateAccount --> PasswordHasher
+AuthenticateAccount --> AccessTokenIssuer
+VerifyEmail --> VerificationTokenRepository
+VerifyEmail --> AccountRepository
+VerifyEmail --> Clock
+ResetPassword --> AccountRepository
+ResetPassword --> PasswordHasher
+Account "1" *-- "0..*" EmailVerificationToken
+@enduml
+
+
+

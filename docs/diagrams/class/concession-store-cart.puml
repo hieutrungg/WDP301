@@ -1,0 +1,84 @@
+@startuml
+title Concession Store and Cart
+skinparam classAttributeIconSize 0
+class ConcessionController <<api>>
+class ConcessionCatalogQuery <<application>> {
++menu(branchId: BranchId): ConcessionMenuView
+}
+class CartApplicationService <<application>> {
++addItem(cartId: CartId, cmd: AddCartItem): CartView
++changeQuantity(cartId: CartId, lineId: LineId, qty: int): CartView
++remove(cartId: CartId, lineId: LineId): CartView
+}
+class CheckoutConcessionCart <<application>> {
++execute(cmd: CheckoutCartCommand): OrderId
+}
+interface CartRepository {
++findById(id: CartId): ShoppingCart?
++save(cart: ShoppingCart): void
+}
+interface ConcessionOrderRepository {
++save(order: ConcessionOrder): void
+}
+interface ConcessionCatalogReadPort {
++menu(branchId: BranchId): ConcessionMenuView
++snapshot(productId: ProductId): ProductSnapshot
+}
+interface InventoryReservationPort {
++reserve(branchId: BranchId, lines: List<OrderLine>): ReservationId
++release(id: ReservationId): void
+}
+class ShoppingCart <<aggregate>> {
+-id: CartId
+-ownerId: AccountId
+-branchId: BranchId
+-lines: List<CartLine>
++add(snapshot: ProductSnapshot, qty: int): void
++changeQuantity(lineId: LineId, qty: int): void
++remove(lineId: LineId): void
++checkout(): List<OrderLine>
+}
+class CartLine <<entity>> {
+-id: LineId
+-product: ProductSnapshot
+-quantity: int
++subtotal(): Money
+}
+class ProductSnapshot <<value object>> {
+-productId: ProductId
+-type: ProductType
+-name: String
+-unitPrice: Money
+}
+class ConcessionOrder <<aggregate>> {
+-id: OrderId
+-customerId: AccountId
+-branchId: BranchId
+-lines: List<OrderLine>
+-total: Money
+-status: OrderStatus
++place(reservationId: ReservationId): void
++markPaid(paymentId: PaymentId): void
++cancel(): void
+}
+class OrderLine <<value object>> {
+-product: ProductSnapshot
+-quantity: int
+-lineTotal: Money
+}
+ConcessionController --> ConcessionCatalogQuery
+ConcessionController --> CartApplicationService
+ConcessionController --> CheckoutConcessionCart
+CartApplicationService --> CartRepository
+CartApplicationService --> ConcessionCatalogReadPort
+CheckoutConcessionCart --> CartRepository
+CheckoutConcessionCart --> InventoryReservationPort
+CheckoutConcessionCart --> ConcessionOrderRepository
+ShoppingCart *-- "0..*" CartLine
+CartLine *-- ProductSnapshot
+ConcessionOrder *-- "1..*" OrderLine
+OrderLine *-- ProductSnapshot
+@enduml
+
+
+

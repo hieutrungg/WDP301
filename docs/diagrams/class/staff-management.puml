@@ -1,0 +1,82 @@
+@startuml
+title Staff Management
+skinparam classAttributeIconSize 0
+class StaffController <<api>>
+class ShiftController <<api>>
+class ProvisionStaffAccount <<application>> {
++execute(cmd: ProvisionStaffCommand, actor: AccountId): EmployeeId
+}
+class ShiftQueryService <<application>> {
++dashboard(query: ShiftDashboardQuery): ShiftDashboard
++search(query: ShiftSearchQuery): ShiftPage
+}
+class ReviewShift <<application>> {
++execute(cmd: ReviewShiftCommand, manager: AccountId): void
+}
+interface IdentityProvisioningPort {
++createStaffIdentity(identity: StaffIdentity, roles: Set<RoleId>): AccountId
+}
+interface BranchDirectoryPort {
++requireActive(id: BranchId): BranchSummary
+}
+interface RoleCatalogPort {
++requireStaffRoles(ids: Set<RoleId>): Set<RoleSummary>
+}
+interface EmployeeRepository {
++findById(id: EmployeeId): EmployeeProfile?
++save(employee: EmployeeProfile): void
+}
+interface StaffShiftRepository {
++findById(id: ShiftId): StaffShift?
++save(shift: StaffShift): void
+}
+interface ShiftReadPort {
++dashboard(query: ShiftDashboardQuery): ShiftDashboard
++search(query: ShiftSearchQuery): ShiftPage
+}
+interface AuditPort {
++record(event: AuditEvent): void
+}
+class EmployeeProfile <<aggregate>> {
+-id: EmployeeId
+-accountId: AccountId
+-branchId: BranchId
+-fullName: String
+-position: Position
+-status: EmployeeStatus
++transferTo(branchId: BranchId): void
++changeStatus(status: EmployeeStatus): void
+}
+class StaffShift <<aggregate>> {
+-id: ShiftId
+-employeeId: EmployeeId
+-branchId: BranchId
+-period: TimeInterval
+-station: String
+-status: ShiftStatus
+-review: ShiftReview?
++complete(): void
++reviewBy(managerId: AccountId, note: String, at: Instant): void
+}
+class ShiftReview <<value object>> {
+-managerId: AccountId
+-reviewedAt: Instant
+-note: String
+}
+StaffController --> ProvisionStaffAccount
+ShiftController --> ShiftQueryService
+ShiftController --> ReviewShift
+ProvisionStaffAccount --> IdentityProvisioningPort
+ProvisionStaffAccount --> BranchDirectoryPort
+ProvisionStaffAccount --> RoleCatalogPort
+ProvisionStaffAccount --> EmployeeRepository
+ProvisionStaffAccount --> AuditPort
+ShiftQueryService --> ShiftReadPort
+ReviewShift --> StaffShiftRepository
+ReviewShift --> AuditPort
+EmployeeProfile "1" <-- "0..*" StaffShift
+StaffShift *-- "0..1" ShiftReview
+@enduml
+
+
+

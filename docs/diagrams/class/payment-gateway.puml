@@ -1,0 +1,64 @@
+@startuml
+title Payment Gateway
+skinparam classAttributeIconSize 0
+class PaymentController <<api>>
+class PaymentWebhookController <<api>>
+class PaymentExpiryJob <<infrastructure job>>
+class InitiatePayment <<application>> {
++execute(cmd: InitiatePaymentCommand): PaymentRedirect
+}
+class HandlePaymentWebhook <<application>> {
++execute(envelope: SignedWebhook): void
+}
+class ExpirePayments <<application>> {
++execute(now: Instant): int
+}
+interface PaymentRepository {
++findById(id: PaymentId): Payment?
++findExpired(now: Instant): List<Payment>
++save(payment: Payment): void
+}
+interface PaymentGatewayPort {
++createPayment(request: GatewayPaymentRequest): GatewayPayment
++verifyWebhook(envelope: SignedWebhook): GatewayEvent
++refund(request: GatewayRefundRequest): GatewayRefund
+}
+interface IdempotencyStore {
++claim(key: String): boolean
++complete(key: String): void
+}
+interface PaymentEventPublisher {
++publish(event: PaymentEvent): void
+}
+class Payment <<aggregate>> {
+-id: PaymentId
+-payableRef: PayableRef
+-amount: Money
+-status: PaymentStatus
+-gatewayReference: String?
+-expiresAt: Instant
++attachGateway(reference: String): void
++succeed(reference: String, paidAt: Instant): void
++fail(reason: String): void
++expire(now: Instant): void
+}
+class PayableRef <<value object>> {
+-type: PayableType
+-id: String
+}
+PaymentController --> InitiatePayment
+PaymentWebhookController --> HandlePaymentWebhook
+PaymentExpiryJob --> ExpirePayments
+InitiatePayment --> PaymentRepository
+InitiatePayment --> PaymentGatewayPort
+HandlePaymentWebhook --> PaymentGatewayPort
+HandlePaymentWebhook --> IdempotencyStore
+HandlePaymentWebhook --> PaymentRepository
+HandlePaymentWebhook --> PaymentEventPublisher
+ExpirePayments --> PaymentRepository
+ExpirePayments --> PaymentEventPublisher
+Payment *-- PayableRef
+@enduml
+
+
+

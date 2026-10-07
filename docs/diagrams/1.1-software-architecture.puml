@@ -1,0 +1,86 @@
+@startuml
+title Cinema Management System - Proposed Software Architecture
+left to right direction
+skinparam componentStyle rectangle
+skinparam shadowing false
+skinparam packageStyle rectangle
+
+actor Guest
+actor Customer
+actor Staff
+actor Manager
+actor Admin
+
+package "Client" {
+  [React SPA\nfeature UI] as SPA
+  [HTTP client / query cache] as HttpClient
+  SPA --> HttpClient
+}
+
+package "Express Modular Monolith" {
+  [HTTP routes & controllers] as API
+  [AuthN/AuthZ middleware] as Security
+  [Application use cases\ncommands and queries] as App
+  [Domain model\naggregates, policies, events] as Domain
+  interface "Repository ports" as RepoPorts
+  interface "PaymentGatewayPort" as PaymentPort
+  interface "NotificationPort" as NotifyPort
+  interface "ReportExporterPort" as ExportPort
+  [Mongoose repositories] as Persistence
+  [Payment gateway adapter] as PaymentAdapter
+  [Email/SMS adapter] as NotifyAdapter
+  [Export adapters] as ExportAdapter
+  [Scheduled job adapters] as Jobs
+  [Composition root] as Bootstrap
+
+  API --> App : invoke use case
+  Security ..> API : guard request
+  App --> Domain : execute behavior
+  App --> RepoPorts
+  App --> PaymentPort
+  App --> NotifyPort
+  App --> ExportPort
+  Persistence ..|> RepoPorts
+  PaymentAdapter ..|> PaymentPort
+  NotifyAdapter ..|> NotifyPort
+  ExportAdapter ..|> ExportPort
+  Jobs --> App : invoke idempotent use case
+  Bootstrap ..> API : wire
+  Bootstrap ..> Persistence : wire
+  Bootstrap ..> PaymentAdapter : wire
+  Bootstrap ..> NotifyAdapter : wire
+}
+
+package "Business Modules" {
+  [Identity & Access]
+  [Movie Catalog]
+  [Cinema Scheduling]
+  [Booking & Ticketing]
+  [Concession Sales]
+  [Promotion]
+  [Payment & Refund]
+  [Cinema Operations]
+  [Reporting & Analytics]
+}
+
+database "MongoDB" as Mongo
+cloud "Payment Gateway" as Gateway
+cloud "Email/SMS Provider" as Messaging
+
+Guest --> SPA
+Customer --> SPA
+Staff --> SPA
+Manager --> SPA
+Admin --> SPA
+HttpClient --> API : HTTPS / JSON
+App ..> "Business Modules" : module use cases
+Persistence --> Mongo : Mongoose
+PaymentAdapter --> Gateway : HTTPS + signed callback
+NotifyAdapter --> Messaging : provider API
+
+note bottom of Domain
+No Express, Mongoose, vendor SDK,
+or another module's infrastructure.
+end note
+@enduml
+

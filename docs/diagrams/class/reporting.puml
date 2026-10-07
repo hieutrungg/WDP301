@@ -1,0 +1,53 @@
+@startuml
+title Reporting
+skinparam classAttributeIconSize 0
+class ReportController <<api>>
+class GenerateRevenueReport <<application>> {
++execute(criteria: RevenueReportCriteria): RevenueReportView
+}
+class ExportReport <<application>> {
++execute(report: RevenueReportView, format: ExportFormat): ExportedFile
+}
+interface RevenueReportReadPort {
++query(criteria: RevenueReportCriteria): RevenueReportView
+}
+interface ReportExporter {
++supports(format: ExportFormat): boolean
++export(report: RevenueReportView): ExportedFile
+}
+class RevenueReportCriteria <<value object>> {
+-period: DateRange
+-branchIds: Set<BranchId>
+-movieIds: Set<MovieId>
+-recognitionBasis: RevenueRecognitionBasis
+}
+class RevenueReportView <<read model>> {
+-generatedAt: Instant
+-criteria: RevenueReportCriteria
+-gross: Money
+-refunds: Money
+-net: Money
+-lines: List<RevenueLine>
+}
+class RevenueLine <<read model>> {
+-dimension: String
+-ticketRevenue: Money
+-concessionRevenue: Money
+-refunds: Money
+-net: Money
+}
+class PdfReportExporter <<infrastructure adapter>>
+class ExcelReportExporter <<infrastructure adapter>>
+ReportController --> GenerateRevenueReport
+ReportController --> ExportReport
+GenerateRevenueReport --> RevenueReportReadPort
+GenerateRevenueReport --> RevenueReportCriteria
+ExportReport --> "1..*" ReportExporter
+PdfReportExporter ..|> ReportExporter
+ExcelReportExporter ..|> ReportExporter
+RevenueReportView *-- RevenueReportCriteria
+RevenueReportView *-- "0..*" RevenueLine
+@enduml
+
+
+

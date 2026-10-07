@@ -1,0 +1,47 @@
+@startuml
+title Analytics
+skinparam classAttributeIconSize 0
+class AnalyticsController <<api>>
+class AnalyticsQueryService <<application>> {
++dashboard(filter: AnalyticsFilter): DashboardView
++movieSales(filter: AnalyticsFilter): MovieSalesView
+}
+interface AnalyticsReadPort {
++dashboard(filter: AnalyticsFilter): DashboardView
++movieSales(filter: AnalyticsFilter): MovieSalesView
+}
+class MongoAnalyticsAdapter <<infrastructure adapter>> {
++dashboard(filter: AnalyticsFilter): DashboardView
++movieSales(filter: AnalyticsFilter): MovieSalesView
+}
+class AnalyticsFilter <<value object>> {
+-period: DateRange
+-branchIds: Set<BranchId>
+-timeZone: ZoneId
+}
+class DashboardView <<read model>> {
+-netRevenue: Money
+-ticketsSold: long
+-completedBookings: long
+-occupancyRate: Percentage
+-trend: List<TimeSeriesPoint>
+}
+class MovieSalesView <<read model>> {
+-rows: List<MovieSalesRow>
+}
+class MovieSalesRow <<read model>> {
+-movieId: MovieId
+-title: String
+-ticketsSold: long
+-netRevenue: Money
+-occupancyRate: Percentage
+}
+AnalyticsController --> AnalyticsQueryService
+AnalyticsQueryService --> AnalyticsReadPort
+MongoAnalyticsAdapter ..|> AnalyticsReadPort
+AnalyticsQueryService --> AnalyticsFilter
+DashboardView *-- "0..*" TimeSeriesPoint
+MovieSalesView *-- "0..*" MovieSalesRow
+@enduml
+
+

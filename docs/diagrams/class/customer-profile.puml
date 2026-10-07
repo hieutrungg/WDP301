@@ -1,0 +1,51 @@
+@startuml
+title Customer Profile
+skinparam classAttributeIconSize 0
+class CustomerProfileController <<api>>
+class ProfileApplicationService <<application>> {
+  +view(accountId: AccountId): CustomerProfileView
+  +update(accountId: AccountId, cmd: UpdateProfileCommand): CustomerProfileView
+}
+class ChangePassword <<application>> {
++execute(accountId: AccountId, cmd: ChangePasswordCommand): void
+}
+class CustomerHistoryQuery <<application>> {
++execute(accountId: AccountId, page: PageRequest): CustomerHistoryPage
+}
+interface AccountRepository {
++findById(id: AccountId): Account?
++save(account: Account): void
+}
+interface CustomerHistoryReadPort {
++findByAccount(id: AccountId, page: PageRequest): CustomerHistoryPage
+}
+interface PasswordHasher {
++verify(raw: String, hash: String): boolean
++hash(raw: String): String
+}
+class Account <<aggregate>> {
+  -id: AccountId
+  -profile: Profile
+  -passwordHash: String
+  +updateProfile(profile: Profile): void
+  +changePassword(hash: String): void
+}
+class Profile <<value object>> {
+-fullName: String
+-dateOfBirth: LocalDate?
+-phone: Phone?
+-address: String?
+}
+class CustomerHistoryPage <<read model>>
+CustomerProfileController --> ProfileApplicationService
+CustomerProfileController --> ChangePassword
+CustomerProfileController --> CustomerHistoryQuery
+ProfileApplicationService --> AccountRepository
+ChangePassword --> AccountRepository
+ChangePassword --> PasswordHasher
+CustomerHistoryQuery --> CustomerHistoryReadPort
+Account *-- Profile
+@enduml
+
+
+

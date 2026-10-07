@@ -1,0 +1,80 @@
+@startuml
+title Promotion and Voucher
+skinparam classAttributeIconSize 0
+class PromotionController <<api>>
+class ManagePromotionCampaigns <<application>> {
++create(cmd: CreatePromotionCommand): PromotionId
++update(id: PromotionId, cmd: UpdatePromotionCommand): void
++activate(id: PromotionId): void
+}
+class QuoteDiscount <<application>> {
++execute(cmd: DiscountQuoteCommand): DiscountQuote
+}
+class ReserveVoucherRedemption <<application>> {
++reserve(cmd: ReserveVoucherCommand): RedemptionId
++confirm(id: RedemptionId): void
++release(id: RedemptionId): void
+}
+interface PromotionRepository {
++findById(id: PromotionId): Promotion?
++save(promotion: Promotion): void
+}
+interface VoucherRepository {
++findByCode(code: VoucherCode): Voucher?
++save(voucher: Voucher): void
+}
+interface RedemptionRepository {
++reserveAtomically(voucherId: VoucherId, customerId: AccountId, orderRef: String): VoucherRedemption
++save(redemption: VoucherRedemption): void
+}
+class Promotion <<aggregate>> {
+-id: PromotionId
+-name: String
+-period: DateRange
+-status: PromotionStatus
+-rule: DiscountRule
+-criteria: EligibilityCriteria
++quote(context: PricingContext): DiscountQuote
++activate(now: Instant): void
+}
+class Voucher <<aggregate>> {
+-id: VoucherId
+-promotionId: PromotionId
+-code: VoucherCode
+-usageLimit: int
+-usedCount: int
+-period: DateRange
+-status: VoucherStatus
++ensureAvailable(context: PricingContext): void
+}
+class VoucherRedemption <<aggregate>> {
+-id: RedemptionId
+-voucherId: VoucherId
+-customerId: AccountId
+-orderRef: String
+-status: RedemptionStatus
++confirm(): void
++release(): void
+}
+class DiscountRule <<value object>>
+class EligibilityCriteria <<value object>>
+class DiscountQuote <<value object>> {
+-discount: Money
+-promotionId: PromotionId
+-voucherId: VoucherId?
+}
+PromotionController --> ManagePromotionCampaigns
+PromotionController --> QuoteDiscount
+ManagePromotionCampaigns --> PromotionRepository
+QuoteDiscount --> PromotionRepository
+QuoteDiscount --> VoucherRepository
+ReserveVoucherRedemption --> VoucherRepository
+ReserveVoucherRedemption --> RedemptionRepository
+Promotion *-- DiscountRule
+Promotion *-- EligibilityCriteria
+Promotion "1" <-- "0..*" Voucher
+Voucher "1" <-- "0..*" VoucherRedemption
+@enduml
+
+
+
