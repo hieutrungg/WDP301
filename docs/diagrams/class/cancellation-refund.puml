@@ -1,0 +1,76 @@
+@startuml
+title Cancellation and Refund
+skinparam classAttributeIconSize 0
+class RefundController <<api>>
+class RefundRetryJob <<infrastructure job>>
+class RequestCancellation <<application>> {
++execute(cmd: RequestCancellationCommand): RefundRequestId
+}
+class ProcessRefund <<application>> {
++execute(id: RefundRequestId): void
+}
+interface BookingRepository {
++findById(id: BookingId): Booking?
++save(booking: Booking): void
+}
+interface PaymentReadPort {
++settledPaymentFor(bookingId: BookingId): SettledPayment?
+}
+interface RefundRequestRepository {
++findById(id: RefundRequestId): RefundRequest?
++findRetryable(): List<RefundRequest>
++save(request: RefundRequest): void
+}
+interface PaymentGatewayPort {
++refund(request: GatewayRefundRequest): GatewayRefund
+}
+interface CancellationCompensationPort {
++releaseSeats(bookingId: BookingId): void
++invalidateTickets(bookingId: BookingId): void
++releaseVoucherAndInventory(bookingId: BookingId): void
+}
+class RefundPolicy <<domain service>> {
++evaluate(booking: Booking, payment: SettledPayment, now: Instant): RefundDecision
+}
+class Booking <<aggregate>> {
+-id: BookingId
+-customerId: AccountId
+-showtimeId: ShowtimeId
+-status: BookingStatus
++requestCancellation(): void
++completeCancellation(): void
++rejectCancellation(reason: String): void
+}
+class RefundRequest <<aggregate>> {
+-id: RefundRequestId
+-bookingId: BookingId
+-paymentId: PaymentId
+-amount: Money
+-reason: String
+-status: RefundStatus
+-attempts: int
++start(): void
++succeed(gatewayReference: String): void
++fail(reason: String, retryable: boolean): void
+}
+class RefundDecision <<value object>> {
+-eligible: boolean
+-amount: Money
+-reason: String
+}
+RefundController --> RequestCancellation
+RefundController --> ProcessRefund
+RefundRetryJob --> ProcessRefund
+RequestCancellation --> BookingRepository
+RequestCancellation --> PaymentReadPort
+RequestCancellation --> RefundPolicy
+RequestCancellation --> RefundRequestRepository
+ProcessRefund --> RefundRequestRepository
+ProcessRefund --> PaymentGatewayPort
+ProcessRefund --> BookingRepository
+ProcessRefund --> CancellationCompensationPort
+Booking "1" <-- "0..1" RefundRequest
+@enduml
+
+
+

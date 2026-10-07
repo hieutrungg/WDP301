@@ -1,0 +1,40 @@
+@startuml
+title Movie Management
+skinparam classAttributeIconSize 0
+class MovieAdminController <<api>>
+class ManageMovieService <<application>> {
++create(cmd: CreateMovieCommand): MovieId
++update(id: MovieId, cmd: UpdateMovieCommand): void
++archive(id: MovieId): void
+}
+interface MovieRepository {
++findById(id: MovieId): Movie?
++existsByTitleAndReleaseDate(title: String, date: LocalDate, excluding: MovieId?): boolean
++save(movie: Movie): void
+}
+class MovieUniquenessPolicy <<domain service>> {
++ensureUnique(title: String, date: LocalDate, excluding: MovieId?): void
+}
+class Movie <<aggregate>> {
+  -id: MovieId
+  -title: String
+  -duration: Duration
+  -releaseDate: LocalDate
+  -genres: Set<Genre>
+  -status: MovieStatus
+  +update(details: MovieDetails): void
+  +archive(): void
+  +ensureSchedulable(): void
+}
+class MovieDetails <<value object>>
+class Genre <<value object>>
+MovieAdminController --> ManageMovieService
+ManageMovieService --> MovieRepository
+ManageMovieService --> MovieUniquenessPolicy
+MovieUniquenessPolicy --> MovieRepository
+Movie *-- MovieDetails
+Movie *-- "1..*" Genre
+@enduml
+
+
+

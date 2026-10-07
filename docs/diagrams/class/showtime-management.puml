@@ -1,0 +1,57 @@
+@startuml
+title Showtime Management
+skinparam classAttributeIconSize 0
+class ShowtimeAdminController <<api>>
+class ShowtimeManagementService <<application>> {
++create(cmd: CreateShowtimeCommand): ShowtimeId
++modify(id: ShowtimeId, cmd: ModifyShowtimeCommand): void
++cancel(id: ShowtimeId, reason: String): void
++publish(id: ShowtimeId): void
+}
+interface ShowtimeRepository {
++findById(id: ShowtimeId): Showtime?
++findOverlapping(roomId: RoomId, interval: TimeInterval, excluding: ShowtimeId?): List<Showtime>
++save(showtime: Showtime): void
+}
+interface MovieCatalogPort {
++requireSchedulable(id: MovieId): MovieSummary
+}
+interface RoomCatalogPort {
++requireAvailable(id: RoomId): RoomSummary
+}
+interface SalesStatusPort {
++hasSoldTickets(showtimeId: ShowtimeId): boolean
+}
+interface SeatAvailabilityInitializer {
++initialize(showtimeId: ShowtimeId, roomId: RoomId): void
+}
+class ScheduleConflictPolicy <<domain service>> {
++ensureNoConflict(roomId: RoomId, interval: TimeInterval, excluding: ShowtimeId?): void
+}
+class Showtime <<aggregate>> {
+-id: ShowtimeId
+-movieId: MovieId
+-roomId: RoomId
+-interval: TimeInterval
+-status: ShowtimeStatus
++reschedule(interval: TimeInterval): void
++publish(): void
++cancel(reason: String, hasSales: boolean): void
+}
+class TimeInterval <<value object>> {
+-start: Instant
+-end: Instant
++overlaps(other: TimeInterval): boolean
+}
+ShowtimeAdminController --> ShowtimeManagementService
+ShowtimeManagementService --> ShowtimeRepository
+ShowtimeManagementService --> MovieCatalogPort
+ShowtimeManagementService --> RoomCatalogPort
+ShowtimeManagementService --> SalesStatusPort
+ShowtimeManagementService --> SeatAvailabilityInitializer
+ShowtimeManagementService --> ScheduleConflictPolicy
+ScheduleConflictPolicy --> ShowtimeRepository
+Showtime *-- TimeInterval
+@enduml
+
+

@@ -1,0 +1,61 @@
+@startuml
+title Counter Ticketing and Ticket Validation
+skinparam classAttributeIconSize 0
+class CounterSaleController <<api>>
+class TicketScanController <<api>>
+class CreateCounterSale <<application>> {
++execute(cmd: CounterSaleCommand): CounterSaleResult
+}
+class ValidateTicket <<application>> {
++execute(cmd: ValidateTicketCommand): ValidationResult
+}
+interface BookingRepository {
++save(booking: Booking): void
+}
+interface SeatHoldPort {
++acquire(showtimeId: ShowtimeId, seats: Set<SeatId>, owner: StaffId): SeatHold
++confirm(holdId: HoldId, bookingId: BookingId): void
+}
+interface TicketRepository {
++findByQrDigestForUpdate(digest: String): Ticket?
++save(ticket: Ticket): void
+}
+interface TicketIssuer {
++issueFor(booking: Booking): List<Ticket>
+}
+interface TicketPrinterPort {
++print(tickets: List<Ticket>, receipt: Receipt): void
+}
+interface StaffAuthorizationPort {
++ensureCanSell(staffId: StaffId, branchId: BranchId): void
++ensureCanScan(staffId: StaffId, branchId: BranchId): void
+}
+class Booking <<aggregate>> {
+-id: BookingId
+-channel: BookingChannel
+-status: BookingStatus
++confirmCounterSale(payment: PaymentReference): void
+}
+class Ticket <<aggregate>> {
+-id: TicketId
+-bookingId: BookingId
+-showtimeId: ShowtimeId
+-qrDigest: String
+-status: TicketStatus
+-checkedInAt: Instant?
++checkIn(at: Instant, scanner: StaffId): void
+}
+CounterSaleController --> CreateCounterSale
+TicketScanController --> ValidateTicket
+CreateCounterSale --> StaffAuthorizationPort
+CreateCounterSale --> SeatHoldPort
+CreateCounterSale --> BookingRepository
+CreateCounterSale --> TicketIssuer
+CreateCounterSale --> TicketPrinterPort
+ValidateTicket --> StaffAuthorizationPort
+ValidateTicket --> TicketRepository
+Booking "1" *-- "1..*" Ticket
+@enduml
+
+
+

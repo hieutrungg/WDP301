@@ -1,0 +1,76 @@
+@startuml
+title Room and Branch Management
+skinparam classAttributeIconSize 0
+class BranchController <<api>>
+class RoomController <<api>>
+class ManageBranch <<application>> {
++update(id: BranchId, cmd: UpdateBranchCommand): void
+}
+class ConfigureRoomLayout <<application>> {
++execute(roomId: RoomId, cmd: ConfigureSeatLayoutCommand): LayoutVersion
+}
+interface BranchRepository {
++findById(id: BranchId): Branch?
++save(branch: Branch): void
+}
+interface RoomRepository {
++findById(id: RoomId): Room?
++save(room: Room): void
+}
+interface PublishedShowtimePort {
++existsForRoomAndLayout(roomId: RoomId, version: LayoutVersion): boolean
+}
+interface SeatTypeCatalog {
++requireAll(ids: Set<SeatTypeId>): Map<SeatTypeId, SeatType>
+}
+class Branch <<aggregate>> {
+-id: BranchId
+-name: String
+-address: Address
+-contact: ContactInfo
+-status: BranchStatus
++update(info: BranchInfo): void
+}
+class Room <<aggregate>> {
+-id: RoomId
+-branchId: BranchId
+-name: String
+-type: RoomType
+-layout: SeatLayout
+-status: RoomStatus
++replaceLayout(layout: SeatLayout, locked: boolean): void
++capacity(): int
+}
+class SeatLayout <<value object>> {
+-version: LayoutVersion
+-seats: List<SeatDefinition>
++validate(): void
++capacity(): int
+}
+class SeatDefinition <<value object>> {
+-id: SeatId
+-row: String
+-number: String
+-typeId: SeatTypeId
+-enabled: boolean
+}
+class SeatType <<entity>> {
+-id: SeatTypeId
+-name: String
+-priceMultiplier: Decimal
+-status: SeatTypeStatus
+}
+BranchController --> ManageBranch
+RoomController --> ConfigureRoomLayout
+ManageBranch --> BranchRepository
+ConfigureRoomLayout --> RoomRepository
+ConfigureRoomLayout --> PublishedShowtimePort
+ConfigureRoomLayout --> SeatTypeCatalog
+Branch "1" o-- "0..*" Room
+Room *-- SeatLayout
+SeatLayout *-- "1..*" SeatDefinition
+SeatDefinition --> SeatType
+@enduml
+
+
+

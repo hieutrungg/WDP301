@@ -1,0 +1,92 @@
+@startuml
+title Online Booking
+skinparam classAttributeIconSize 0
+class BookingController <<api>>
+class BookingQueryService <<application>> {
++options(query: BookingOptionsQuery): BookingOptionsView
++history(accountId: AccountId): BookingHistoryPage
+}
+class HoldSeats <<application>> {
++execute(cmd: HoldSeatsCommand): SeatHold
+}
+class CreateBooking <<application>> {
++execute(cmd: CreateBookingCommand): BookingId
+}
+class CompleteBookingPayment <<application>> {
++execute(event: PaymentSucceeded): void
+}
+interface BookingRepository {
++findById(id: BookingId): Booking?
++save(booking: Booking): void
+}
+interface SeatHoldRepository {
++acquire(showtimeId: ShowtimeId, seats: Set<SeatId>, owner: AccountId, until: Instant): SeatHold
++confirm(holdId: HoldId, bookingId: BookingId): void
++release(holdId: HoldId): void
+}
+interface BookingCatalogReadPort {
++findOptions(query: BookingOptionsQuery): BookingOptionsView
+}
+interface PricingPort {
++quote(request: BookingPriceRequest): PriceQuote
+}
+interface PaymentCommandPort {
++createPayment(bookingId: BookingId, amount: Money): PaymentRedirect
+}
+interface TicketIssuer {
++issueFor(booking: Booking): List<TicketId>
+}
+class Booking <<aggregate>> {
+-id: BookingId
+-customerId: AccountId
+-showtimeId: ShowtimeId
+-seatIds: Set<SeatId>
+-quote: PriceQuote
+-status: BookingStatus
++place(hold: SeatHold, quote: PriceQuote): void
++markPaid(paymentId: PaymentId): void
++cancel(reason: String): void
+}
+class SeatHold <<aggregate>> {
+-id: HoldId
+-showtimeId: ShowtimeId
+-seatIds: Set<SeatId>
+-ownerId: AccountId
+-expiresAt: Instant
+-status: HoldStatus
++ensureUsableBy(owner: AccountId, now: Instant): void
++confirm(bookingId: BookingId): void
+}
+class PriceQuote <<value object>> {
+-ticketTotal: Money
+-concessionTotal: Money
+-discount: Money
+-grandTotal: Money
+}
+class Ticket <<entity>> {
+-id: TicketId
+-bookingId: BookingId
+-showtimeId: ShowtimeId
+-seatId: SeatId
+-status: TicketStatus
++checkIn(at: Instant): void
+}
+BookingController --> BookingQueryService
+BookingController --> HoldSeats
+BookingController --> CreateBooking
+HoldSeats --> SeatHoldRepository
+CreateBooking --> SeatHoldRepository
+CreateBooking --> PricingPort
+CreateBooking --> BookingRepository
+CreateBooking --> PaymentCommandPort
+CompleteBookingPayment --> BookingRepository
+CompleteBookingPayment --> SeatHoldRepository
+CompleteBookingPayment --> TicketIssuer
+BookingQueryService --> BookingCatalogReadPort
+Booking *-- PriceQuote
+Booking "1" o-- "1" SeatHold
+Booking "1" *-- "1..*" Ticket
+@enduml
+
+
+

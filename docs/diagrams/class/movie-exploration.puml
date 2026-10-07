@@ -1,0 +1,55 @@
+@startuml
+title Movie Exploration
+skinparam classAttributeIconSize 0
+class MovieQueryController <<api>>
+class MovieReviewController <<api>>
+class MovieCatalogQueryService <<application>> {
++search(query: MovieSearchQuery): MoviePage
++detail(movieId: MovieId): MovieDetailView
+}
+class SubmitMovieReview <<application>> {
++execute(cmd: SubmitReviewCommand): ReviewId
+}
+interface MovieCatalogReadPort {
++search(query: MovieSearchQuery): MoviePage
++detail(movieId: MovieId): MovieDetailView
+}
+interface ReviewRepository {
++existsByMovieAndAuthor(movieId: MovieId, accountId: AccountId): boolean
++save(review: MovieReview): void
+}
+interface ReviewEligibilityPort {
++hasCompletedBooking(accountId: AccountId, movieId: MovieId): boolean
+}
+class Movie <<aggregate>> {
+-id: MovieId
+-title: String
+-status: MovieStatus
+-genres: Set<Genre>
++isBrowsable(on: LocalDate): boolean
+}
+class Genre <<value object>> {
+-code: String
+-name: String
+}
+class MovieReview <<entity>> {
+-id: ReviewId
+-movieId: MovieId
+-authorId: AccountId
+-rating: Rating
+-comment: String
++edit(rating: Rating, comment: String): void
+}
+class MovieDetailView <<read model>>
+MovieQueryController --> MovieCatalogQueryService
+MovieReviewController --> SubmitMovieReview
+MovieCatalogQueryService --> MovieCatalogReadPort
+SubmitMovieReview --> ReviewEligibilityPort
+SubmitMovieReview --> ReviewRepository
+Movie *-- "1..*" Genre
+Movie "1" <-- "0..*" MovieReview
+MovieCatalogReadPort ..> MovieDetailView
+@enduml
+
+
+

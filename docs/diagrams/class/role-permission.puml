@@ -1,0 +1,49 @@
+@startuml
+title Role and Permission
+skinparam classAttributeIconSize 0
+class RoleAdminController <<api>>
+class ManageRoles <<application>> {
++create(cmd: CreateRoleCommand, actor: AccountId): RoleId
++update(id: RoleId, cmd: UpdateRoleCommand, actor: AccountId): void
++assignPermissions(id: RoleId, permissions: Set<PermissionId>, actor: AccountId): void
+}
+interface RoleRepository {
++findById(id: RoleId): Role?
++existsByName(name: RoleName, excluding: RoleId?): boolean
++save(role: Role): void
+}
+interface PermissionCatalog {
++findAll(): List<Permission>
++requireAll(ids: Set<PermissionId>): Set<Permission>
+}
+interface AuditPort {
++record(event: AuditEvent): void
+}
+class Role <<aggregate>> {
+-id: RoleId
+-name: RoleName
+-description: String
+-permissions: Set<PermissionId>
++rename(name: RoleName, description: String): void
++replacePermissions(ids: Set<PermissionId>): void
+}
+class Permission <<entity>> {
+-id: PermissionId
+-code: String
+-description: String
+}
+class AuditEvent <<value object>> {
+-actorId: AccountId
+-action: String
+-targetId: String
+-occurredAt: Instant
+-details: Map
+}
+RoleAdminController --> ManageRoles
+ManageRoles --> RoleRepository
+ManageRoles --> PermissionCatalog
+ManageRoles --> AuditPort
+Role "1" o-- "0..*" Permission : grants by id
+@enduml
+
+

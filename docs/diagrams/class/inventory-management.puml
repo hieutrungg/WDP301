@@ -1,0 +1,73 @@
+@startuml
+title Inventory Management
+skinparam classAttributeIconSize 0
+class InventoryController <<api>>
+class InventoryQueryService <<application>> {
++stockLevels(query: StockLevelQuery): StockLevelPage
+}
+class ReceiveStock <<application>> {
++execute(cmd: ReceiveStockCommand): MovementId
+}
+class AdjustStock <<application>> {
++execute(cmd: AdjustStockCommand): MovementId
+}
+class ReserveInventory <<application>> {
++reserve(cmd: ReserveInventoryCommand): InventoryReservation
++confirm(id: ReservationId): void
++release(id: ReservationId): void
+}
+interface InventoryRepository {
++findForUpdate(branchId: BranchId, productId: ProductId): InventoryItem?
++saveWithMovement(item: InventoryItem, movement: StockMovement, expectedVersion: long): void
+}
+interface InventoryReadPort {
++search(query: StockLevelQuery): StockLevelPage
+}
+interface SupplierCatalogPort {
++requireActive(id: SupplierId): SupplierSummary
+}
+class InventoryItem <<aggregate>> {
+-branchId: BranchId
+-productId: ProductId
+-onHand: int
+-reserved: int
+-reorderThreshold: int
+-version: long
++receive(qty: int, supplier: SupplierId, actor: StaffId): StockMovement
++adjust(delta: int, reason: String, actor: StaffId): StockMovement
++reserve(qty: int): void
++confirm(qty: int): void
++release(qty: int): void
++status(): InventoryStatus
+}
+class StockMovement <<entity>> {
+-id: MovementId
+-branchId: BranchId
+-productId: ProductId
+-type: MovementType
+-quantity: int
+-actorId: StaffId
+-supplierId: SupplierId?
+-occurredAt: Instant
+}
+class InventoryReservation <<aggregate>> {
+-id: ReservationId
+-lines: List<ReservedStock>
+-status: ReservationStatus
+-expiresAt: Instant
++confirm(): void
++release(): void
+}
+InventoryController --> InventoryQueryService
+InventoryController --> ReceiveStock
+InventoryController --> AdjustStock
+InventoryQueryService --> InventoryReadPort
+ReceiveStock --> InventoryRepository
+ReceiveStock --> SupplierCatalogPort
+AdjustStock --> InventoryRepository
+ReserveInventory --> InventoryRepository
+InventoryItem ..> StockMovement : creates
+InventoryReservation *-- "1..*" InventoryItem : reserves by identity
+@enduml
+
+
