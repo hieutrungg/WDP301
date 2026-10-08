@@ -198,6 +198,20 @@ Mỗi thành viên nên sử dụng App Password của tài khoản gửi mail d
 
 Nếu sử dụng SMTP khác Gmail, thay `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_USER`, `EMAIL_PASS` và `EMAIL_FROM` theo tài liệu của nhà cung cấp.
 
+### Cấu hình Google Sign-In (tùy chọn)
+
+Nút "Continue with Google" ở trang Login/Register dùng Google Identity Services. Nếu không cấu hình, nút bị vô hiệu hóa và đăng nhập bằng email/username vẫn hoạt động bình thường.
+
+1. Mở [Google Cloud Console](https://console.cloud.google.com/apis/credentials), chọn project, tạo **OAuth client ID** loại **Web application**.
+2. **Authorized JavaScript origins**: thêm `http://localhost:5173` và `http://localhost` (thêm domain production khi deploy).
+3. **Authorized redirect URIs**: để trống (luồng này không dùng redirect).
+4. Copy **Client ID** (dạng `xxxx.apps.googleusercontent.com`) vào hai file:
+   - `server/.env`: `GOOGLE_CLIENT_ID=<client id>`
+   - `client/.env`: `VITE_GOOGLE_CLIENT_ID=<client id>`
+5. Khởi động lại cả backend và frontend. Không cần Client Secret.
+
+Nếu OAuth consent screen đang ở chế độ Testing, chỉ các tài khoản được thêm vào mục Test users mới đăng nhập được.
+
 Sau mỗi lần thay đổi `.env`, phải dừng và chạy lại backend. Nodemon không đảm bảo tự reload khi `.env` thay đổi.
 
 ## 8. Cấu hình frontend

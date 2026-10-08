@@ -25,6 +25,9 @@ export const env = {
   get clientUrl() {
     return process.env.CLIENT_URL;
   },
+  get googleClientId() {
+    return process.env.GOOGLE_CLIENT_ID?.trim();
+  },
   get isProduction() {
     return process.env.NODE_ENV === "production";
   },

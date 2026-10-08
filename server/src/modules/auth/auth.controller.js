@@ -8,14 +8,32 @@ const cookieOptions = {
   path: "/",
 };
 
+const setAccessCookie = (res, token, rememberMe) => {
+  const options = rememberMe
+    ? { ...cookieOptions, maxAge: 7 * 24 * 60 * 60 * 1000 }
+    : cookieOptions;
+
+  return res.cookie("accessToken", token, options);
+};
+
 export const login = async (req, res, next) => {
   try {
     const { token, rememberMe } = await authService.login(req.body);
-    const options = rememberMe
-      ? { ...cookieOptions, maxAge: 7 * 24 * 60 * 60 * 1000 }
-      : cookieOptions;
 
-    res.cookie("accessToken", token, options).json({
+    setAccessCookie(res, token, rememberMe).json({
+      success: true,
+      message: "Signed in successfully",
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const googleLogin = async (req, res, next) => {
+  try {
+    const { token, rememberMe } = await authService.loginWithGoogle(req.body);
+
+    setAccessCookie(res, token, rememberMe).json({
       success: true,
       message: "Signed in successfully",
     });

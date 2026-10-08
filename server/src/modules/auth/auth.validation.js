@@ -7,7 +7,7 @@ const normalizedEmail = z
   .email("Enter a valid email address")
   .max(254, "Email is too long");
 
-const strongPassword = z
+export const strongPassword = z
   .string({ error: "Password is required" })
   .min(8, "Password must be at least 8 characters")
   .max(128, "Password is too long")
@@ -29,31 +29,45 @@ export const loginSchema = z.object({
   rememberMe: z.boolean().optional().default(false),
 });
 
+export const googleLoginSchema = z.object({
+  credential: z
+    .string({ error: "Google credential is required" })
+    .min(1, "Google credential is required")
+    .max(4096, "Google credential is too long"),
+  rememberMe: z.boolean().optional().default(false),
+});
+
+export const fullNameField = z
+  .string({ error: "Full name is required" })
+  .trim()
+  .min(2, "Full name must be at least 2 characters")
+  .max(100, "Full name is too long");
+
+export const phoneField = z
+  .string({ error: "Phone number is required" })
+  .trim()
+  .transform((value) => value.replace(/[\s.-]/g, ""))
+  .refine(
+    (value) => /^(?:\+84|0)\d{9,10}$/.test(value),
+    "Enter a valid phone number",
+  );
+
+export const usernameField = z
+  .string({ error: "Username is required" })
+  .trim()
+  .min(3, "Username must be at least 3 characters")
+  .max(30, "Username is too long")
+  .regex(
+    /^[A-Za-z0-9_]+$/,
+    "Username may only contain letters, numbers, and underscores",
+  );
+
 export const registerSchema = z
   .object({
-    fullName: z
-      .string({ error: "Full name is required" })
-      .trim()
-      .min(2, "Full name must be at least 2 characters")
-      .max(100, "Full name is too long"),
+    fullName: fullNameField,
     email: normalizedEmail,
-    phone: z
-      .string({ error: "Phone number is required" })
-      .trim()
-      .transform((value) => value.replace(/[\s.-]/g, ""))
-      .refine(
-        (value) => /^(?:\+84|0)\d{9,10}$/.test(value),
-        "Enter a valid phone number",
-      ),
-    username: z
-      .string({ error: "Username is required" })
-      .trim()
-      .min(3, "Username must be at least 3 characters")
-      .max(30, "Username is too long")
-      .regex(
-        /^[A-Za-z0-9_]+$/,
-        "Username may only contain letters, numbers, and underscores",
-      ),
+    phone: phoneField,
+    username: usernameField,
     password: strongPassword,
     confirmPassword: z.string({ error: "Please confirm your password" }),
   })

@@ -1,5 +1,6 @@
 import { Router } from "express";
 import {
+  googleLogin,
   login,
   logout,
   me,
@@ -8,6 +9,7 @@ import {
   verifyEmail,
 } from "./auth.controller.js";
 import {
+  googleLoginSchema,
   loginSchema,
   registerSchema,
   resendVerificationSchema,
@@ -16,6 +18,7 @@ import {
 import { requireAuth } from "../../middlewares/authMiddleware.js";
 import { validate } from "../../middlewares/validateMiddleware.js";
 import {
+  googleLoginRateLimiter,
   registerRateLimiter,
   resendVerificationRateLimiter,
   verifyEmailRateLimiter,
@@ -24,6 +27,7 @@ import {
 const router = Router();
 
 router.post("/login", validate(loginSchema), login);
+router.post("/google", googleLoginRateLimiter, validate(googleLoginSchema), googleLogin);
 router.post("/register", registerRateLimiter, validate(registerSchema), register);
 router.post(
   "/verify-email",

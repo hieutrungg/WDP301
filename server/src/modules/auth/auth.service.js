@@ -5,6 +5,7 @@ import { env } from "../../config/env.js";
 import {
   findAccountForLogin,
   findAccountByEmail,
+  findAccountByUsername,
   findAccountWithAccessById,
   findDuplicateAccount,
   createAccount,
@@ -20,6 +21,7 @@ import {
   incrementAttemptCount,
 } from "./email-verification.repository.js";
 import { sendRegistrationOtpEmail } from "./email.service.js";
+import { googleTokenVerifier } from "./google.service.js";
 import { AppError } from "../../utils/AppError.js";
 
 const REGISTER_PURPOSE = "REGISTER_EMAIL";
@@ -95,6 +97,7 @@ const serializeAccount = (account) => {
     email: account.email,
     phone: account.phone,
     status: account.status,
+    createdAt: account.createdAt,
     profile: account.profile,
     employeeProfile: account.employeeProfile,
     roles: (account.roleIds ?? []).map((role) => ({
@@ -106,10 +109,15 @@ const serializeAccount = (account) => {
   };
 };
 
+const issueAccessToken = (accountId, rememberMe) =>
+  jwt.sign({ sub: accountId.toString() }, env.jwtAccessSecret, {
+    expiresIn: rememberMe ? "7d" : "8h",
+  });
+
 export const login = async ({ identity, password, rememberMe }) => {
   const account = await findAccountForLogin(identity);
 
-  if (!account || !(await bcrypt.compare(password, account.passwordHash))) {
+  if (!account?.passwordHash || !(await bcrypt.compare(password, account.passwordHash))) {
     throw new AppError(401, "Invalid email/username or password");
   }
 
@@ -117,12 +125,86 @@ export const login = async ({ identity, password, rememberMe }) => {
     throw new AppError(403, "This account is not allowed to sign in");
   }
 
-  const expiresIn = rememberMe ? "7d" : "8h";
-  const token = jwt.sign({ sub: account._id.toString() }, env.jwtAccessSecret, {
-    expiresIn,
-  });
+  return { token: issueAccessToken(account._id, rememberMe), rememberMe };
+};
 
-  return { token, rememberMe };
+const buildUsernameBase = (email) => {
+  const base = email
+    .split("@")[0]
+    .replace(/[^A-Za-z0-9_]/g, "_")
+    .slice(0, 22);
+
+  return base.length >= 3 ? base : `user_${base}`;
+};
+
+const generateUniqueUsername = async (email) => {
+  const base = buildUsernameBase(email);
+  let candidate = base;
+
+  while (await findAccountByUsername(candidate)) {
+    candidate = `${base}_${crypto.randomInt(1000, 10000)}`;
+  }
+
+  return candidate;
+};
+
+const createGoogleAccount = async ({ email, name }) => {
+  const customerRole = await findRoleByName("CUSTOMER");
+  if (!customerRole) {
+    throw new AppError(500, "CUSTOMER role is not configured");
+  }
+
+  // Google accounts have no usable password until the owner sets one from their profile.
+  const passwordHash = await bcrypt.hash(
+    crypto.randomBytes(32).toString("hex"),
+    BCRYPT_ROUNDS,
+  );
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      return await createAccount({
+        username: await generateUniqueUsername(email),
+        email,
+        passwordHash,
+        roleIds: [customerRole._id],
+        directPermissionIds: [],
+        status: "ACTIVE",
+        profile: { fullName: name || email.split("@")[0] },
+      });
+    } catch (error) {
+      if (error?.code !== 11000) throw error;
+
+      // A concurrent first sign-in already created this email.
+      const existing = await findAccountByEmail(email);
+      if (existing) return existing;
+    }
+  }
+
+  throw new AppError(409, "Unable to create account. Please try again.");
+};
+
+export const loginWithGoogle = async ({ credential, rememberMe }) => {
+  const profile = await googleTokenVerifier.verify(credential);
+
+  if (!profile.email || !profile.emailVerified) {
+    throw new AppError(401, "Your Google email address is not verified");
+  }
+
+  const account =
+    (await findAccountByEmail(profile.email)) ?? (await createGoogleAccount(profile));
+
+  if (account.status === "PENDING_VERIFICATION") {
+    throw new AppError(
+      409,
+      "This email is awaiting verification. Please verify it with the code we emailed you.",
+    );
+  }
+
+  if (account.status !== "ACTIVE") {
+    throw new AppError(403, "This account is not allowed to sign in");
+  }
+
+  return { token: issueAccessToken(account._id, rememberMe), rememberMe };
 };
 
 export const getCurrentAccount = async (accountId) => {

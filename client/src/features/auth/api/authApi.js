@@ -31,3 +31,8 @@ export const resendVerificationRequest = async (email) => {
   const response = await httpClient.post('/auth/resend-verification', { email })
   return response.data
 }
+
+export const googleLoginRequest = async (payload) => {
+  const response = await httpClient.post('/auth/google', payload)
+  return response.data
+}
