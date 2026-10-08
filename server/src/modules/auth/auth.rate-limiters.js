@@ -28,3 +28,9 @@ export const resendVerificationRateLimiter = createLimiter({
   limit: 5,
   message: "Too many resend requests. Please try again later.",
 });
+
+export const googleLoginRateLimiter = createLimiter({
+  windowMs: 15 * 60 * 1000,
+  limit: 20,
+  message: "Too many Google sign-in attempts. Please try again later.",
+});
