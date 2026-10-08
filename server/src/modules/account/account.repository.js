@@ -21,6 +21,9 @@ export const findAccountWithAccessById = (accountId) =>
 
 export const findAccountByEmail = (email) => Account.findOne({ email }).exec();
 
+export const findAccountByUsername = (username) =>
+  Account.findOne({ username }).collation({ locale: "en", strength: 2 }).exec();
+
 export const findDuplicateAccount = (email, username) =>
   Account.findOne({ $or: [{ email }, { username }] })
     .collation({ locale: "en", strength: 2 })
@@ -36,3 +39,14 @@ export const activateAccount = (accountId) =>
 
 export const deletePendingAccount = (accountId) =>
   Account.deleteOne({ _id: accountId, status: "PENDING_VERIFICATION" }).exec();
+
+export const findAccountById = (accountId) => Account.findById(accountId).exec();
+
+export const findAccountWithPasswordById = (accountId) =>
+  Account.findById(accountId).select("+passwordHash").exec();
+
+export const updateAccountProfile = (accountId, changes) =>
+  Account.updateOne({ _id: accountId }, { $set: changes }).exec();
+
+export const setAccountPasswordHash = (accountId, passwordHash) =>
+  Account.updateOne({ _id: accountId }, { $set: { passwordHash } }).exec();

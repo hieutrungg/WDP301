@@ -6,13 +6,14 @@ import {
   UserRound,
 } from 'lucide-react'
 import { useState } from 'react'
-import { useForm } from 'react-hook-form'
+import { useForm, useWatch } from 'react-hook-form'
 import { Link, useLocation, useNavigate } from 'react-router'
 import { toast } from 'sonner'
 import { getApiErrorMessage } from '../../../lib/api/apiError'
 import { useLogin } from '../hooks/useLogin'
 import { loginSchema } from '../schema/loginSchema'
 import { AuthInput, AuthServerError, PasswordInput } from './AuthFormField'
+import GoogleSignInButton from './GoogleSignInButton'
 
 function LoginForm() {
   const [showPassword, setShowPassword] = useState(false)
@@ -23,11 +24,14 @@ function LoginForm() {
   const {
     register,
     handleSubmit,
+    control,
     formState: { errors },
   } = useForm({
     resolver: zodResolver(loginSchema),
     defaultValues: { identity: '', password: '', rememberMe: false },
   })
+
+  const rememberMe = useWatch({ control, name: 'rememberMe' })
 
   const onSubmit = async (values) => {
     setServerError('')
@@ -124,14 +128,7 @@ function LoginForm() {
         <span className="h-px flex-1 bg-surface-container-highest" />
       </div>
 
-      <div className="grid grid-cols-2 gap-2">
-        <button type="button" disabled className="h-11 rounded-lg bg-surface-container text-sm text-on-surface opacity-70">
-          Google
-        </button>
-        <button type="button" disabled className="h-11 rounded-lg bg-surface-container text-sm text-on-surface opacity-70">
-          Apple ID
-        </button>
-      </div>
+      <GoogleSignInButton onError={setServerError} rememberMe={rememberMe} />
 
       <p className="mt-6 text-center text-sm text-on-surface-variant">
         Don&apos;t have an account yet?{' '}

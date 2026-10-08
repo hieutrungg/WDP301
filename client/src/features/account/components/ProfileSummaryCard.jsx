@@ -1,6 +1,7 @@
 import { BadgeCheck, KeyRound, Lock, Pencil } from 'lucide-react'
 import {
   formatAccountStatus,
+  formatDate,
   getAvatarLabel,
   getDisplayName,
 } from '../utils/accountFormat'
@@ -51,6 +52,10 @@ function ProfileSummaryCard({ account, onEditProfile, onChangePassword }) {
         <div className="flex items-center justify-between gap-4">
           <dt className="text-on-surface-variant">Account Type</dt>
           <dd className="truncate font-semibold text-on-surface">{roleNames || '—'}</dd>
+        </div>
+        <div className="flex items-center justify-between gap-4">
+          <dt className="text-on-surface-variant">Member Since</dt>
+          <dd className="truncate font-semibold text-on-surface">{formatDate(account.createdAt) ?? '—'}</dd>
         </div>
         <div className="flex items-center justify-between gap-4">
           <dt className="text-on-surface-variant">Username</dt>

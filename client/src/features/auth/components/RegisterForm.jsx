@@ -8,6 +8,7 @@ import { getApiErrorMessage, getApiFieldErrors } from '../../../lib/api/apiError
 import { registerRequest } from '../api/authApi'
 import { registerSchema } from '../schema/registerSchema'
 import { AuthInput, AuthServerError, FieldError, PasswordInput } from './AuthFormField'
+import GoogleSignInButton from './GoogleSignInButton'
 
 function RegisterForm() {
   const [showPassword, setShowPassword] = useState(false)
@@ -92,6 +93,14 @@ function RegisterForm() {
           {isPending ? <><span className="size-4 animate-spin rounded-full border-2 border-white/35 border-t-white" /> Creating account...</> : <>Create account <ArrowRight className="size-5" /></>}
         </button>
       </form>
+
+      <div className="my-6 flex items-center gap-4 text-xs text-on-surface-variant">
+        <span className="h-px flex-1 bg-surface-container-highest" />
+        or continue with
+        <span className="h-px flex-1 bg-surface-container-highest" />
+      </div>
+
+      <GoogleSignInButton onError={setServerError} />
 
       <p className="mt-6 text-center text-sm text-on-surface-variant">
         Already have an account? <Link to="/login" className="font-semibold text-secondary hover:underline">Sign in now</Link>

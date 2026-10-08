@@ -1,15 +1,18 @@
 import { ChevronRight, House, KeyRound, Pencil } from 'lucide-react'
+import { useState } from 'react'
 import { Link } from 'react-router'
-import { toast } from 'sonner'
 import { useAuth } from '../../auth/hooks/useAuth'
+import ChangePasswordModal from '../components/ChangePasswordModal'
+import EditProfileModal from '../components/EditProfileModal'
 import PersonalInfoSection from '../components/PersonalInfoSection'
 import ProfileSummaryCard from '../components/ProfileSummaryCard'
 
-// UC05-08 (edit profile / change password) is DRAFT_NEEDS_REVIEW: no API contract yet.
-const notifyComingSoon = () => toast.info('This feature is coming soon.')
-
 function ProfilePage() {
   const { account } = useAuth()
+  const [modal, setModal] = useState(null)
+  const closeModal = () => setModal(null)
+  const openEditProfile = () => setModal('edit')
+  const openChangePassword = () => setModal('password')
 
   return (
     <div className="relative w-full overflow-hidden bg-gradient-to-b from-surface-container-lowest to-background pt-20">
@@ -46,7 +49,7 @@ function ProfilePage() {
           <div className="flex shrink-0 items-center gap-2">
             <button
               type="button"
-              onClick={notifyComingSoon}
+              onClick={openEditProfile}
               className="group flex items-center gap-1.5 rounded-lg bg-surface-container px-4 py-2 text-sm font-semibold text-on-surface shadow-sm transition-all hover:bg-surface-container-high"
             >
               <Pencil className="size-[18px] text-on-surface-variant transition-colors group-hover:text-on-surface" />
@@ -54,7 +57,7 @@ function ProfilePage() {
             </button>
             <button
               type="button"
-              onClick={notifyComingSoon}
+              onClick={openChangePassword}
               className="group flex items-center gap-1.5 rounded-lg bg-surface-container-high px-4 py-2 text-sm font-semibold text-on-surface shadow-sm transition-all hover:bg-surface-variant"
             >
               <KeyRound className="size-[18px] text-on-surface-variant transition-colors group-hover:text-primary" />
@@ -67,19 +70,21 @@ function ProfilePage() {
           <div className="lg:col-span-4">
             <ProfileSummaryCard
               account={account}
-              onEditProfile={notifyComingSoon}
-              onChangePassword={notifyComingSoon}
+              onEditProfile={openEditProfile}
+              onChangePassword={openChangePassword}
             />
           </div>
           <div className="lg:col-span-8">
             <PersonalInfoSection
               account={account}
-              onEditProfile={notifyComingSoon}
-              onChangePassword={notifyComingSoon}
+              onEditProfile={openEditProfile}
+              onChangePassword={openChangePassword}
             />
           </div>
         </div>
       </div>
+      {modal === 'edit' && <EditProfileModal account={account} onClose={closeModal} />}
+      {modal === 'password' && <ChangePasswordModal onClose={closeModal} />}
     </div>
   )
 }
