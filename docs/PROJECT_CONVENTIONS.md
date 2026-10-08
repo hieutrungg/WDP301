@@ -155,11 +155,11 @@ Các contract sau là draft, không phải implementation authorization.
 | -------------------------------------- | -------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- | ------ |
 | `GET /api/movies`                    | `q`, `genre`, `language`, `releaseFrom`, `releaseTo`, `status`, `page`, `limit`, `sort`, `order` | page gồm movie summary:`id`, `title`, `synopsis`, `genres`, `duration`, `releaseDate`, `language`, `director`, `ageRating`, `posterUrl`, `trailerUrl`, `status` | `INVALID_QUERY`                         | Public |
 | `GET /api/movies/:id`                | ObjectId                                                                                                             | movie detail cùng fields trên; showtime không embedded authoritative                                                                                                                  | `INVALID_MOVIE_ID`, `MOVIE_NOT_FOUND` | Public |
-| `GET /api/cinemas`                   | `q`, `status`, `page`, `limit`                                                                               | `id`, `branchName`, `address`, `email`, `status`                                                                                                                               | `INVALID_QUERY`                         | Public |
-| `GET /api/showtimes`                 | `movieId`, `cinemaId`, `roomId`, `date`, `status`, `page`, `limit`                                     | `id`, `movieId`, `roomId`, `cinemaId` projection, `startTime`, `endTime`, `status`                                                                                         | `INVALID_QUERY`, `INVALID_DATE_RANGE` | Public |
+| `GET /api/cinemas`                   | `q`, `page`, `limit`                                                                                         | page gồm `id`, `branchName`, `address`, `email`, `hotline`, `status`; public chỉ trả `ACTIVE`                                                                                | `INVALID_QUERY`                         | Public |
+| `GET /api/showtimes`                 | `movieId`, `cinemaId`, `roomId`, `date`, `page`, `limit`                                                   | page gồm `id`, `movieId`, `roomId`, `cinemaId` projection, `startAt`, `endAt`, stored `status`, derived `displayStatus`; public chỉ trả `PUBLISHED` chưa bắt đầu | `INVALID_QUERY`, `INVALID_DATE_RANGE` | Public |
 | `GET /api/movies/:movieId/showtimes` | cùng filter cinema/date                                                                                             | cùng showtime summary, scope bởi movie                                                                                                                                                 | `MOVIE_NOT_FOUND`, `INVALID_QUERY`    | Public |
 
-Open contract questions: public movie status enum, timezone/date boundary, cinema projection source từ room, default sort, pagination max và unpublished visibility.
+Open contract questions: pagination max và các Movie query detail chưa được chốt trong bảng này. Showtime date filter dùng ngày `Asia/Ho_Chi_Minh` rồi chuyển thành UTC range, `cinemaId` được chiếu từ Room, và default sort là `startAt` tăng dần.
 
 ## 8. Database convention
 
@@ -205,7 +205,8 @@ Không lưu `Seat.isBooked = true` global. `Room.seats[].status` chỉ được 
 - Frontend guard không phải security boundary.
 - `roles + directPermissionIds` hiện hợp nhất theo union; không có direct deny.
 - Không xóa `directPermissionIds` trong phase governance.
-- Role/permission/account-status change phải xác định session effect; hiện chưa approve immediate invalidation hay effective at next request/login.
+- Protected request phải dùng account status và effective permissions hiện hành từ backend; account bị khóa hoặc quyền bị thu hồi có hiệu lực ở protected request tiếp theo.
+- Role redirect mặc định: `ADMIN -> /admin`, `MANAGER -> /manager`, `STAFF -> /staff`, `CUSTOMER -> /`; account nhiều role dùng thứ tự ưu tiên này.
 - Branch-scoped authorization chưa có contract; không suy ra từ global permission code.
 
 ## 11. Validation
@@ -402,9 +403,137 @@ Affected modules: Frontend, requirements, UX.
 Status: APPROVED.
 Owner/Approver: Project owner.
 
+### Decision A-13
+
+Decision: Movie dùng lifecycle `DRAFT`, `PUBLISHED`, `ARCHIVED`; public API chỉ trả `PUBLISHED`, không hard-delete Movie đã có lịch sử; danh sách mặc định mới nhất trước và hỗ trợ search/pagination.
+Reason: Tách rõ dữ liệu đang soạn, dữ liệu công khai và dữ liệu lịch sử để Movie owner có contract ổn định.
+Affected modules: `movies`, public Movie UI, Manager Movie.
+Status: APPROVED.
+Owner/Approver: Project owner.
+
+### Decision A-14
+
+Decision: Physical Seat chỉ mô tả layout; availability thuộc `Showtime + Seat`. Room layout đã được Showtime tham chiếu không sửa đè; thay đổi cấu trúc tạo layout version mới, dữ liệu lịch sử tiếp tục tham chiếu version cũ.
+Reason: Tránh làm sai lịch sử Showtime/Booking và loại bỏ booked state toàn cục.
+Affected modules: `cinemas`, `rooms`, `showtimes`, `bookings`.
+Status: APPROVED.
+Owner/Approver: Project owner.
+
+### Decision A-15
+
+Decision: Showtime lưu thời gian UTC và hiển thị theo `Asia/Ho_Chi_Minh`; cùng Room không được overlap, khác Room có thể đồng thời; hai suất liền nhau chỉ hợp lệ khi `endAt` đã bao gồm thời gian dọn phòng. Read/filter/create và update Showtime chưa bán vé được phép; cancel Showtime đã bán vé bị defer đến khi Refund contract approved.
+Reason: Cho phép Showtime discovery tiến độc lập nhưng không tự invent cancellation/refund behavior.
+Affected modules: `showtimes`, `rooms`, public discovery, Manager Showtime.
+Status: APPROVED.
+Owner/Approver: Project owner.
+
+### Decision A-16
+
+Decision: Protected API kiểm tra account status và effective permissions hiện hành ở backend; unauthenticated trả `401`, thiếu quyền trả `403`; account bị khóa/quyền bị thu hồi có hiệu lực ở protected request tiếp theo. Role redirect và priority là `ADMIN`, `MANAGER`, `STAFF`, `CUSTOMER`. Branch-scoped authorization là decision riêng chưa được duyệt.
+Reason: Backend là security boundary và thay đổi quyền không được phụ thuộc vào state cũ ở frontend.
+Affected modules: `auth`, `accounts`, RBAC, protected routes và role layouts.
+Status: APPROVED.
+Owner/Approver: Project owner.
+
+### Decision A-17
+
+Decision: Seat hold mặc định 10 phút, lấy từ cấu hình; UI hiển thị thời gian còn lại và hold hết hạn phải được giải phóng theo cách idempotent.
+Reason: Cho khách thời gian hoàn tất checkout nhưng không khóa ghế vô thời hạn hoặc ghi cứng policy trong nhiều module.
+Affected modules: `bookings`, `showtimes`, Seat Selection UI.
+Status: APPROVED.
+Owner/Approver: Project owner.
+
+### Decision A-18
+
+Decision: Dùng `SeatHold` riêng gắn với `Showtime + Seat` và owner/checkout identity. Một ghế trong một Showtime chỉ có tối đa một hold còn hiệu lực; yêu cầu giữ nhiều ghế phải all-or-nothing và chống concurrent double booking.
+Reason: Physical Seat chỉ mô tả layout; hold cần owner, expiry và atomic acquisition rõ ràng.
+Affected modules: `rooms`, `showtimes`, `bookings`.
+Status: APPROVED.
+Owner/Approver: Project owner.
+
+### Decision A-19
+
+Decision: Booking MVP dùng các trạng thái `PENDING_PAYMENT`, `CONFIRMED`, `EXPIRED`; đường đi ban đầu là `PENDING_PAYMENT -> CONFIRMED` hoặc `PENDING_PAYMENT -> EXPIRED`. Cancellation/refund states chưa thuộc MVP này.
+Reason: Cho phép triển khai Booking core mà không tự suy diễn chính sách hoàn tiền chưa được duyệt.
+Affected modules: `bookings`, `payments`, customer checkout.
+Status: APPROVED.
+Owner/Approver: Project owner.
+
+### Decision A-20
+
+Decision: Payment báo thành công sau khi SeatHold/Booking đã hết hạn không được tự confirm Booking hoặc phát hành Ticket. Giao dịch phải được đánh dấu `REFUND_REQUIRED` hoặc `REVIEW_REQUIRED`; automatic refund chờ Refund contract, trước đó Manager xử lý thủ công.
+Reason: Không được bán lại ghế đã hết quyền giữ hoặc tạo Ticket cho một ghế có thể đã thuộc khách khác.
+Affected modules: `payments`, `bookings`, `tickets`, `refunds`.
+Status: APPROVED.
+Owner/Approver: Project owner.
+
+### Decision A-21
+
+Decision: Payment được thiết kế provider-neutral và triển khai deterministic mock adapter trước. Tích hợp VNPay/MoMo hoặc gateway thật không thuộc Gói C và tiếp tục defer.
+Reason: Hoàn thiện và kiểm thử Booking-Payment contract trước khi phụ thuộc nhà cung cấp ngoài.
+Affected modules: `payments`, checkout UI.
+Status: APPROVED.
+Owner/Approver: Project owner.
+
+### Decision A-22
+
+Decision: Payment idempotency dùng cả provider reference duy nhất và processing key/state. Callback hoặc retry lặp chỉ trả trạng thái hiện hành, không lặp Booking confirmation, Ticket issuance hoặc side effect khác.
+Reason: Gateway có thể gửi callback nhiều lần hoặc request có thể retry sau timeout.
+Affected modules: `payments`, `bookings`, `tickets` và downstream ports.
+Status: APPROVED.
+Owner/Approver: Project owner.
+
+### Decision A-23
+
+Decision: Ticket/QR chỉ được phát hành đúng một lần sau khi Booking/Payment được xác nhận thành công qua authoritative success path; redirect query và late payment không đủ điều kiện phát hành Ticket.
+Reason: Ngăn vé giả, vé trùng và side effect phát sinh trước khi thanh toán được xác minh.
+Affected modules: `payments`, `bookings`, `tickets`, C15/C17.
+Status: APPROVED.
+Owner/Approver: Project owner.
+
+### Decision A-24
+
+Decision: CinemaBranch dùng trạng thái `ACTIVE`, `INACTIVE`; public chỉ thấy `ACTIVE`. Không hard-delete Branch đã có dữ liệu tham chiếu và không cho chuyển sang `INACTIVE` khi còn Showtime `PUBLISHED` trong tương lai.
+Reason: Giữ lịch sử Room, Showtime, Booking và giao dịch ổn định trong khi vẫn cho phép ngừng vận hành chi nhánh.
+Affected modules: `cinemas`, `rooms`, `showtimes`, public discovery.
+Status: APPROVED.
+Owner/Approver: Project owner.
+
+### Decision A-25
+
+Decision: Branch M0 có `branchName` và `address` bắt buộc, `email` và `hotline` tùy chọn, cùng `status`; `branchName` phải unique theo dạng đã normalize. Operating hours và branch-scoped RBAC không thuộc M0. Development seed phải có Branch/Room/layout và chạy lặp không tạo trùng.
+Reason: Đủ dữ liệu cho discovery và Showtime phát triển mà không tự mở rộng sang lịch vận hành hoặc authorization theo chi nhánh.
+Affected modules: `cinemas`, `rooms`, seed, RBAC.
+Status: APPROVED.
+Owner/Approver: Project owner.
+
+### Decision A-26
+
+Decision: Showtime chỉ persist `DRAFT`, `PUBLISHED`, `CANCELLED`. `UPCOMING`, `NOW_SHOWING`, `ENDED`, `SOLD_OUT` là trạng thái hiển thị được tính từ thời gian và availability, không persist như lifecycle state.
+Reason: Tránh cron/job chỉ để đổi trạng thái theo đồng hồ và tránh đồng bộ sai giữa trạng thái lịch và ghế.
+Affected modules: `showtimes`, public discovery, bookings.
+Status: APPROVED.
+Owner/Approver: Project owner.
+
+### Decision A-27
+
+Decision: Manager chọn `startAt`; hệ thống tính `endAt` dùng cho conflict từ Movie duration cộng cleanup buffer cấu hình, mặc định 15 phút. Cùng Room dùng interval `[startAt, endAt)` nên suất sau được phép bắt đầu đúng `endAt` của suất trước.
+Reason: Một nguồn tính thời gian thống nhất và có khoảng dọn phòng rõ ràng cho overlap validation.
+Affected modules: `movies`, `rooms`, `showtimes`, Manager Showtime UI.
+Status: APPROVED.
+Owner/Approver: Project owner.
+
+### Decision A-28
+
+Decision: Publish Showtime chỉ hợp lệ khi Movie, Branch, Room active/eligible, thời gian tương lai, không overlap và Room layout hợp lệ; publish chốt `roomLayoutVersion`. Showtime `PUBLISHED` chỉ được sửa hoặc hủy trước giờ chiếu khi chưa có active SeatHold, Booking, Payment hoặc Ticket. `CANCELLED` là terminal; cancel đã có giao dịch tiếp tục defer đến Refund contract.
+Reason: Bảo vệ layout/availability và không tạo mutation cần hoàn tiền trước khi Refund policy được duyệt.
+Affected modules: `showtimes`, `rooms`, `bookings`, `payments`, `tickets`, `refunds`.
+Status: APPROVED.
+Owner/Approver: Project owner.
+
 ## 22. Proposed decisions awaiting approval
 
-Các business/API/data decision chưa được owner duyệt tiếp tục nằm trong `docs/REQUIREMENTS_STATUS.md` và tab `Requirement Decisions` của Team Development Plan. Không suy diễn các decision đó từ các quyết định chung A-01 đến A-12.
+Các business/API/data decision chưa được owner duyệt tiếp tục nằm trong `docs/REQUIREMENTS_STATUS.md` và tab `Requirement Decisions` của Team Development Plan. Không suy diễn các decision đó từ các quyết định đã được duyệt A-01 đến A-28.
 
 ## 23. Change-control policy
 

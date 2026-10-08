@@ -7,6 +7,7 @@
     "test": "node --test --test-concurrency=1",
     "lint": "eslint src test",
     "lint:auth": "eslint src/modules/auth src/modules/account src/modules/role-permission src/config src/middlewares src/app.js src/utils test",
+    "seed:dev": "node src/seeds/seed-development.js",
     "dev": "nodemon src/server.js",
     "start": "node src/server.js"
   },
