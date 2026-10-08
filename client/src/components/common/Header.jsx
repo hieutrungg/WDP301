@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { ChevronDown, LogOut, MapPin, Menu, Search, X } from 'lucide-react'
 import AppLogo from './AppLogo'
+import UserMenu from './UserMenu'
+import { userMenuItems } from './userMenuItems'
 import { Link, useNavigate } from 'react-router'
 import { toast } from 'sonner'
 import { useAuth } from '../../features/auth/hooks/useAuth'
@@ -71,25 +73,13 @@ function Header() {
             </>
           )}
           {initialized && isAuthenticated && (
-            <div className="hidden items-center gap-2 md:flex">
-              <div className="flex min-w-0 items-center gap-2 rounded-lg bg-surface-container px-2.5 py-1.5">
-                <span className="grid size-8 shrink-0 place-items-center rounded-full bg-primary text-sm font-bold text-on-primary">
-                  {avatarLabel}
-                </span>
-                <span className="max-w-32 truncate text-xs font-semibold text-on-surface xl:max-w-44">
-                  {displayName}
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={handleLogout}
-                disabled={isLoggingOut}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-surface-container px-3 py-2 text-xs text-on-surface transition-colors hover:bg-surface-container-high disabled:cursor-wait disabled:opacity-60"
-              >
-                <LogOut className="size-4" />
-                {isLoggingOut ? 'Signing out...' : 'Logout'}
-              </button>
-            </div>
+            <UserMenu
+              account={account}
+              avatarLabel={avatarLabel}
+              displayName={displayName}
+              isLoggingOut={isLoggingOut}
+              onLogout={handleLogout}
+            />
           )}
           {!initialized && (
             <span className="hidden size-8 animate-pulse rounded-full bg-surface-container-high md:block" />
@@ -125,6 +115,20 @@ function Header() {
                     <p className="truncate text-xs text-on-surface-variant">{account.email}</p>
                   </div>
                 </div>
+                {userMenuItems.map(({ label, to, icon: Icon }) =>
+                  to ? (
+                    <Link key={label} to={to} onClick={() => setMenuOpen(false)} className="flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm text-on-surface hover:bg-surface-container-high">
+                      <Icon className="size-4 text-on-surface-variant" />
+                      {label}
+                    </Link>
+                  ) : (
+                    <span key={label} aria-disabled="true" className="flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm text-on-surface-variant/60">
+                      <Icon className="size-4" />
+                      {label}
+                      <span className="ml-auto rounded-full bg-surface-container-highest px-2 py-0.5 text-[10px] font-bold uppercase">Soon</span>
+                    </span>
+                  ),
+                )}
                 <button
                   type="button"
                   onClick={handleLogout}
