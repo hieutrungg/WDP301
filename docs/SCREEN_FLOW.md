@@ -39,7 +39,7 @@ G03 Sign In
      -> G04d Password Reset Success -> G03 Sign In
 ```
 
-Important implementation rule: create and expire a seat hold before taking payment. A successful payment creates the booking and ticket atomically; a failed or timed-out payment releases the hold.
+Important implementation rule: create an expiring seat hold, then create a `PENDING_PAYMENT` Booking before taking payment. A verified successful payment confirms the Booking and issues its Ticket exactly once. Failed or timed-out payment expires/releases the hold. Payment success received after expiry must not confirm the Booking or issue a Ticket; it moves to `REFUND_REQUIRED`/`REVIEW_REQUIRED` handling.
 
 ## 2. Customer account, loyalty and support
 
@@ -94,7 +94,7 @@ G03 Sign In -> role guard -> Manager Dashboard & Analytics
   `-> Movie Sales Analytics -> Revenue Reports
 ```
 
-Showtime cancellation must invoke the refund workflow and notify affected customers. Movie archival must be blocked while future showtimes reference the movie.
+Showtime without any active SeatHold or transaction may be cancelled before it starts. Cancellation with sold/pending transactions remains unavailable until the Refund workflow and notification policy are approved. Movie archival must be blocked while future showtimes reference the movie.
 
 ## 5. System administration
 

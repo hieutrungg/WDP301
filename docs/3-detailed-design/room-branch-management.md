@@ -12,9 +12,17 @@ Supports branch updates, room management, seat-map viewing/configuration, seat t
 - Separate branch contact updates from room layout changes; they have different policies and repositories.
 - Capacity is derived from enabled seats and should not be independently editable.
 
-## Proposed Responsibilities and Relationships
+## Approved M0 Branch Contract
+
+- Branch fields: required normalized-unique `branchName`, required `address`, optional `email`, optional `hotline`, and `status` in `ACTIVE/INACTIVE`.
+- Public discovery returns only `ACTIVE` branches. Only an active Branch/Room may receive a new Showtime.
+- A referenced Branch is never hard-deleted. Transition to `INACTIVE` is blocked while it has a future `PUBLISHED` Showtime; Rooms and historical records remain intact.
+- Operating hours and branch-scoped RBAC are outside M0.
+- Development seed must create Branch, Room, and valid layout fixtures idempotently.
+
+## Responsibilities and Relationships
 
 Branch is an aggregate for branch metadata. Room is a separate aggregate because layout changes have their own consistency rule. Room owns an immutable/versioned `SeatLayout` composed of `SeatDefinition` values. Published showtimes reference the layout version or receive a snapshot.
 
-Open Design Question: confirm whether old layout versions must remain queryable for historical tickets and future showtimes.
+Old layout versions remain queryable for historical records and any future Showtime that already references that version.
 

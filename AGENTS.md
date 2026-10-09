@@ -26,7 +26,7 @@
 - Không lưu trạng thái booked toàn cục trên physical `Seat`; availability luôn thuộc `Showtime + Seat`.
 - Protected backend route phải default-deny và dùng `requireAuth`/`requirePermission` phù hợp.
 - Không tạo ticket/QR trước confirmed successful booking/payment flow.
-- Không tự xóa `directPermissionIds`; policy này đang chờ owner review.
+- Không xóa `directPermissionIds`; effective permission đã được duyệt là union của role grants và direct grants, chưa có direct deny.
 
 ## Khi requirement chưa rõ
 
