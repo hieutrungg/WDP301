@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { ChevronDown, LogOut } from 'lucide-react'
 import { Link } from 'react-router'
-import { userMenuItems } from './userMenuItems'
+import { getUserMenuItems } from './userMenuItems'
 
 function UserMenu({ account, avatarLabel, displayName, isLoggingOut, onLogout }) {
   const [open, setOpen] = useState(false)
@@ -50,7 +50,7 @@ function UserMenu({ account, avatarLabel, displayName, isLoggingOut, onLogout })
           </div>
 
           <div className="p-1.5">
-            {userMenuItems.map(({ label, to, icon: Icon }) =>
+            {getUserMenuItems(account).map(({ label, to, icon: Icon }) =>
               to ? (
                 <Link
                   key={label}

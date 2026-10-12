@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { ChevronDown, LogOut, MapPin, Menu, Search, X } from 'lucide-react'
 import AppLogo from './AppLogo'
 import UserMenu from './UserMenu'
-import { userMenuItems } from './userMenuItems'
+import { getUserMenuItems } from './userMenuItems'
 import { Link, useNavigate } from 'react-router'
 import { toast } from 'sonner'
 import { useAuth } from '../../features/auth/hooks/useAuth'
@@ -115,7 +115,7 @@ function Header() {
                     <p className="truncate text-xs text-on-surface-variant">{account.email}</p>
                   </div>
                 </div>
-                {userMenuItems.map(({ label, to, icon: Icon }) =>
+                {getUserMenuItems(account).map(({ label, to, icon: Icon }) =>
                   to ? (
                     <Link key={label} to={to} onClick={() => setMenuOpen(false)} className="flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm text-on-surface hover:bg-surface-container-high">
                       <Icon className="size-4 text-on-surface-variant" />

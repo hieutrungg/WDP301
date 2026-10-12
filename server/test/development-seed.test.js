@@ -36,7 +36,13 @@ test("branch and room fixtures satisfy the approved M0 invariants", () => {
 
   assert.equal(new Set(normalizedBranchNames).size, branchSeeds.length);
   assert.ok(branchSeeds.every(({ branchName, address }) => branchName && address));
-  assert.ok(branchSeeds.every(({ status }) => status === "ACTIVE"));
+  assert.deepEqual(new Set(branchSeeds.map(({ status }) => status)), new Set(["ACTIVE", "INACTIVE"]));
+  assert.ok(branchSeeds.every(({ hotline }) => !hotline || /^\+?\d{4,15}$/.test(hotline)));
+
+  const inactiveBranchKeys = new Set(
+    branchSeeds.filter(({ status }) => status === "INACTIVE").map(({ seedKey }) => seedKey),
+  );
+  assert.ok(roomSeeds.every(({ branchSeedKey }) => !inactiveBranchKeys.has(branchSeedKey)));
 
   for (const room of roomSeeds) {
     assert.ok(branchKeys.has(room.branchSeedKey));

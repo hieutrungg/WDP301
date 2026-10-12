@@ -10,6 +10,8 @@ export const errorHandler = (error, _req, res, _next) => {
 
   res.status(statusCode).json({
     success: false,
+    // Only AppError codes are public; driver errors carry numeric codes such as 11000.
+    ...(isOperationalError && error.code ? { code: error.code } : {}),
     message:
       statusCode >= 500 && !isOperationalError
         ? "Internal server error"

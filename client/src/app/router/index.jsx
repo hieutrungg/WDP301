@@ -1,10 +1,13 @@
-import { BrowserRouter, Route, Routes } from 'react-router'
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router'
 import ProfilePage from '../../features/account/pages/ProfilePage'
+import BranchManagementPage from '../../features/branch/pages/BranchManagementPage'
+import AdminLayout from '../../layouts/AdminLayout'
 import PublicLayout from '../../layouts/PublicLayout'
 import LandingPage from '../../pages/public/LandingPage'
 import LoginPage from '../../pages/public/LoginPage'
 import RegisterPage from '../../pages/public/RegisterPage'
 import VerifyEmailPage from '../../pages/public/VerifyEmailPage'
+import PermissionRoute from './PermissionRoute'
 import ProtectedRoute from './ProtectedRoute'
 
 function AppRouter() {
@@ -18,6 +21,16 @@ function AppRouter() {
           <Route path="verify-email" element={<VerifyEmailPage />} />
           <Route element={<ProtectedRoute />}>
             <Route path="profile" element={<ProfilePage />} />
+          </Route>
+        </Route>
+
+        {/* UX guard only; the API enforces branch.manage on every request. */}
+        <Route path="admin" element={<ProtectedRoute />}>
+          <Route element={<PermissionRoute permission="branch.manage" />}>
+            <Route element={<AdminLayout />}>
+              <Route index element={<Navigate to="branches" replace />} />
+              <Route path="branches" element={<BranchManagementPage />} />
+            </Route>
           </Route>
         </Route>
       </Routes>

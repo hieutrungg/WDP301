@@ -46,6 +46,24 @@ export const roomSeeds = [
     roomName: "Room 02",
     roomType: "STANDARD",
   },
+  ...[
+    ["landmark-81", 3],
+    ["crescent-mall", 2],
+    ["west-lake", 2],
+    ["da-nang-riverside", 1],
+    ["saigon-centre", 2],
+  ].flatMap(([branchKey, roomTotal]) =>
+    Array.from({ length: roomTotal }, (_, index) => {
+      const roomNumber = String(index + 1).padStart(2, "0");
+
+      return {
+        seedKey: `room:${branchKey}:${roomNumber}`,
+        branchSeedKey: `branch:f-cinema-${branchKey}`,
+        roomName: `Room ${roomNumber}`,
+        roomType: "STANDARD",
+      };
+    }),
+  ),
 ].map((room) => {
   const seats = createStandardLayout(room.seedKey);
   return { ...room, layoutVersion: 1, seats, capacity: seats.length, status: "ACTIVE" };
