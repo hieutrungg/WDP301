@@ -1,16 +1,20 @@
 import { Link } from 'react-router'
-import { Clapperboard } from 'lucide-react'
+import brandLogo from '../../assets/icons/f_cinema_brand_logo.png'
 
 function AppLogo({ className = '' }) {
   return (
     <Link
       to="/"
-      className={`flex shrink-0 items-center gap-2 ${className}`}
+      className={`flex shrink-0 items-center gap-4 ${className}`}
       aria-label="F-Cinema home"
     >
-      <span className="relative grid size-8 place-items-center rounded-lg bg-primary-container text-white shadow-crimson">
-        <Clapperboard className="size-5" strokeWidth={2.5} />
-        <span className="absolute -right-0.5 -top-0.5 size-2 rounded-full border border-surface bg-secondary" />
+      <span className="relative size-8 shrink-0 overflow-hidden">
+        <img
+          src={brandLogo}
+          alt=""
+          aria-hidden="true"
+          className="absolute -left-4 -top-4 h-16 w-16 max-w-none object-contain"
+        />
       </span>
       <span className="font-heading text-lg font-bold tracking-widest text-on-surface sm:text-xl">
         F-CINEMA
