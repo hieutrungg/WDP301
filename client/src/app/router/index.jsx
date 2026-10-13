@@ -9,6 +9,8 @@ import RegisterPage from '../../pages/public/RegisterPage'
 import VerifyEmailPage from '../../pages/public/VerifyEmailPage'
 import ShowtimesPage from '../../features/movie-showtime/pages/ShowtimesPage'
 import PermissionRoute from './PermissionRoute'
+import MoviesPage from '../../pages/public/MoviesPage'
+import MovieDetailPage from '../../pages/public/MovieDetailPage'
 import ProtectedRoute from './ProtectedRoute'
 
 function AppRouter() {
@@ -21,6 +23,8 @@ function AppRouter() {
           <Route path="register" element={<RegisterPage />} />
           <Route path="verify-email" element={<VerifyEmailPage />} />
           <Route path="showtimes" element={<ShowtimesPage />} />
+          <Route path="movies" element={<MoviesPage />} />
+          <Route path="movies/:movieId" element={<MovieDetailPage />} />
           <Route element={<ProtectedRoute />}>
             <Route path="profile" element={<ProfilePage />} />
           </Route>

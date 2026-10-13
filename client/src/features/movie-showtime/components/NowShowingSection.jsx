@@ -1,9 +1,13 @@
 import { ArrowRight, Flame } from 'lucide-react'
-import MovieCard from './MovieCard'
+import { Link } from 'react-router'
+import EmptyState from '../../../components/common/EmptyState'
+import ErrorState from '../../../components/common/ErrorState'
+import MovieCatalogCard from './MovieCatalogCard'
+import MovieCatalogSkeleton from './MovieCatalogSkeleton'
 
-const genres = ['All', 'Action', 'Drama', 'Animation', 'Horror']
+function NowShowingSection({ movies, loading, error, onRetry }) {
+  const genres = [...new Set(movies.flatMap((movie) => movie.genres))].slice(0, 4)
 
-function NowShowingSection({ movies }) {
   return (
     <section id="movies" className="mx-auto w-full max-w-[1440px] px-4 py-6 sm:px-6 lg:px-8">
       <div className="mb-6 flex flex-col justify-between gap-4 md:flex-row md:items-end">
@@ -13,16 +17,24 @@ function NowShowingSection({ movies }) {
         </div>
         <div className="flex min-w-0 items-center gap-3">
           <div className="flex min-w-0 gap-1 overflow-x-auto rounded-lg bg-surface-container-low p-1">
-            {genres.map((genre, index) => (
-              <button key={genre} type="button" className={`shrink-0 rounded-lg px-3 py-1.5 text-xs transition-colors ${index === 0 ? 'bg-primary-container font-semibold text-white' : 'text-on-surface-variant hover:bg-surface-container hover:text-on-surface'}`}>{genre}</button>
+            <Link to="/movies" className="shrink-0 rounded-lg bg-primary-container px-3 py-1.5 text-xs font-semibold text-white">All</Link>
+            {genres.map((genre) => (
+              <Link key={genre} to={`/movies?genre=${encodeURIComponent(genre)}`} className="shrink-0 rounded-lg px-3 py-1.5 text-xs text-on-surface-variant transition-colors hover:bg-surface-container hover:text-on-surface">{genre}</Link>
             ))}
           </div>
-          <a href="#" className="hidden shrink-0 items-center gap-1 text-sm font-semibold text-primary sm:flex">View All <ArrowRight className="size-4" /></a>
+          <Link to="/movies" className="hidden shrink-0 items-center gap-1 text-sm font-semibold text-primary sm:flex">View All <ArrowRight className="size-4" /></Link>
         </div>
       </div>
-      <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 lg:grid-cols-5">
-        {movies.map((movie) => <MovieCard key={movie.id} movie={movie} />)}
-      </div>
+      {loading && <MovieCatalogSkeleton count={5} className="grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 lg:grid-cols-5" />}
+      {!loading && error && <ErrorState message={error} onRetry={onRetry} />}
+      {!loading && !error && movies.length === 0 && (
+        <EmptyState title="No movies are showing right now" description="Published movies will appear here when the cinema lineup is available." />
+      )}
+      {!loading && !error && movies.length > 0 && (
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 lg:grid-cols-5">
+          {movies.map((movie) => <MovieCatalogCard key={movie.id} movie={movie} />)}
+        </div>
+      )}
     </section>
   )
 }

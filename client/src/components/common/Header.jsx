@@ -3,16 +3,16 @@ import { ChevronDown, LogOut, MapPin, Menu, Search, X } from "lucide-react";
 import AppLogo from "./AppLogo";
 import UserMenu from "./UserMenu";
 import { getUserMenuItems } from "./userMenuItems";
-import { Link, useLocation, useNavigate } from "react-router";
+import { Link, NavLink, useNavigate } from "react-router";
 import { toast } from "sonner";
 import { useAuth } from "../../features/auth/hooks/useAuth";
 
 const navItems = [
-  "Home",
-  "Movies",
-  "Showtimes",
-  "Theatres & Tickets",
-  "Offers",
+  { label: "Home", to: "/" },
+  { label: "Movies", to: "/movies" },
+  { label: "Showtimes", to: "/showtimes" },
+  { label: "Theatres & Tickets", href: "/#theatres-&-tickets" },
+  { label: "Offers", href: "/#offers" },
 ];
 
 function Header() {
@@ -20,9 +20,15 @@ function Header() {
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const { account, initialized, isAuthenticated, logout } = useAuth();
   const navigate = useNavigate();
-  const location = useLocation();
+  const [searchQuery, setSearchQuery] = useState("");
   const displayName = account?.username || account?.email || "";
   const avatarLabel = displayName.charAt(0).toUpperCase();
+
+  const handleMovieSearch = (event) => {
+    event.preventDefault()
+    const query = searchQuery.trim()
+    navigate(query ? `/movies?q=${encodeURIComponent(query)}` : '/movies')
+  }
 
   const handleLogout = async () => {
     setIsLoggingOut(true);
@@ -58,38 +64,38 @@ function Header() {
           className="hidden items-center lg:flex"
           aria-label="Main navigation"
         >
-          {navItems.map((item) => (
-            <Link
-              key={item}
-              to={
-                item === "Home"
-                  ? "/"
-                  : item === "Showtimes"
-                    ? "/showtimes"
-                    : `/#${item.toLowerCase().replaceAll(" ", "-")}`
-              }
-              aria-current={
-                item === "Showtimes" && location.pathname === "/showtimes"
-                  ? "page"
-                  : undefined
-              }
-              className={`rounded-lg px-3 py-2 text-sm transition-colors hover:text-white ${item === "Showtimes" && location.pathname === "/showtimes" ? "bg-primary-container font-semibold text-white" : "text-on-surface-variant"}`}
-            >
-              {item}
-            </Link>
-          ))}
+          {navItems.map((item) =>
+            item.to ? (
+              <NavLink
+                key={item.label}
+                to={item.to}
+                end={item.to === "/"}
+                className={({ isActive }) =>
+                  `rounded-lg px-3 py-2 text-sm transition-colors hover:text-white ${isActive ? "bg-primary-container font-semibold text-white" : "text-on-surface-variant"}`
+                }
+              >
+                {item.label}
+              </NavLink>
+            ) : (
+              <a
+                key={item.label}
+                href={item.href}
+                className="rounded-lg px-3 py-2 text-sm text-on-surface-variant transition-colors hover:text-white"
+              >
+                {item.label}
+              </a>
+            ),
+          )}
         </nav>
 
         <div className="flex shrink-0 items-center gap-2 sm:gap-3">
-          <label className="relative hidden sm:block sm:w-40 xl:w-64">
-            <span className="sr-only">Search movies and actors</span>
-            <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-on-surface-variant" />
-            <input
-              type="search"
-              placeholder="Search movies, actors..."
-              className="w-full rounded-lg border-0 bg-surface-container-low py-2 pl-9 pr-3 text-xs text-on-surface outline-none placeholder:text-on-surface-variant/60 focus:bg-surface-container-high"
-            />
-          </label>
+          <form onSubmit={handleMovieSearch} className="relative hidden sm:block sm:w-40 xl:w-64">
+            <label>
+              <span className="sr-only">Search movies by title</span>
+              <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-on-surface-variant" aria-hidden="true" />
+              <input value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} type="search" placeholder="Search movie titles..." className="w-full rounded-lg border-0 bg-surface-container-low py-2 pl-9 pr-3 text-xs text-on-surface outline-none placeholder:text-on-surface-variant/60 focus:bg-surface-container-high" />
+            </label>
+          </form>
           {initialized && !isAuthenticated && (
             <>
               <Link
@@ -136,22 +142,30 @@ function Header() {
             className="mx-auto grid max-w-[1440px] gap-1"
             aria-label="Mobile navigation"
           >
-            {navItems.map((item) => (
-              <Link
-                key={item}
-                to={
-                  item === "Home"
-                    ? "/"
-                    : item === "Showtimes"
-                      ? "/showtimes"
-                      : `/#${item.toLowerCase().replaceAll(" ", "-")}`
-                }
-                onClick={() => setMenuOpen(false)}
-                className="rounded-lg px-3 py-2.5 text-sm text-on-surface hover:bg-surface-container-high"
-              >
-                {item}
-              </Link>
-            ))}
+            {navItems.map((item) =>
+              item.to ? (
+                <NavLink
+                  key={item.label}
+                  to={item.to}
+                  end={item.to === "/"}
+                  onClick={() => setMenuOpen(false)}
+                  className={({ isActive }) =>
+                    `rounded-lg px-3 py-2.5 text-sm hover:bg-surface-container-high ${isActive ? "bg-primary-container font-semibold text-white" : "text-on-surface"}`
+                  }
+                >
+                  {item.label}
+                </NavLink>
+              ) : (
+                <a
+                  key={item.label}
+                  href={item.href}
+                  onClick={() => setMenuOpen(false)}
+                  className="rounded-lg px-3 py-2.5 text-sm text-on-surface hover:bg-surface-container-high"
+                >
+                  {item.label}
+                </a>
+              ),
+            )}
             {initialized && !isAuthenticated && (
               <div className="mt-2 flex gap-2 border-t border-white/5 pt-3">
                 <Link

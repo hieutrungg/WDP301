@@ -1,4 +1,5 @@
 import { deterministicObjectId, summarizeBulkWrite } from "./seed-utils.js";
+import { MOVIE_STATUSES } from "../modules/movie/movie.constants.js";
 
 export const movieSeeds = [
   {
@@ -14,7 +15,7 @@ export const movieSeeds = [
     ageRating: "T13",
     posterUrl: "https://placehold.co/600x900/png?text=Aurora+Station",
     trailerUrl: "https://example.com/trailers/aurora-station",
-    status: "PUBLISHED",
+    status: MOVIE_STATUSES.PUBLISHED,
   },
   {
     seedKey: "movie:saigon-after-rain",
@@ -29,7 +30,7 @@ export const movieSeeds = [
     ageRating: "T13",
     posterUrl: "https://placehold.co/600x900/png?text=Saigon+After+Rain",
     trailerUrl: "https://example.com/trailers/saigon-after-rain",
-    status: "PUBLISHED",
+    status: MOVIE_STATUSES.PUBLISHED,
   },
   {
     seedKey: "movie:the-last-projectionist",
@@ -44,7 +45,7 @@ export const movieSeeds = [
     ageRating: "T16",
     posterUrl: "https://placehold.co/600x900/png?text=The+Last+Projectionist",
     trailerUrl: "https://example.com/trailers/the-last-projectionist",
-    status: "PUBLISHED",
+    status: MOVIE_STATUSES.PUBLISHED,
   },
   {
     seedKey: "movie:orbit-kids",
@@ -59,7 +60,7 @@ export const movieSeeds = [
     ageRating: "P",
     posterUrl: "https://placehold.co/600x900/png?text=Orbit+Kids",
     trailerUrl: "https://example.com/trailers/orbit-kids",
-    status: "PUBLISHED",
+    status: MOVIE_STATUSES.PUBLISHED,
   },
   {
     seedKey: "movie:midnight-frequency",
@@ -74,7 +75,7 @@ export const movieSeeds = [
     ageRating: "T16",
     posterUrl: "https://placehold.co/600x900/png?text=Midnight+Frequency",
     trailerUrl: "https://example.com/trailers/midnight-frequency",
-    status: "DRAFT",
+    status: MOVIE_STATUSES.DRAFT,
   },
   {
     seedKey: "movie:river-of-stars",
@@ -89,7 +90,7 @@ export const movieSeeds = [
     ageRating: "T13",
     posterUrl: "https://placehold.co/600x900/png?text=River+of+Stars",
     trailerUrl: "https://example.com/trailers/river-of-stars",
-    status: "ARCHIVED",
+    status: MOVIE_STATUSES.ARCHIVED,
   },
 ];
 

@@ -1,0 +1,9 @@
+export const MOVIE_STATUSES = Object.freeze({
+  DRAFT: "DRAFT",
+  PUBLISHED: "PUBLISHED",
+  ARCHIVED: "ARCHIVED",
+});
+
+export const PUBLIC_MOVIE_STATUS = MOVIE_STATUSES.PUBLISHED;
+export const DEFAULT_MOVIE_PAGE_SIZE = 12;
+export const MAX_MOVIE_PAGE_SIZE = 24;

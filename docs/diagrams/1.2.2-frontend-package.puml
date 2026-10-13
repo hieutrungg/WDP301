@@ -1,0 +1,87 @@
+@startuml
+title 1.2.2 Frontend Package Diagram - Target Architecture
+top to bottom direction
+
+skinparam shadowing false
+skinparam packageStyle folder
+skinparam defaultFontName Arial
+skinparam linetype ortho
+skinparam nodesep 35
+skinparam ranksep 55
+skinparam ArrowColor #475569
+skinparam packageBorderColor #0369A1
+skinparam packageBackgroundColor #7DD3FC
+
+rectangle " " as TopRow #transparent {
+package "Feature Package" as FeaturePackage {
+  package "Auth & Account" as AuthAccount
+  package "Movie & Showtime" as MovieShowtime
+  package "Booking & Ticketing" as BookingTicketing
+  package "Payment & Promotion" as PaymentPromotion
+  package "Concession" as Concession
+  package "Cinema Operations" as CinemaOperations
+  package "Reporting" as Reporting
+  package "Role & Permission" as RolePermission
+
+  AuthAccount -[hidden]right-> MovieShowtime
+  MovieShowtime -[hidden]right-> BookingTicketing
+  BookingTicketing -[hidden]right-> PaymentPromotion
+  Concession -[hidden]right-> CinemaOperations
+  CinemaOperations -[hidden]right-> Reporting
+  Reporting -[hidden]right-> RolePermission
+  AuthAccount -[hidden]down-> Concession
+}
+
+package "Shared Package" as SharedPackage {
+  package "Assets & Styles" as AssetsStyles
+  package "Security" as Security
+  package "Store" as Store
+  package "Config & Constants" as ConfigConstants
+  package "Hooks" as Hooks
+  package "Utilities" as Utilities
+  package "Notifications" as Notifications
+
+  AssetsStyles -[hidden]right-> Security
+  Security -[hidden]right-> Store
+  ConfigConstants -[hidden]right-> Hooks
+  Hooks -[hidden]right-> Utilities
+  AssetsStyles -[hidden]down-> ConfigConstants
+  Hooks -[hidden]down-> Notifications
+}
+}
+
+rectangle " " as BottomRow #transparent {
+package "Presentation Package" as PresentationPackage {
+  package "Routes" as Routes
+  package "Layouts" as Layouts
+  package "Pages" as Pages
+  package "Components" as Components
+
+  Routes -[hidden]right-> Layouts
+  Pages -[hidden]right-> Components
+  Routes -[hidden]down-> Pages
+}
+
+package "Data Access Package" as DataAccessPackage {
+  package "Feature API Services" as ApiServices
+  package "HTTP Client" as HttpClient
+  package "API Error Mapper" as ApiErrorMapper
+  package "Query Client" as QueryClient
+
+  ApiServices -[hidden]right-> HttpClient
+  ApiErrorMapper -[hidden]right-> QueryClient
+  ApiServices -[hidden]down-> ApiErrorMapper
+}
+}
+
+FeaturePackage -[hidden]right-> SharedPackage
+PresentationPackage -[hidden]right-> DataAccessPackage
+TopRow -[hidden]down-> BottomRow
+
+PresentationPackage ..up.> FeaturePackage
+PresentationPackage ..right.> SharedPackage
+FeaturePackage ..right.> SharedPackage
+FeaturePackage ..down.> DataAccessPackage
+DataAccessPackage ..up.> SharedPackage
+
+@enduml

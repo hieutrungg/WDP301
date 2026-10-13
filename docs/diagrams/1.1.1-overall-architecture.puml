@@ -1,0 +1,82 @@
+@startuml
+title 1.1.1 Overall Architecture Diagram - Target Architecture
+top to bottom direction
+
+skinparam shadowing false
+skinparam componentStyle rectangle
+skinparam packageStyle rectangle
+skinparam defaultFontName Arial
+skinparam linetype ortho
+skinparam nodesep 35
+skinparam ranksep 55
+skinparam ArrowColor #374151
+skinparam packageBorderColor #475569
+skinparam packageBackgroundColor #F8FAFC
+skinparam componentBorderColor #475569
+skinparam componentBackgroundColor #FFFFFF
+skinparam databaseBorderColor #15803D
+skinparam databaseBackgroundColor #F0FDF4
+
+rectangle "Users / Actors\nGuest | Customer | Staff | Manager | Admin" as Users #FFFFFF
+
+package "Presentation Layer" as PresentationLayer {
+  component "React 19 Web Application\nRole-based user interfaces" as ReactApp #EFF6FF
+}
+
+package "Application Layer" as ApplicationLayer {
+  component "Express 5 Backend / REST API" as Backend #EFF6FF
+
+  component "Security & RBAC" as Security #FFFFFF
+  component "Controller Layer" as Controllers #FFFFFF
+  component "Service Layer" as Services #FFFFFF
+
+  package "Business Modules" as BusinessModules {
+    component "Authentication\n& Account" as AuthAccount
+    component "Movie\n& Showtime" as MovieShowtime
+    component "Booking\n& Ticketing" as BookingTicketing
+    component "Payment\n& Promotion" as PaymentPromotion
+    component "Cinema\nOperations" as CinemaOperations
+    component "Reporting\n& Analytics" as Reporting
+    component "Role\n& Permission" as RolePermission
+
+    AuthAccount -[hidden]right-> MovieShowtime
+    MovieShowtime -[hidden]right-> BookingTicketing
+    BookingTicketing -[hidden]right-> PaymentPromotion
+    CinemaOperations -[hidden]right-> Reporting
+    Reporting -[hidden]right-> RolePermission
+    AuthAccount -[hidden]down-> CinemaOperations
+  }
+}
+
+package "Data Layer" as DataLayer {
+  database "MongoDB Database" as MongoDb
+}
+
+package "External Systems" as ExternalSystems {
+  component "Payment Gateway\nProvider TBD" as PaymentGateway #FFF7ED
+  component "Email/SMS\nNotification Service" as NotificationService #FFF7ED
+  component "Google Identity\nServices" as GoogleIdentity #FFF7ED
+}
+
+Users -down-> ReactApp : HTTPS
+ReactApp -down-> Backend : RESTful API / JSON
+
+Backend -down-> Security
+Backend -down-> Controllers
+Backend -down-> Services
+Security -[hidden]right-> Controllers
+Controllers -[hidden]right-> Services
+
+Controllers -down-> Services
+Services -down-> BusinessModules : business workflows
+BusinessModules -down-> MongoDb : Mongoose / Repository
+RolePermission -[hidden]down-> MongoDb
+
+BusinessModules .right.> PaymentGateway : Payment / Refund API
+BusinessModules .right.> NotificationService : Notification API
+Security .right.> GoogleIdentity : Identity verification
+
+PresentationLayer -[hidden]down-> ApplicationLayer
+ApplicationLayer -[hidden]right-> ExternalSystems
+
+@enduml

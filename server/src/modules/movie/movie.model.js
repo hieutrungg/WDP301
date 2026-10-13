@@ -1,29 +1,32 @@
 import mongoose from "mongoose";
+import { MOVIE_STATUSES } from "./movie.constants.js";
 
-const accountSchema = new mongoose.Schema(
+const movieSchema = new mongoose.Schema(
   {
-    email: {
+    title: {
       type: String,
       required: true,
-      unique: true,
+      trim: true,
     },
-
-    passwordHash: {
+    synopsis: {
       type: String,
       required: true,
+      trim: true,
     },
-
-    roleIds: [
-      {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "Role",
-      },
-    ],
-
+    genres: [{ type: String, required: true, trim: true }],
+    cast: [{ type: String, trim: true }],
+    duration: { type: Number, required: true, min: 1 },
+    releaseDate: { type: Date, required: true },
+    language: { type: String, required: true, trim: true },
+    director: { type: String, required: true, trim: true },
+    ageRating: { type: String, required: true, trim: true },
+    posterUrl: { type: String, required: true, trim: true },
+    trailerUrl: { type: String, trim: true, default: "" },
     status: {
       type: String,
-      enum: ["ACTIVE", "DISABLED"],
-      default: "ACTIVE",
+      enum: Object.values(MOVIE_STATUSES),
+      default: MOVIE_STATUSES.DRAFT,
+      index: true,
     },
   },
   {
@@ -31,4 +34,7 @@ const accountSchema = new mongoose.Schema(
   },
 );
 
-export const Account = mongoose.model("Account", accountSchema);
+movieSchema.index({ status: 1, releaseDate: -1, _id: -1 });
+movieSchema.index({ status: 1, genres: 1, releaseDate: -1 });
+
+export const Movie = mongoose.models.Movie || mongoose.model("Movie", movieSchema);
