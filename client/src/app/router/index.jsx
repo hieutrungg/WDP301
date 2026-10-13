@@ -12,6 +12,10 @@ import PermissionRoute from './PermissionRoute'
 import MoviesPage from '../../pages/public/MoviesPage'
 import MovieDetailPage from '../../pages/public/MovieDetailPage'
 import ProtectedRoute from './ProtectedRoute'
+import StaffLayout from '../../layouts/StaffLayout'
+import CounterPosPage from '../../features/counter-pos/pages/CounterPosPage'
+import CounterPaymentPage from '../../features/counter-pos/pages/CounterPaymentPage'
+import CounterCompletePage from '../../features/counter-pos/pages/CounterCompletePage'
 
 function AppRouter() {
   return (
@@ -27,6 +31,12 @@ function AppRouter() {
           <Route path="movies/:movieId" element={<MovieDetailPage />} />
           <Route element={<ProtectedRoute />}>
             <Route path="profile" element={<ProfilePage />} />
+            <Route path="staff" element={<StaffLayout />}>
+              <Route index element={<CounterPosPage />} />
+              <Route path="pos" element={<CounterPosPage />} />
+              <Route path="pos/payment" element={<CounterPaymentPage />} />
+              <Route path="pos/complete" element={<CounterCompletePage />} />
+            </Route>
           </Route>
         </Route>
 
