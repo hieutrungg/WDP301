@@ -1,0 +1,93 @@
+@startuml
+title 1.2.1 Backend Package Diagram - Target Architecture
+top to bottom direction
+
+skinparam shadowing false
+skinparam packageStyle folder
+skinparam defaultFontName Arial
+skinparam linetype ortho
+skinparam nodesep 40
+skinparam ranksep 55
+skinparam ArrowColor #475569
+skinparam packageBorderColor #0369A1
+skinparam packageBackgroundColor #7DD3FC
+skinparam databaseBorderColor #15803D
+skinparam databaseBackgroundColor #F0FDF4
+skinparam rectangle {
+  BorderColor transparent
+  BackgroundColor transparent
+}
+
+package "API Package" as ApiPackage {
+  package "Routes" as Routes
+  package "Controllers" as Controllers
+  package "Request Validation" as RequestValidation
+
+  Routes -[hidden]right-> Controllers
+  Controllers -[hidden]right-> RequestValidation
+}
+
+rectangle " " as MainRow #transparent {
+  package "Cross-cutting Package" as CrossCuttingPackage {
+    package "Security & RBAC" as Security
+    package "Configuration" as Configuration
+    package "Error Handling" as ErrorHandling
+    package "Logging & Audit" as LoggingAudit
+
+    Security -[hidden]right-> Configuration
+    ErrorHandling -[hidden]right-> LoggingAudit
+    Security -[hidden]down-> ErrorHandling
+  }
+
+  package "Business Module Package" as BusinessModules {
+    package "Auth & Account" as AuthAccount
+    package "Role & Permission" as RolePermission
+    package "Movie & Showtime" as MovieShowtime
+    package "Booking & Ticketing" as BookingTicketing
+    package "Payment & Promotion" as PaymentPromotion
+    package "Concession" as Concession
+    package "Cinema Operations" as CinemaOperations
+    package "Reporting & Support" as ReportingSupport
+
+    AuthAccount -[hidden]right-> RolePermission
+    RolePermission -[hidden]right-> MovieShowtime
+    MovieShowtime -[hidden]right-> BookingTicketing
+    PaymentPromotion -[hidden]right-> Concession
+    Concession -[hidden]right-> CinemaOperations
+    CinemaOperations -[hidden]right-> ReportingSupport
+    AuthAccount -[hidden]down-> PaymentPromotion
+  }
+
+  package "Integration Package" as IntegrationPackage {
+    package "Provider Adapters" as ProviderAdapters
+    package "Webhooks" as Webhooks
+    package "Background Jobs" as BackgroundJobs
+
+    ProviderAdapters -[hidden]down-> Webhooks
+    Webhooks -[hidden]down-> BackgroundJobs
+  }
+
+  CrossCuttingPackage -[hidden]right-> BusinessModules
+  BusinessModules -[hidden]right-> IntegrationPackage
+}
+
+package "Data Access Package" as DataAccessPackage {
+  package "Repositories" as Repositories
+  package "Mongoose Models" as Models
+
+  Repositories -[hidden]right-> Models
+}
+
+database "MongoDB" as MongoDb
+
+ApiPackage -[hidden]down-> BusinessModules
+BusinessModules -[hidden]down-> DataAccessPackage
+DataAccessPackage -[hidden]down-> MongoDb
+
+ApiPackage ..down.> BusinessModules
+BusinessModules ..left.> CrossCuttingPackage
+BusinessModules ..right.> IntegrationPackage
+BusinessModules ..down.> DataAccessPackage
+DataAccessPackage ..down.> MongoDb
+
+@enduml

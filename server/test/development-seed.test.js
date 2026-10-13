@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { MOVIE_STATUSES } from "../src/modules/movie/movie.constants.js";
 import { branchSeeds } from "../src/seeds/seed-branches.js";
-import { movieSeeds } from "../src/seeds/seed-movies.js";
+import { movieSeeds, seedMovies } from "../src/seeds/seed-movies.js";
 import { roomSeeds } from "../src/seeds/seed-rooms.js";
 import {
   assertDevelopmentSeedTarget,
@@ -23,11 +24,59 @@ test("development seed fixtures use stable unique identities", () => {
 });
 
 test("movie fixtures cover the approved lifecycle", () => {
-  const allowedStatuses = new Set(["DRAFT", "PUBLISHED", "ARCHIVED"]);
+  const allowedStatuses = new Set(Object.values(MOVIE_STATUSES));
 
   assert.ok(movieSeeds.length >= 6);
   assert.ok(movieSeeds.every(({ status }) => allowedStatuses.has(status)));
   assert.deepEqual(new Set(movieSeeds.map(({ status }) => status)), allowedStatuses);
+});
+
+test("movie seed uses deterministic upserts and is safe to run repeatedly", async () => {
+  const calls = [];
+  const database = {
+    collection(name) {
+      assert.equal(name, "movies");
+
+      return {
+        async bulkWrite(operations, options) {
+          calls.push({ operations, options });
+          return {
+            matchedCount: calls.length === 1 ? 0 : movieSeeds.length,
+            modifiedCount: calls.length === 1 ? 0 : movieSeeds.length,
+            upsertedCount: calls.length === 1 ? movieSeeds.length : 0,
+          };
+        },
+      };
+    },
+  };
+
+  const firstResult = await seedMovies(database);
+  const secondResult = await seedMovies(database);
+
+  assert.deepEqual(firstResult, { matched: 0, modified: 0, upserted: movieSeeds.length });
+  assert.deepEqual(secondResult, {
+    matched: movieSeeds.length,
+    modified: movieSeeds.length,
+    upserted: 0,
+  });
+  assert.equal(calls.length, 2);
+
+  for (const { operations, options } of calls) {
+    assert.deepEqual(options, { ordered: true });
+    assert.equal(operations.length, movieSeeds.length);
+
+    operations.forEach(({ updateOne }, index) => {
+      const fixture = movieSeeds[index];
+      const expectedId = deterministicObjectId(fixture.seedKey);
+
+      assert.equal(updateOne.filter._id.toString(), expectedId.toString());
+      assert.equal(updateOne.update.$setOnInsert._id.toString(), expectedId.toString());
+      assert.equal(updateOne.upsert, true);
+      assert.ok(updateOne.update.$set.releaseDate instanceof Date);
+      assert.ok(updateOne.update.$set.createdAt === undefined);
+      assert.ok(updateOne.update.$set.seedKey === undefined);
+    });
+  }
 });
 
 test("branch and room fixtures satisfy the approved M0 invariants", () => {
