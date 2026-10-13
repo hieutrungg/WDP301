@@ -89,7 +89,7 @@ function MovieDetailPage() {
                 <span className="flex items-center gap-2"><CalendarDays className="size-4 text-primary" aria-hidden="true" />{releaseDateFormatter.format(new Date(movie.releaseDate))}</span>
                 <span className="flex items-center gap-2"><Languages className="size-4 text-primary" aria-hidden="true" />{movie.language}</span>
               </div>
-              <p className="mt-7 max-w-3xl text-base leading-8 text-on-surface-variant">{movie.synopsis}</p>
+              
               <div className="mt-8 flex flex-wrap gap-3">
                 {movie.trailerUrl && (
                   <a href={movie.trailerUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-lg bg-primary-container px-5 py-3 text-sm font-bold text-white shadow-crimson transition-transform hover:-translate-y-0.5">

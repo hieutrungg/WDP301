@@ -5,23 +5,21 @@ import ErrorState from '../../components/common/ErrorState'
 import MovieCatalogCard from '../../features/movie-showtime/components/MovieCatalogCard'
 import MovieCatalogSkeleton from '../../features/movie-showtime/components/MovieCatalogSkeleton'
 import { useMovies } from '../../features/movie-showtime/hooks/useMovies'
+import {
+  buildMovieQuery,
+  getVisibleMoviePages,
+  readMovieSearchParams,
+} from '../../features/movie-showtime/utils/movieSearchParams'
 
 const genres = ['Adventure', 'Animation', 'Drama', 'Family', 'Mystery', 'Romance', 'Science Fiction']
 
 function MoviesPage() {
   const [searchParams, setSearchParams] = useSearchParams()
-  const q = searchParams.get('q') || ''
-  const genre = searchParams.get('genre') || ''
-  const page = Math.max(Number(searchParams.get('page')) || 1, 1)
-  const requestParams = new URLSearchParams()
-
-  if (q) requestParams.set('q', q)
-  if (genre) requestParams.set('genre', genre)
-  requestParams.set('page', String(page))
-  requestParams.set('limit', '12')
-
-  const { movies, meta, loading, error, retry } = useMovies(requestParams.toString())
+  const searchState = readMovieSearchParams(searchParams)
+  const { q, genre, sortOption } = searchState
+  const { movies, meta, loading, error, retry } = useMovies(buildMovieQuery(searchState))
   const hasFilters = Boolean(q || genre)
+  const visiblePages = getVisibleMoviePages(meta.page, meta.totalPages)
 
   const updateParams = (changes) => {
     const next = new URLSearchParams(searchParams)
@@ -74,7 +72,7 @@ function MoviesPage() {
             <SlidersHorizontal className="size-4 text-primary" aria-hidden="true" />
             Find your movie
           </div>
-          <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_240px]">
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_240px_240px]">
             <form key={q} onSubmit={handleSearch} className="flex min-w-0 gap-2">
               <label className="relative min-w-0 flex-1">
                 <span className="sr-only">Search by movie title</span>
@@ -88,6 +86,15 @@ function MoviesPage() {
               <select value={genre} onChange={(event) => updateParams({ genre: event.target.value, page: '' })} className="h-11 w-full rounded-lg border border-white/10 bg-surface-container px-3 text-sm text-on-surface outline-none focus:border-primary-container">
                 <option value="">All genres</option>
                 {genres.map((item) => <option key={item} value={item}>{item}</option>)}
+              </select>
+            </label>
+            <label>
+              <span className="sr-only">Sort movies</span>
+              <select value={sortOption} onChange={(event) => updateParams({ sort: event.target.value === 'releaseDate-desc' ? '' : event.target.value, page: '' })} className="h-11 w-full rounded-lg border border-white/10 bg-surface-container px-3 text-sm text-on-surface outline-none focus:border-primary-container">
+                <option value="releaseDate-desc">Newest releases</option>
+                <option value="releaseDate-asc">Oldest releases</option>
+                <option value="title-asc">Title A–Z</option>
+                <option value="title-desc">Title Z–A</option>
               </select>
             </label>
           </div>
@@ -124,11 +131,22 @@ function MoviesPage() {
                 {movies.map((movie) => <MovieCatalogCard key={movie.id} movie={movie} />)}
               </div>
               {meta.totalPages > 1 && (
-                <nav aria-label="Movie results pages" className="mt-10 flex items-center justify-center gap-3">
+                <nav aria-label="Movie results pages" className="mt-10 flex flex-wrap items-center justify-center gap-2">
                   <button type="button" disabled={meta.page <= 1} onClick={() => updateParams({ page: String(meta.page - 1) })} className="inline-flex items-center gap-1 rounded-lg border border-white/10 px-3 py-2 text-sm text-on-surface disabled:cursor-not-allowed disabled:opacity-40">
                     <ChevronLeft className="size-4" aria-hidden="true" /> Previous
                   </button>
-                  <span className="text-sm text-on-surface-variant">Page {meta.page} of {meta.totalPages}</span>
+                  {visiblePages.map((pageNumber) => (
+                    <button
+                      key={pageNumber}
+                      type="button"
+                      aria-current={pageNumber === meta.page ? 'page' : undefined}
+                      aria-label={`Page ${pageNumber}`}
+                      onClick={() => updateParams({ page: pageNumber === 1 ? '' : String(pageNumber) })}
+                      className={`size-10 rounded-lg border text-sm font-semibold transition-colors ${pageNumber === meta.page ? 'border-primary-container bg-primary-container text-white' : 'border-white/10 text-on-surface hover:border-primary-container/60'}`}
+                    >
+                      {pageNumber}
+                    </button>
+                  ))}
                   <button type="button" disabled={meta.page >= meta.totalPages} onClick={() => updateParams({ page: String(meta.page + 1) })} className="inline-flex items-center gap-1 rounded-lg border border-white/10 px-3 py-2 text-sm text-on-surface disabled:cursor-not-allowed disabled:opacity-40">
                     Next <ChevronRight className="size-4" aria-hidden="true" />
                   </button>
