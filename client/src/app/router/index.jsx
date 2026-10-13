@@ -6,6 +6,10 @@ import LoginPage from '../../pages/public/LoginPage'
 import RegisterPage from '../../pages/public/RegisterPage'
 import VerifyEmailPage from '../../pages/public/VerifyEmailPage'
 import ProtectedRoute from './ProtectedRoute'
+import StaffLayout from '../../layouts/StaffLayout'
+import CounterPosPage from '../../features/counter-pos/pages/CounterPosPage'
+import CounterPaymentPage from '../../features/counter-pos/pages/CounterPaymentPage'
+import CounterCompletePage from '../../features/counter-pos/pages/CounterCompletePage'
 
 function AppRouter() {
   return (
@@ -18,6 +22,12 @@ function AppRouter() {
           <Route path="verify-email" element={<VerifyEmailPage />} />
           <Route element={<ProtectedRoute />}>
             <Route path="profile" element={<ProfilePage />} />
+            <Route path="staff" element={<StaffLayout />}>
+              <Route index element={<CounterPosPage />} />
+              <Route path="pos" element={<CounterPosPage />} />
+              <Route path="pos/payment" element={<CounterPaymentPage />} />
+              <Route path="pos/complete" element={<CounterCompletePage />} />
+            </Route>
           </Route>
         </Route>
       </Routes>
