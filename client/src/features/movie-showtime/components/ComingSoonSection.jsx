@@ -1,4 +1,5 @@
-import { ArrowRight, Bell, CalendarClock, Play } from 'lucide-react'
+import { ArrowRight, Bell, CalendarClock } from 'lucide-react'
+import TrailerPlayerButton from './TrailerPlayerButton'
 
 function ComingSoonSection({ movies }) {
   return (
@@ -26,7 +27,7 @@ function ComingSoonSection({ movies }) {
               <div><h3 className="font-heading text-lg font-semibold text-on-surface transition-colors group-hover:text-primary">{movie.title}</h3><p className="mt-1 text-xs text-on-surface-variant">{movie.genres}</p></div>
               <div className="flex gap-2">
                 <button type="button" className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-surface-container-high px-3 py-2 text-xs text-on-surface transition-colors hover:bg-surface-container-highest"><Bell className="size-4 text-secondary" />Remind Me</button>
-                <button type="button" aria-label={`Play ${movie.title} trailer`} className="grid size-9 place-items-center rounded-lg bg-surface-container-high text-on-surface transition-colors hover:bg-surface-container-highest"><Play className="size-4" /></button>
+                <TrailerPlayerButton trailerUrl={movie.trailerUrl} title={movie.title} iconOnly className="grid size-9 place-items-center rounded-lg bg-surface-container-high text-on-surface transition-colors hover:bg-surface-container-highest disabled:hover:bg-surface-container-high" iconClassName="size-4" />
               </div>
             </div>
           </article>

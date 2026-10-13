@@ -1,22 +1,40 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { ChevronDown, LogOut } from 'lucide-react'
 import { Link } from 'react-router'
 import { getUserMenuItems } from './userMenuItems'
 
 function UserMenu({ account, avatarLabel, displayName, isLoggingOut, onLogout }) {
   const [open, setOpen] = useState(false)
+  const menuRef = useRef(null)
+
+  useEffect(() => {
+    if (!open) return undefined
+
+    const closeOnOutsideClick = (event) => {
+      if (!menuRef.current?.contains(event.target)) setOpen(false)
+    }
+    const closeOnEscape = (event) => {
+      if (event.key === 'Escape') setOpen(false)
+    }
+
+    document.addEventListener('pointerdown', closeOnOutsideClick)
+    document.addEventListener('keydown', closeOnEscape)
+    return () => {
+      document.removeEventListener('pointerdown', closeOnOutsideClick)
+      document.removeEventListener('keydown', closeOnEscape)
+    }
+  }, [open])
 
   return (
     <div
+      ref={menuRef}
       className="relative hidden md:block"
-      onMouseEnter={() => setOpen(true)}
-      onMouseLeave={() => setOpen(false)}
-      onKeyDown={(event) => event.key === 'Escape' && setOpen(false)}
     >
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
         aria-haspopup="menu"
+        aria-controls="user-account-menu"
         aria-expanded={open}
         className="flex min-w-0 items-center gap-2 rounded-lg bg-surface-container px-2.5 py-1.5 transition-colors hover:bg-surface-container-high"
       >
@@ -36,6 +54,7 @@ function UserMenu({ account, avatarLabel, displayName, isLoggingOut, onLogout })
         className={`absolute right-0 top-full w-64 pt-2 transition-all duration-150 ${open ? 'visible translate-y-0 opacity-100' : 'invisible -translate-y-1 opacity-0'}`}
       >
         <div
+          id="user-account-menu"
           role="menu"
           className="overflow-hidden rounded-xl border border-white/5 bg-surface-container-low shadow-[0_8px_32px_rgba(0,0,0,0.6)]"
         >

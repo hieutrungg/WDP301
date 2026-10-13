@@ -1,13 +1,13 @@
 import {
   ArrowLeft,
   CalendarDays,
-  CirclePlay,
   Clock3,
   Languages,
   UserRound,
 } from 'lucide-react'
 import { Link, useParams } from 'react-router'
 import ErrorState from '../../components/common/ErrorState'
+import TrailerPlayerButton from '../../features/movie-showtime/components/TrailerPlayerButton'
 import { useMovie } from '../../features/movie-showtime/hooks/useMovie'
 
 const releaseDateFormatter = new Intl.DateTimeFormat('en-GB', {
@@ -92,9 +92,11 @@ function MovieDetailPage() {
               
               <div className="mt-8 flex flex-wrap gap-3">
                 {movie.trailerUrl && (
-                  <a href={movie.trailerUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-lg bg-primary-container px-5 py-3 text-sm font-bold text-white shadow-crimson transition-transform hover:-translate-y-0.5">
-                    <CirclePlay className="size-5" aria-hidden="true" /> Watch trailer
-                  </a>
+                  <TrailerPlayerButton
+                    trailerUrl={movie.trailerUrl}
+                    title={movie.title}
+                    className="inline-flex items-center gap-2 rounded-lg bg-primary-container px-5 py-3 text-sm font-bold text-white shadow-crimson transition-transform hover:-translate-y-0.5"
+                  />
                 )}
                 <Link to="/movies" className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-surface-container-high/80 px-5 py-3 text-sm font-semibold text-on-surface hover:bg-surface-container-highest">
                   <ArrowLeft className="size-4" aria-hidden="true" /> Back to lineup

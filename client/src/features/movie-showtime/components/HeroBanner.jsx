@@ -1,5 +1,6 @@
-import { CalendarDays, CirclePlay, Clock3, Film } from 'lucide-react'
+import { CalendarDays, Clock3, Film } from 'lucide-react'
 import { Link } from 'react-router'
+import TrailerPlayerButton from './TrailerPlayerButton'
 
 const releaseDateFormatter = new Intl.DateTimeFormat('en-GB', {
   day: '2-digit',
@@ -67,9 +68,13 @@ function HeroBanner({ movie, loading }) {
           <div className="flex flex-col gap-3 pt-1 sm:flex-row sm:items-center">
             <Link to={`/movies/${movie.id}`} className="flex items-center justify-center rounded-lg bg-primary-container px-6 py-3 font-heading text-base font-semibold text-white shadow-crimson-strong transition-transform hover:-translate-y-0.5">Explore movie</Link>
             {movie.trailerUrl && (
-              <a href={movie.trailerUrl} target="_blank" rel="noreferrer" className="flex items-center justify-center gap-2 rounded-lg bg-surface-container-highest/70 px-6 py-3 font-heading text-base font-semibold text-on-surface backdrop-blur-md transition-colors hover:bg-surface-container-highest">
-                <CirclePlay className="size-5 fill-secondary text-secondary" /> Watch Trailer
-              </a>
+              <TrailerPlayerButton
+                trailerUrl={movie.trailerUrl}
+                title={movie.title}
+                label="Watch Trailer"
+                iconClassName="size-5 fill-secondary text-secondary"
+                className="flex items-center justify-center gap-2 rounded-lg bg-surface-container-highest/70 px-6 py-3 font-heading text-base font-semibold text-on-surface backdrop-blur-md transition-colors hover:bg-surface-container-highest"
+              />
             )}
           </div>
         </div>
