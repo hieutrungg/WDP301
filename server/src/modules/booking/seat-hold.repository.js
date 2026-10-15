@@ -10,6 +10,13 @@ export class SeatClaimConflictError extends Error {
   }
 }
 
+export class ShowtimeSeatInitializationConflictError extends Error {
+  constructor() {
+    super("Showtime seats were already initialized from a different layout snapshot");
+    this.name = "ShowtimeSeatInitializationConflictError";
+  }
+}
+
 const isDuplicateKey = (error) => error?.code === 11000;
 
 const toPlainObject = (document) =>
@@ -20,6 +27,61 @@ export const createSeatHoldRepository = ({
   showtimeSeatModel = ShowtimeSeat,
   connection = mongoose.connection,
 } = {}) => {
+  const listByShowtime = (showtimeId, session) =>
+    showtimeSeatModel.find({ showtimeId }).session(session ?? null).lean().exec();
+
+  const initializeShowtimeSeats = async ({ showtimeId, roomLayoutVersion, seats }) => {
+    const session = await connection.startSession();
+    let result;
+
+    try {
+      await session.withTransaction(async () => {
+        const existing = await listByShowtime(showtimeId, session);
+        const expectedSeatIds = new Set(seats.map(({ seatId }) => seatId.toString()));
+        const hasDifferentSnapshot = existing.some(
+          ({ seatId, roomLayoutVersion: storedVersion }) =>
+            storedVersion !== roomLayoutVersion || !expectedSeatIds.has(seatId.toString()),
+        );
+        if (hasDifferentSnapshot || existing.length > seats.length) {
+          throw new ShowtimeSeatInitializationConflictError();
+        }
+
+        if (existing.length < seats.length) {
+          await showtimeSeatModel.bulkWrite(
+            seats.map(({ seatId, state }) => ({
+              updateOne: {
+                filter: { showtimeId, seatId },
+                update: {
+                  $setOnInsert: { showtimeId, seatId, roomLayoutVersion, state },
+                },
+                upsert: true,
+              },
+            })),
+            { ordered: false, session },
+          );
+        }
+
+        const initialized = await listByShowtime(showtimeId, session);
+        if (
+          initialized.length !== seats.length ||
+          initialized.some(
+            ({ seatId, roomLayoutVersion: storedVersion }) =>
+              storedVersion !== roomLayoutVersion || !expectedSeatIds.has(seatId.toString()),
+          )
+        ) {
+          throw new ShowtimeSeatInitializationConflictError();
+        }
+        result = initialized;
+      });
+      return result;
+    } catch (error) {
+      if (isDuplicateKey(error)) throw new ShowtimeSeatInitializationConflictError();
+      throw error;
+    } finally {
+      await session.endSession();
+    }
+  };
+
   const findByOwnerAndCheckoutKey = (ownerId, checkoutKey, session) =>
     seatHoldModel.findOne({ ownerId, checkoutKey }).session(session ?? null).lean().exec();
 
@@ -198,7 +260,13 @@ export const createSeatHoldRepository = ({
     }
   };
 
-  return { acquire, findByOwnerAndCheckoutKey, release };
+  return {
+    acquire,
+    findByOwnerAndCheckoutKey,
+    initializeShowtimeSeats,
+    listByShowtime,
+    release,
+  };
 };
 
 export const seatHoldRepository = createSeatHoldRepository();

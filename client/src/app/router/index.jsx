@@ -20,6 +20,7 @@ import StaffLayout from '../../layouts/StaffLayout'
 import CounterPosPage from '../../features/counter-pos/pages/CounterPosPage'
 import CounterPaymentPage from '../../features/counter-pos/pages/CounterPaymentPage'
 import CounterCompletePage from '../../features/counter-pos/pages/CounterCompletePage'
+import SeatSelectionPage from '../../features/seat-selection/pages/SeatSelectionPage'
 
 function AppRouter() {
   return (
@@ -35,6 +36,7 @@ function AppRouter() {
           <Route path="movies/:movieId" element={<MovieDetailPage />} />
           <Route element={<ProtectedRoute />}>
             <Route path="profile" element={<ProfilePage />} />
+            <Route path="booking/:showtimeId/seats" element={<SeatSelectionPage />} />
             <Route path="profile/edit" element={<EditProfilePage />} />
             <Route path="profile/change-password" element={<ChangePasswordPage />} />
             <Route path="staff" element={<StaffLayout />}>
