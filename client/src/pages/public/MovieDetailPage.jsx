@@ -9,6 +9,7 @@ import { Link, useParams } from 'react-router'
 import ErrorState from '../../components/common/ErrorState'
 import TrailerPlayerButton from '../../features/movie-showtime/components/TrailerPlayerButton'
 import { useMovie } from '../../features/movie-showtime/hooks/useMovie'
+import { buildMovieShowtimesPath } from '../../features/movie-showtime/utils/movieNavigation'
 
 const releaseDateFormatter = new Intl.DateTimeFormat('en-GB', {
   day: '2-digit',
@@ -91,6 +92,12 @@ function MovieDetailPage() {
               </div>
               
               <div className="mt-8 flex flex-wrap gap-3">
+                <Link
+                  to={buildMovieShowtimesPath(movie.id)}
+                  className="inline-flex items-center gap-2 rounded-lg bg-primary-container px-5 py-3 text-sm font-bold text-white shadow-crimson transition-transform hover:-translate-y-0.5"
+                >
+                  <CalendarDays className="size-4" aria-hidden="true" /> Choose a showtime
+                </Link>
                 {movie.trailerUrl && (
                   <TrailerPlayerButton
                     trailerUrl={movie.trailerUrl}
