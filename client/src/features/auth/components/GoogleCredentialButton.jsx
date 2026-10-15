@@ -42,7 +42,12 @@ const loadGoogleIdentity = () => {
 }
 
 // Renders Google's own button and hands the resulting ID token to `onCredential`.
-function GoogleCredentialButton({ onCredential, disabled = false, text = 'continue_with' }) {
+function GoogleCredentialButton({
+  onCredential,
+  disabled = false,
+  text = 'continue_with',
+  label = 'Continue with Google',
+}) {
   const containerRef = useRef(null)
   const [loadFailed, setLoadFailed] = useState(false)
 
@@ -100,7 +105,7 @@ function GoogleCredentialButton({ onCredential, disabled = false, text = 'contin
     <div className={`group relative mx-auto h-10 w-full max-w-[400px] ${disabled ? 'pointer-events-none opacity-50' : ''}`}>
       <div className={`${buttonClass} pointer-events-none group-hover:bg-surface-container-high`}>
         <GoogleLogo />
-        Continue with Google
+        {label}
       </div>
       <div ref={containerRef} className="absolute inset-0 overflow-hidden rounded-lg opacity-[0.01]" />
     </div>
