@@ -77,9 +77,9 @@ function LoginForm() {
           id="login-password"
           label="Password"
           labelAction={
-            <button type="button" className="text-xs text-primary transition hover:text-white">
+            <Link to="/forgot-password" className="text-xs text-primary transition hover:text-white">
               Forgot password?
-            </button>
+            </Link>
           }
           icon={LockKeyhole}
           error={errors.password}

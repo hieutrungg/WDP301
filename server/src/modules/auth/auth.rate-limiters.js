@@ -34,3 +34,15 @@ export const googleLoginRateLimiter = createLimiter({
   limit: 20,
   message: "Too many Google sign-in attempts. Please try again later.",
 });
+
+export const forgotPasswordRateLimiter = createLimiter({
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
+  message: "Too many password reset requests. Please try again later.",
+});
+
+export const resetPasswordRateLimiter = createLimiter({
+  windowMs: 10 * 60 * 1000,
+  limit: 15,
+  message: "Too many password reset attempts. Please try again later.",
+});

@@ -20,3 +20,10 @@ export const incrementAttemptCount = (verificationId) =>
 
 export const deleteVerificationById = (verificationId) =>
   EmailVerification.deleteOne({ _id: verificationId }).exec();
+
+// Marks the code as verified and gives the user a fresh window to choose a new password.
+export const markVerificationVerified = (verificationId, expiresAt) =>
+  EmailVerification.updateOne(
+    { _id: verificationId },
+    { $set: { verifiedAt: new Date(), expiresAt } },
+  ).exec();

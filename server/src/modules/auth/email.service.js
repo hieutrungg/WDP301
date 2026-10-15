@@ -76,4 +76,37 @@ export const sendRegistrationOtpEmail = async ({ email, fullName, otp, expiresIn
   });
 };
 
+export const sendPasswordResetOtpEmail = async ({ email, fullName, otp, expiresInMinutes }) => {
+  if (env.isTest && process.env.EMAIL_TEST_MODE === "capture") {
+    testOutbox.push({ purpose: "RESET_PASSWORD", email, fullName, otp, expiresInMinutes });
+    return;
+  }
+
+  const safeFullName = escapeHtml(fullName);
+
+  await getTransporter().sendMail({
+    from: env.emailFrom,
+    to: email,
+    subject: "Reset your F-Cinema password",
+    text: [
+      `Hello ${fullName},`,
+      "",
+      `Your F-Cinema password reset code is: ${otp}`,
+      `This code expires in ${expiresInMinutes} minutes.`,
+      "",
+      "If you did not ask to reset your password, you can safely ignore this email. Your password will not change.",
+    ].join("\n"),
+    html: `
+      <div style="font-family:Arial,sans-serif;line-height:1.6;color:#1f1f24">
+        <h2 style="color:#e50914">F-Cinema</h2>
+        <p>Hello ${safeFullName},</p>
+        <p>Your password reset code is:</p>
+        <p style="font-size:32px;font-weight:700;letter-spacing:8px">${otp}</p>
+        <p>This code expires in <strong>${expiresInMinutes} minutes</strong>.</p>
+        <p>If you did not ask to reset your password, you can safely ignore this email. Your password will not change.</p>
+      </div>
+    `,
+  });
+};
+
 export const takeTestEmails = () => testOutbox.splice(0, testOutbox.length);
