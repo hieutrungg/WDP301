@@ -4,6 +4,7 @@ import { env } from "../config/env.js";
 import { seedBranches } from "./seed-branches.js";
 import { seedMovies } from "./seed-movies.js";
 import { seedRooms } from "./seed-rooms.js";
+import { seedSeatHoldDemoData } from "./seed-seat-hold.js";
 import { assertDevelopmentSeedTarget } from "./seed-utils.js";
 
 const runDevelopmentSeed = async () => {
@@ -16,8 +17,10 @@ const runDevelopmentSeed = async () => {
   const movies = await seedMovies(database);
   const branches = await seedBranches(database);
   const rooms = await seedRooms(database);
+  const seatHold = await seedSeatHoldDemoData(database);
 
   console.table({ movies, branches, rooms });
+  console.log("SeatHold fixtures:", seatHold);
   console.log("Development seed completed without deleting unrelated data.");
 };
 

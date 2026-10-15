@@ -25,6 +25,9 @@ export const countRooms = (filter) => Room.countDocuments(filter).exec();
 
 export const findRoomById = (roomId) => Room.findById(roomId).lean().exec();
 
+export const findLayoutSnapshot = (roomId, layoutVersion) =>
+  RoomLayoutVersion.findOne({ roomId, layoutVersion }).lean().exec();
+
 // Snapshot writes are idempotent: the content of a given version never changes, so a retry or a
 // later failed room update leaves a correct snapshot behind rather than a partial one.
 export const saveLayoutSnapshot = ({ roomId, layoutVersion, ...snapshot }) =>

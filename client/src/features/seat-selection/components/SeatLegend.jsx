@@ -1,20 +1,40 @@
-const items = [
-  ['bg-surface-container-high border-white/15', 'Available'],
-  ['bg-primary-container border-primary', 'Selected'],
-  ['bg-secondary/20 border-secondary', 'Held by you'],
-  ['bg-surface-container-highest border-transparent opacity-55', 'Unavailable'],
-  ['bg-surface-container-lowest border-transparent opacity-40', 'Disabled'],
-]
+import { Accessibility, Heart, X } from 'lucide-react'
 
-function SeatLegend() {
+const labels = {
+  STANDARD: 'Standard',
+  VIP: 'VIP Prime',
+  DOUBLE_LUXURY: 'Sweetbox',
+}
+
+const typeClasses = {
+  STANDARD: 'border-white/15 bg-surface-container-highest',
+  VIP: 'border-secondary/60 bg-secondary-container/20 text-secondary',
+  DOUBLE_LUXURY: 'border-tertiary-fixed-dim/50 bg-tertiary-container/30 text-tertiary',
+}
+
+function SeatLegend({ seatTypes, selectedCount }) {
   return (
-    <div className="flex flex-wrap justify-center gap-x-5 gap-y-2 text-[11px] text-on-surface-variant">
-      {items.map(([classes, label]) => (
-        <span key={label} className="inline-flex items-center gap-2">
-          <span className={`size-3 rounded-sm border ${classes}`} aria-hidden="true" />
-          {label}
-        </span>
+    <div className="flex flex-wrap items-center justify-between gap-4 text-xs text-on-surface-variant">
+      {seatTypes.map((seat) => (
+        <div key={`${seat.type}:${seat.price}`} className="flex items-center gap-2">
+          <span className={`grid h-6 min-w-6 place-items-center rounded border px-1 ${typeClasses[seat.type] ?? typeClasses.STANDARD}`}>
+            {seat.type === 'DOUBLE_LUXURY' ? <Heart className="size-3" /> : seat.type === 'VIP' ? 'VIP' : ''}
+          </span>
+          <span><strong className="block text-on-surface">{labels[seat.type] ?? seat.type}</strong>{seat.formattedPrice}</span>
+        </div>
       ))}
+      <div className="flex items-center gap-2">
+        <span className="grid size-6 place-items-center rounded border border-white bg-primary-container text-white shadow-crimson">✓</span>
+        <span><strong className="block text-on-surface">Selected ({selectedCount})</strong>Your seats</span>
+      </div>
+      <div className="flex items-center gap-2">
+        <span className="grid size-6 place-items-center rounded bg-surface-container-lowest opacity-40"><X className="size-3.5" /></span>
+        <span><strong className="block text-on-surface">Reserved</strong>Unavailable</span>
+      </div>
+      <div className="flex items-center gap-2">
+        <span className="grid size-6 place-items-center rounded border border-blue-500/40 bg-blue-950/60 text-blue-400"><Accessibility className="size-3.5" /></span>
+        <span><strong className="block text-on-surface">Accessible</strong>Wheelchair space</span>
+      </div>
     </div>
   )
 }

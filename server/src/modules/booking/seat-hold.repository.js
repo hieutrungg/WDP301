@@ -105,7 +105,7 @@ export const createSeatHoldRepository = ({
       { holdId: { $in: holdIds }, state: SHOWTIME_SEAT_STATE.HELD },
       {
         $set: { state: SHOWTIME_SEAT_STATE.AVAILABLE },
-        $unset: { holdId: "", holdOwnerId: "", holdExpiresAt: "", priceSnapshot: "" },
+        $unset: { holdId: "", holdOwnerId: "", holdExpiresAt: "" },
       },
       { session },
     );
@@ -235,7 +235,7 @@ export const createSeatHoldRepository = ({
           { holdId: hold._id, state: SHOWTIME_SEAT_STATE.HELD },
           {
             $set: { state: SHOWTIME_SEAT_STATE.AVAILABLE },
-            $unset: { holdId: "", holdOwnerId: "", holdExpiresAt: "", priceSnapshot: "" },
+            $unset: { holdId: "", holdOwnerId: "", holdExpiresAt: "" },
           },
           { session },
         );

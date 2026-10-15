@@ -62,3 +62,54 @@ export const findPublicShowtimes = async ({ movieId, cinemaId, roomId, dateRange
   const [result] = await collection("showtimes").aggregate(pipeline).toArray();
   return { items: result?.items ?? [], total: result?.total?.[0]?.count ?? 0 };
 };
+
+export const findBookableShowtimeById = async (showtimeId, now) => {
+  const [showtime] = await collection("showtimes")
+    .aggregate([
+      { $match: { _id: toObjectId(showtimeId), status: SHOWTIME_STATUS.PUBLISHED } },
+      {
+        $addFields: {
+          resolvedStartAt: { $ifNull: ["$startAt", "$startTime"] },
+          resolvedEndAt: { $ifNull: ["$endAt", "$endTime"] },
+        },
+      },
+      { $match: { resolvedStartAt: { $gt: now }, roomLayoutVersion: { $type: "number" } } },
+      { $lookup: { from: "rooms", localField: "roomId", foreignField: "_id", as: "room" } },
+      { $unwind: "$room" },
+      { $lookup: { from: "branches", localField: "room.branchId", foreignField: "_id", as: "cinema" } },
+      { $unwind: "$cinema" },
+      { $lookup: { from: "movies", localField: "movieId", foreignField: "_id", as: "movie" } },
+      { $unwind: "$movie" },
+      {
+        $project: {
+          _id: 1,
+          roomId: 1,
+          roomLayoutVersion: 1,
+          startAt: "$resolvedStartAt",
+          endAt: "$resolvedEndAt",
+          status: 1,
+          movie: {
+            id: "$movie._id",
+            title: "$movie.title",
+            duration: "$movie.duration",
+            ageRating: "$movie.ageRating",
+            posterUrl: "$movie.posterUrl",
+          },
+          cinema: {
+            id: "$cinema._id",
+            branchName: "$cinema.branchName",
+            address: "$cinema.address",
+          },
+          room: {
+            id: "$room._id",
+            roomName: "$room.roomName",
+            roomType: "$room.roomType",
+            capacity: "$room.capacity",
+          },
+        },
+      },
+      { $limit: 1 },
+    ])
+    .toArray();
+  return showtime ?? null;
+};

@@ -5,6 +5,7 @@ import { countFuturePublishedShowtimesForLayout } from "./room-dependency.reposi
 import { ROOM_ERROR } from "./room.constants.js";
 import {
   countRooms,
+  findLayoutSnapshot,
   findRoomById,
   findRooms,
   replaceRoomLayout,
@@ -117,6 +118,21 @@ export const listRooms = async ({ branchId, q, page, limit }) => {
 };
 
 export const getSeatLayout = async (roomId) => toSeatLayoutDetail(await requireRoom(roomId));
+
+// Exported Room read contract for Booking. It resolves the exact layout version snapshotted by
+// a Showtime and never exposes a mutable current layout in place of a missing historical one.
+export const getLayoutVersionForBooking = async (roomId, layoutVersion) => {
+  const room = await findRoomById(roomId);
+  if (!room) return null;
+
+  if ((room.layoutVersion ?? 0) === layoutVersion) {
+    return { roomId: room._id, roomLayoutVersion: layoutVersion, seats: room.seats ?? [] };
+  }
+
+  const snapshot = await findLayoutSnapshot(roomId, layoutVersion);
+  if (!snapshot) return null;
+  return { roomId: snapshot.roomId, roomLayoutVersion: layoutVersion, seats: snapshot.seats ?? [] };
+};
 
 export const createSeatLayout = async (roomId, input, actorId) => {
   const room = await requireRoom(roomId);

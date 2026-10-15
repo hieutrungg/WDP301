@@ -13,6 +13,7 @@ import {
 import { createSeatHoldController } from "../src/modules/booking/seat-hold.controller.js";
 import { SeatHold } from "../src/modules/booking/seat-hold.model.js";
 import { createSeatHoldService } from "../src/modules/booking/seat-hold.service.js";
+import { createShowtimeSeatPriceQuoter } from "../src/modules/booking/seat-price.service.js";
 import { ShowtimeSeat } from "../src/modules/booking/showtime-seat.model.js";
 
 const objectId = () => new mongoose.Types.ObjectId().toString();
@@ -82,6 +83,33 @@ test("SeatHold models own showtime-scoped state and required unique indexes", ()
     .find(([, options]) => options.name === "uniq_showtime_seat");
   assert.deepEqual(showtimeSeatIndex[0], { showtimeId: 1, seatId: 1 });
   assert.equal(showtimeSeatIndex[1].unique, true);
+});
+
+test("showtime seat price quoter returns only complete stored snapshots", async () => {
+  const showtimeId = objectId();
+  const seatIds = [objectId(), objectId()];
+  const priceQuoter = createShowtimeSeatPriceQuoter({
+    repository: {
+      async listByShowtime() {
+        return [
+          { seatId: seatIds[0], priceSnapshot: 90000 },
+          { seatId: seatIds[1], priceSnapshot: 120000 },
+        ];
+      },
+    },
+  });
+
+  assert.deepEqual(await priceQuoter.quote(showtimeId, seatIds), {
+    quoteId: `showtime-seat:${showtimeId}`,
+    currency: "VND",
+    lines: [
+      { seatId: seatIds[0], unitPrice: 90000 },
+      { seatId: seatIds[1], unitPrice: 120000 },
+    ],
+    totalAmount: 210000,
+  });
+
+  assert.equal(await priceQuoter.quote(showtimeId, [...seatIds, objectId()]), null);
 });
 
 test("acquire creates one 10-minute hold with normalized seats and integer VND quote", async () => {
@@ -240,7 +268,7 @@ test("availability merges layout, prices and current hold state using server tim
   const disabledSeatId = objectId();
   const now = new Date("2026-10-15T04:00:00.000Z");
   const seats = [
-    { _id: availableSeatId, row: "A", number: 1, type: "STANDARD", status: "ENABLED" },
+    { _id: availableSeatId, row: "A", number: 1, type: "STANDARD", status: "ENABLED", isAccessible: true },
     { _id: ownHeldSeatId, row: "A", number: 2, type: "STANDARD", status: "ENABLED" },
     { _id: expiredSeatId, row: "A", number: 3, type: "STANDARD", status: "ENABLED" },
     { _id: soldSeatId, row: "A", number: 4, type: "STANDARD", status: "ENABLED" },
@@ -289,6 +317,7 @@ test("availability merges layout, prices and current hold state using server tim
   assert.equal(result.seats[1].holdExpiresAt, "2026-10-15T04:01:00.000Z");
   assert.equal(result.seats[2].holdExpiresAt, undefined);
   assert.equal(result.seats[0].price, 100000);
+  assert.equal(result.seats[0].isAccessible, true);
   assert.equal(result.generatedAt, now.toISOString());
 });
 

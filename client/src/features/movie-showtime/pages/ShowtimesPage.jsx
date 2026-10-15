@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react'
 import { CalendarDays, ChevronRight, Clock3, Film, MapPin, RefreshCw, Search, Ticket } from 'lucide-react'
-import { Link, useLocation, useSearchParams } from 'react-router'
-import { toast } from 'sonner'
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router'
 import ErrorState from '../../../components/common/ErrorState'
 import { useShowtimes } from '../hooks/useShowtimes'
 
@@ -68,6 +67,7 @@ function isInTimeRange(dateString, range) {
 
 function ShowtimesPage() {
   const location = useLocation()
+  const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const movieId = searchParams.get('movieId') || undefined
   const [selectedDate, setSelectedDate] = useState(dateOptions[0].key)
@@ -119,9 +119,11 @@ function ShowtimesPage() {
   }, [filteredShowtimes])
 
   const handleContinue = () => {
-    toast('Seat selection will be available in a later update.', {
-      description: selectedShowtime ? timeFormatter.format(new Date(selectedShowtime.startAt)) : undefined,
-    })
+    if (selectedShowtime) {
+      navigate(`/booking/${selectedShowtime.id}/seats`, {
+        state: { showtime: selectedShowtime },
+      })
+    }
   }
 
   return (

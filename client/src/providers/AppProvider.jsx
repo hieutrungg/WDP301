@@ -1,5 +1,15 @@
 import { useEffect, useRef } from 'react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useAuth } from '../features/auth/hooks/useAuth'
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: 1,
+      staleTime: 15_000,
+    },
+  },
+})
 
 function AppProvider({ children }) {
   const started = useRef(false)
@@ -11,7 +21,7 @@ function AppProvider({ children }) {
     refreshSession()
   }, [refreshSession])
 
-  return children
+  return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
 }
 
 export default AppProvider

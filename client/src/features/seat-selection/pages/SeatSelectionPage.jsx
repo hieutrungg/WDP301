@@ -1,6 +1,26 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowLeft, Clock3, LoaderCircle, ShieldCheck, TicketCheck } from 'lucide-react'
-import { Link, useParams } from 'react-router'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  AlertTriangle,
+  ArrowLeft,
+  ArrowRight,
+  BadgeCheck,
+  CheckCircle2,
+  DoorOpen,
+  Info,
+  LoaderCircle,
+  LockKeyhole,
+  MapPin,
+  RotateCcw,
+  ShieldCheck,
+  Star,
+  TicketCheck,
+  Timer,
+  Utensils,
+  Video,
+  X,
+  Zap,
+} from 'lucide-react'
+import { Link, useLocation, useParams } from 'react-router'
 import { toast } from 'sonner'
 import EmptyState from '../../../components/common/EmptyState'
 import ErrorState from '../../../components/common/ErrorState'
@@ -13,19 +33,38 @@ import {
   useSeatAvailability,
 } from '../hooks/useSeatAvailability'
 
-const formatVnd = (amount) => `${new Intl.NumberFormat('vi-VN').format(amount)} ₫`
+const formatVnd = (amount) => `${new Intl.NumberFormat('vi-VN').format(amount ?? 0)} ₫`
+const seatTypeLabel = (type) => ({
+  STANDARD: 'Standard',
+  VIP: 'VIP Prime',
+  DOUBLE_LUXURY: 'Sweetbox',
+}[type] ?? type)
+
+const dateFormatter = new Intl.DateTimeFormat('en-US', {
+  timeZone: 'Asia/Ho_Chi_Minh',
+  weekday: 'short',
+  month: 'short',
+  day: 'numeric',
+})
+const timeFormatter = new Intl.DateTimeFormat('en-GB', {
+  timeZone: 'Asia/Ho_Chi_Minh',
+  hour: '2-digit',
+  minute: '2-digit',
+})
 
 const formatCountdown = (milliseconds) => {
   const totalSeconds = Math.max(0, Math.ceil(milliseconds / 1000))
   const minutes = Math.floor(totalSeconds / 60)
   const seconds = String(totalSeconds % 60).padStart(2, '0')
-  return `${minutes}:${seconds}`
+  return `${String(minutes).padStart(2, '0')}:${seconds}`
 }
 
 function HoldCountdown({ hold, onExpire }) {
-  const [serverNowMs, setServerNowMs] = useState(() => new Date(hold.serverNow).getTime())
+  const expiresAt = new Date(hold.expiresAt).getTime()
+  const initialServerNow = new Date(hold.serverNow).getTime()
+  const [serverNowMs, setServerNowMs] = useState(initialServerNow)
   const expired = useRef(false)
-  const remainingMs = Math.max(0, new Date(hold.expiresAt).getTime() - serverNowMs)
+  const remainingMs = Math.max(0, expiresAt - serverNowMs)
 
   useEffect(() => {
     const timer = window.setInterval(() => setServerNowMs((value) => value + 1000), 1000)
@@ -41,8 +80,203 @@ function HoldCountdown({ hold, onExpire }) {
   return <>{formatCountdown(remainingMs)}</>
 }
 
+function BookingStepper() {
+  const completeSteps = ['Movie', 'Cinema', 'Date', 'Showtime']
+
+  return (
+    <section className="border-b border-white/5 bg-surface-container-lowest px-4 py-4 shadow-lg sm:px-6">
+      <div className="mx-auto flex max-w-[1400px] flex-col items-center justify-between gap-4 xl:flex-row">
+        <nav aria-label="Booking progress" className="flex max-w-full items-center gap-1 overflow-x-auto pb-1 text-xs">
+          {completeSteps.map((step, index) => (
+            <Fragment key={step}>
+              <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-surface-container-low px-3 py-1.5 font-semibold">
+                <CheckCircle2 className="size-3.5 fill-secondary/20 text-secondary" />
+                {index + 1}. {step}
+              </span>
+              <span className="text-surface-variant">›</span>
+            </Fragment>
+          ))}
+          <span className="inline-flex shrink-0 items-center gap-2 rounded-full bg-primary-container px-3 py-1.5 font-bold uppercase tracking-wider text-white shadow-crimson">
+            <span className="size-2 animate-pulse rounded-full bg-white" />5. Seats · Selecting
+          </span>
+          <span className="text-surface-variant">›</span>
+          <span className="shrink-0 rounded-full px-3 py-1.5 text-on-surface-variant/60">6. F&amp;B Combos</span>
+          <span className="text-surface-variant/50">›</span>
+          <span className="shrink-0 rounded-full px-3 py-1.5 text-on-surface-variant/60">7. Payment</span>
+        </nav>
+        <span className="inline-flex shrink-0 items-center gap-2 rounded-full bg-surface-container px-3 py-1.5 text-xs font-medium">
+          <Zap className="size-4 fill-secondary text-secondary" />Live Seat Lock · Real-time Matrix Active
+        </span>
+      </div>
+    </section>
+  )
+}
+
+function SessionBar({ showtime, activeHold, onExpire }) {
+  const startAt = showtime?.startAt ? new Date(showtime.startAt) : null
+  const endAt = showtime?.endAt ? new Date(showtime.endAt) : null
+  const movie = showtime?.movie
+  const room = showtime?.room
+  const cinema = showtime?.cinema
+  const duration = movie?.duration ?? (
+    startAt && endAt ? Math.round((endAt.getTime() - startAt.getTime()) / 60000) : null
+  )
+
+  return (
+    <section className="border-b border-white/5 bg-surface-container-low px-4 py-4 shadow-inner sm:px-6">
+      <div className="mx-auto flex max-w-[1400px] flex-col justify-between gap-4 md:flex-row md:items-center">
+        <div className="flex min-w-0 items-center gap-4">
+          {movie?.posterUrl ? (
+            <img className="h-20 w-14 shrink-0 rounded-lg object-cover shadow-lg" src={movie.posterUrl} alt={`${movie.title} poster`} />
+          ) : (
+            <span className="grid h-20 w-14 shrink-0 place-items-center rounded-lg bg-surface-container-high text-primary"><Video className="size-6" /></span>
+          )}
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2 text-[10px] font-bold uppercase tracking-wider">
+              {movie?.ageRating && <span className="rounded bg-primary-container px-2 py-0.5 text-white">{movie.ageRating}</span>}
+              <span className="rounded bg-secondary/15 px-2 py-0.5 text-secondary">{room?.roomType ?? 'Cinema Hall'}</span>
+              {duration && <span className="text-on-surface-variant">{duration} mins</span>}
+            </div>
+            <h1 className="mt-1 truncate font-heading text-xl font-extrabold tracking-tight sm:text-2xl">{movie?.title ?? 'Seat Selection'}</h1>
+            <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-on-surface-variant">
+              {startAt && <strong className="text-on-surface">{dateFormatter.format(startAt)} · {timeFormatter.format(startAt)}{endAt ? `–${timeFormatter.format(endAt)}` : ''}</strong>}
+              {room?.roomName && <span>· {room.roomName}</span>}
+              {cinema?.branchName && <span className="inline-flex items-center gap-1 text-secondary"><MapPin className="size-3" />{cinema.branchName}</span>}
+              <Link to="/showtimes" className="inline-flex items-center gap-1 font-semibold text-primary underline hover:text-white">Change Showtime <RotateCcw className="size-3" /></Link>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex shrink-0 items-center gap-4 rounded-xl bg-surface-container-high px-5 py-3 shadow-lg">
+          <span className="relative grid size-4 place-items-center">
+            <span className="absolute size-3.5 animate-ping rounded-full bg-primary-container" />
+            <span className="relative size-3 rounded-full bg-primary-container" />
+          </span>
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-on-surface-variant">Holding reservation</p>
+            <p className="font-heading text-2xl font-extrabold text-primary-container">
+              {activeHold ? <HoldCountdown hold={activeHold} onExpire={onExpire} /> : '10:00'}
+              <span className="ml-2 text-xs font-normal text-on-surface-variant">{activeHold ? 'left' : 'ready'}</span>
+            </p>
+          </div>
+          <Timer className="size-6 text-on-surface-variant" />
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function CurvedScreen() {
+  return (
+    <div className="relative mx-auto mb-8 flex w-full max-w-3xl flex-col items-center">
+      <div className="pointer-events-none absolute -top-20 h-40 w-4/5 bg-gradient-to-b from-primary-container/20 to-transparent blur-3xl" />
+      <svg className="h-12 w-full text-primary-container drop-shadow-[0_0_20px_rgba(229,9,20,0.5)]" fill="none" viewBox="0 0 600 50" aria-hidden="true">
+        <path d="M 20 40 Q 300 5 580 40" stroke="currentColor" strokeLinecap="round" strokeWidth="4" />
+        <path d="M 40 45 Q 300 12 560 45" stroke="white" strokeDasharray="4 4" strokeOpacity="0.28" strokeWidth="1.5" />
+      </svg>
+      <span className="mt-1 inline-flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.22em] text-on-surface-variant"><Video className="size-3.5 text-secondary" />Auditorium Curved Cinema Screen</span>
+      <span className="mt-1 text-center font-mono text-[9px] uppercase tracking-widest text-on-surface-variant/45">Immersive projection · Surround sound</span>
+    </div>
+  )
+}
+
+function SeatMatrix({ rows, selectedSeatIds, activeHold, onToggle }) {
+  const firstPrimeRow = rows.findIndex(([, seats]) => seats.some(({ type }) => type === 'VIP'))
+
+  return (
+    <div className="overflow-hidden rounded-xl bg-surface-container-lowest p-4 shadow-2xl sm:p-7">
+      <CurvedScreen />
+      <div className="mb-4 flex items-center justify-between px-2 font-mono text-[10px] text-on-surface-variant/60">
+        <span className="inline-flex items-center gap-1 rounded bg-surface-container px-2 py-1"><DoorOpen className="size-3.5 text-error" />West exit</span>
+        <span className="inline-flex items-center gap-1 rounded bg-surface-container px-2 py-1">East exit<DoorOpen className="size-3.5 text-error" /></span>
+      </div>
+
+      <div className="overflow-x-auto pb-3">
+        <div className="mx-auto flex min-w-max flex-col gap-2.5">
+          {rows.map(([row, rowSeats], rowIndex) => (
+            <Fragment key={row}>
+              {rowIndex === firstPrimeRow && (
+                <div className="my-1 flex justify-center">
+                  <span className="inline-flex items-center gap-2 rounded-full bg-secondary/10 px-4 py-1 text-[10px] font-semibold uppercase tracking-wider text-secondary"><Star className="size-3 fill-secondary" />Optimum sightline · Prime sound sweetspot<Star className="size-3 fill-secondary" /></span>
+                </div>
+              )}
+              <div className={`flex items-center gap-2 rounded-lg px-1 py-0.5 ${selectedSeatIds.some((id) => rowSeats.some((seat) => seat.seatId === id)) ? 'bg-primary-container/10' : ''}`}>
+                <span className="w-6 text-center font-mono text-xs font-bold text-on-surface-variant">{row}</span>
+                <div className="flex flex-1 items-center justify-center gap-1.5">
+                  {rowSeats.map((seat, index) => (
+                    <Fragment key={seat.seatId}>
+                      {index === Math.ceil(rowSeats.length / 2) && <span className="w-5 text-center font-mono text-[9px] text-on-surface-variant/20">|</span>}
+                      <SeatButton seat={seat} selected={selectedSeatIds.includes(seat.seatId)} onToggle={onToggle} disabled={Boolean(activeHold)} />
+                    </Fragment>
+                  ))}
+                </div>
+                <span className="w-6 text-center font-mono text-xs font-bold text-on-surface-variant">{row}</span>
+              </div>
+            </Fragment>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function BookingSummary({ selectedSeats, total, activeHold, acquirePending, releasePending, onRemove, onHold, onRelease }) {
+  return (
+    <aside className="h-fit rounded-xl bg-surface-container-low p-5 shadow-xl lg:sticky lg:top-24">
+      <div className="flex items-center justify-between border-b border-white/5 pb-4">
+        <div className="flex items-center gap-2"><TicketCheck className="size-5 text-primary-container" /><h2 className="font-heading text-xl font-extrabold">Booking Summary</h2></div>
+        <span className="rounded bg-primary-container/15 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-primary">Step 5 of 7</span>
+      </div>
+
+      <div className="py-4">
+        <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">Selected seats ({selectedSeats.length})</p>
+        <div className="space-y-2">
+          {selectedSeats.length === 0 && <p className="rounded-lg border border-dashed border-white/10 px-4 py-8 text-center text-sm text-on-surface-variant">Select your seats from the auditorium.</p>}
+          {selectedSeats.map((seat) => (
+            <div key={seat.seatId} className="flex items-center justify-between gap-3 rounded-lg bg-surface-container p-2.5">
+              <div className="flex min-w-0 items-center gap-2.5">
+                <span className="grid size-9 shrink-0 place-items-center rounded bg-primary-container font-mono text-xs font-bold text-white shadow-crimson">{seat.row}{String(seat.number).padStart(2, '0')}</span>
+                <div className="min-w-0"><p className="truncate text-sm font-bold">Seat {seat.row}{seat.number} · {seatTypeLabel(seat.type)}</p><p className="text-[10px] text-secondary">Server-confirmed showtime price</p></div>
+              </div>
+              <div className="flex shrink-0 items-center gap-2"><strong className="text-xs">{formatVnd(seat.price)}</strong><button type="button" disabled={Boolean(activeHold)} onClick={() => onRemove(seat.seatId)} title="Deselect seat" className="rounded p-1 text-on-surface-variant hover:text-error disabled:cursor-not-allowed disabled:opacity-30"><X className="size-4" /></button></div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="space-y-2 border-y border-white/5 py-4 text-xs text-on-surface-variant">
+        <div className="flex justify-between"><span>{selectedSeats.length} ticket{selectedSeats.length === 1 ? '' : 's'}</span><strong className="text-on-surface">{formatVnd(total)}</strong></div>
+        <div className="flex justify-between"><span className="inline-flex items-center gap-1">Hall surcharge <Info className="size-3" /></span><span>Included in seat price</span></div>
+        <div className="flex justify-between"><span>Promotions, fees &amp; taxes</span><span>Calculated at checkout</span></div>
+        <div className="flex items-end justify-between pt-2"><strong className="font-heading text-lg text-on-surface">Total amount</strong><strong className="font-heading text-2xl text-primary-container">{formatVnd(total)}</strong></div>
+      </div>
+
+      <div className="mt-4 space-y-3">
+        {!activeHold ? (
+          <button type="button" onClick={onHold} disabled={!selectedSeats.length || acquirePending} className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary-container px-4 py-3.5 font-bold text-white shadow-[0_0_20px_rgba(229,9,20,0.45)] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40">
+            {acquirePending ? <LoaderCircle className="size-4 animate-spin" /> : <LockKeyhole className="size-4" />}{acquirePending ? 'Locking seats…' : 'Lock seats for checkout'}
+          </button>
+        ) : (
+          <>
+            <button type="button" disabled className="flex w-full cursor-not-allowed items-center justify-center gap-2 rounded-lg bg-primary-container px-4 py-3.5 font-bold text-white opacity-55"><span>Proceed to F&amp;B Combos</span><ArrowRight className="size-4" /></button>
+            <button type="button" onClick={onRelease} disabled={releasePending} className="w-full rounded-lg bg-surface-container-high px-4 py-2.5 text-sm font-semibold hover:bg-surface-bright disabled:opacity-50">{releasePending ? 'Releasing…' : 'Release all seats'}</button>
+            <p className="text-center text-[10px] text-on-surface-variant">C13 remains unavailable until the approved cart/concession contract is implemented.</p>
+          </>
+        )}
+      </div>
+
+      <div className="mt-4 space-y-2 text-[10px] leading-4 text-on-surface-variant/75">
+        <p className="flex gap-2"><LockKeyhole className="mt-0.5 size-3.5 shrink-0 text-error" />Seats are locked for exactly 10 minutes and return to inventory after expiry.</p>
+        <p className="flex gap-2"><AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-secondary" />Age-rating admission rules shown for this movie still apply at the cinema.</p>
+        <p className="flex gap-2"><ShieldCheck className="mt-0.5 size-3.5 shrink-0" />Refund and cancellation eligibility is confirmed only by the approved policy workflow.</p>
+      </div>
+    </aside>
+  )
+}
+
 function SeatSelectionPage() {
   const { showtimeId } = useParams()
+  const location = useLocation()
   const availability = useSeatAvailability(showtimeId)
   const acquire = useAcquireSeatHold(showtimeId)
   const release = useReleaseSeatHold(showtimeId)
@@ -51,6 +285,7 @@ function SeatSelectionPage() {
   const checkoutKey = useRef(null)
 
   const seats = useMemo(() => availability.data?.seats ?? [], [availability.data])
+  const showtime = availability.data?.showtime ?? location.state?.showtime
   const seatById = useMemo(() => new Map(seats.map((seat) => [seat.seatId, seat])), [seats])
   const rows = useMemo(() => {
     const groups = new Map()
@@ -68,7 +303,9 @@ function SeatSelectionPage() {
   const seatTypes = useMemo(() => {
     const values = new Map()
     for (const seat of seats) {
-      if (Number.isSafeInteger(seat.price)) values.set(`${seat.type}:${seat.price}`, seat)
+      if (Number.isSafeInteger(seat.price)) {
+        values.set(`${seat.type}:${seat.price}`, { ...seat, formattedPrice: formatVnd(seat.price) })
+      }
     }
     return [...values.values()]
   }, [seats])
@@ -83,29 +320,18 @@ function SeatSelectionPage() {
 
   const toggleSeat = (seatId) => {
     if (activeHold) return
-    setSelectedSeatIds((current) =>
-      current.includes(seatId)
-        ? current.filter((selectedId) => selectedId !== seatId)
-        : [...current, seatId],
-    )
+    setSelectedSeatIds((current) => current.includes(seatId)
+      ? current.filter((selectedId) => selectedId !== seatId)
+      : [...current, seatId])
   }
 
   const holdSeats = async () => {
-    if (selectedSeatIds.length === 0) {
-      toast.error('Select at least one available seat.')
-      return
-    }
+    if (selectedSeatIds.length === 0) return toast.error('Select at least one available seat.')
     try {
-      if (!checkoutKey.current) {
-        checkoutKey.current = globalThis.crypto?.randomUUID?.() ?? `checkout-${Date.now()}`
-      }
-      const result = await acquire.mutateAsync({
-        showtimeId,
-        seatIds: selectedSeatIds,
-        checkoutKey: checkoutKey.current,
-      })
+      if (!checkoutKey.current) checkoutKey.current = globalThis.crypto?.randomUUID?.() ?? `checkout-${Date.now()}`
+      const result = await acquire.mutateAsync({ showtimeId, seatIds: selectedSeatIds, checkoutKey: checkoutKey.current })
       setActiveHold(result)
-      toast.success('Seats held successfully. Complete checkout before the timer ends.')
+      toast.success('Seats locked for 10 minutes.')
     } catch (error) {
       toast.error(getApiErrorMessage(error))
       availability.refetch()
@@ -126,142 +352,44 @@ function SeatSelectionPage() {
   }
 
   if (availability.isPending) {
-    return (
-      <main className="grid min-h-[70vh] place-items-center bg-background pt-20">
-        <div className="text-center text-on-surface-variant">
-          <LoaderCircle className="mx-auto size-9 animate-spin text-primary" />
-          <p className="mt-3 text-sm">Loading seat availability…</p>
-        </div>
-      </main>
-    )
+    return <main className="grid min-h-screen place-items-center bg-background pt-20"><div className="text-center text-on-surface-variant"><LoaderCircle className="mx-auto size-9 animate-spin text-primary" /><p className="mt-3 text-sm">Loading live seat matrix…</p></div></main>
   }
 
   if (availability.isError) {
-    return (
-      <main className="min-h-screen bg-background px-4 pb-12 pt-28">
-        <div className="mx-auto max-w-4xl">
-          <ErrorState message={getApiErrorMessage(availability.error)} onRetry={availability.refetch} />
-        </div>
-      </main>
-    )
+    return <main className="min-h-screen bg-background px-4 pb-12 pt-28"><div className="mx-auto max-w-4xl"><ErrorState message={getApiErrorMessage(availability.error)} onRetry={availability.refetch} /></div></main>
   }
 
   if (seats.length === 0) {
-    return (
-      <main className="min-h-screen bg-background px-4 pb-12 pt-28">
-        <div className="mx-auto max-w-4xl">
-          <EmptyState title="No seats available" description="This showtime does not have an initialized seat layout." />
-        </div>
-      </main>
-    )
+    return <main className="min-h-screen bg-background px-4 pb-12 pt-28"><div className="mx-auto max-w-4xl"><EmptyState title="No seats available" description="This showtime does not have an initialized seat layout." /></div></main>
   }
 
   return (
-    <main className="min-h-screen bg-background pb-12 pt-20 text-on-surface">
-      <header className="border-b border-white/5 bg-surface-container-lowest px-4 py-4 sm:px-6">
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3">
-          <Link to="/showtimes" className="inline-flex items-center gap-2 text-sm text-on-surface-variant hover:text-white">
-            <ArrowLeft className="size-4" /> Back to showtimes
-          </Link>
-          <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider">
-            <span className="text-on-surface-variant">1 · Showtime</span>
-            <span>→</span><span className="text-primary">2 · Seats</span>
-            <span>→</span><span className="text-on-surface-variant">3 · Payment</span>
-          </div>
-        </div>
-      </header>
+    <main className="min-h-screen bg-background pt-20 text-on-surface">
+      <BookingStepper />
+      <SessionBar showtime={showtime} activeHold={activeHold} onExpire={handleHoldExpired} />
 
-      <div className="mx-auto grid max-w-7xl gap-6 px-4 py-7 sm:px-6 lg:grid-cols-[minmax(0,1fr)_340px]">
-        <section className="rounded-2xl border border-white/5 bg-surface-container-low p-4 sm:p-7">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div>
-              <p className="text-xs font-bold uppercase tracking-wider text-primary">Seat selection</p>
-              <h1 className="mt-1 font-heading text-2xl font-bold">Choose your seats</h1>
-              <p className="mt-2 text-sm text-on-surface-variant">Prices are the snapshot stored for this showtime.</p>
-            </div>
-            {activeHold && (
-              <div className="rounded-xl border border-secondary/30 bg-secondary/10 px-4 py-3 text-right">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-secondary">Hold expires in</p>
-                <p className="font-heading text-2xl font-bold text-secondary"><HoldCountdown hold={activeHold} onExpire={handleHoldExpired} /></p>
-              </div>
-            )}
-          </div>
-
-          <div className="mx-auto mt-10 max-w-3xl">
-            <div className="mx-auto h-2 w-4/5 rounded-full bg-gradient-to-r from-transparent via-tertiary-fixed to-transparent shadow-[0_8px_26px_rgba(223,225,245,0.2)]" />
-            <p className="mt-3 text-center text-[10px] font-bold uppercase tracking-[0.35em] text-on-surface-variant">Screen</p>
-
-            <div className="mt-9 space-y-3 overflow-x-auto pb-3">
-              {rows.map(([row, rowSeats]) => (
-                <div key={row} className="flex min-w-max items-center justify-center gap-2">
-                  <span className="w-5 text-center text-xs font-bold text-on-surface-variant">{row}</span>
-                  {rowSeats.map((seat) => (
-                    <SeatButton
-                      key={seat.seatId}
-                      seat={seat}
-                      selected={selectedSeatIds.includes(seat.seatId)}
-                      onToggle={toggleSeat}
-                      disabled={Boolean(activeHold)}
-                    />
-                  ))}
-                  <span className="w-5 text-center text-xs font-bold text-on-surface-variant">{row}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="mt-8 border-t border-white/5 pt-5"><SeatLegend /></div>
-          <div className="mt-5 flex flex-wrap justify-center gap-2">
-            {seatTypes.map((seat) => (
-              <span key={`${seat.type}:${seat.price}`} className="rounded-full bg-surface-container-high px-3 py-1.5 text-[11px] text-on-surface-variant">
-                <strong className="text-on-surface">{seat.type}</strong> · {formatVnd(seat.price)}
-              </span>
-            ))}
+      <div className="mx-auto grid max-w-[1400px] gap-7 px-4 py-8 sm:px-6 lg:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)]">
+        <section className="min-w-0 space-y-5">
+          <div className="rounded-xl bg-surface-container-low p-4"><SeatLegend seatTypes={seatTypes} selectedCount={selectedSeats.length} /></div>
+          <SeatMatrix rows={rows} selectedSeatIds={selectedSeatIds} activeHold={activeHold} onToggle={toggleSeat} />
+          <div className="flex flex-wrap items-center justify-between gap-3 px-1 text-xs text-on-surface-variant/70">
+            <span className="inline-flex items-center gap-2"><BadgeCheck className="size-4 text-secondary" />Hall capacity: {seats.length} seats · Layout version {availability.data.roomLayoutVersion}</span>
+            <span>Availability generated {new Date(availability.data.generatedAt).toLocaleTimeString('en-GB')}</span>
           </div>
         </section>
 
-        <aside className="h-fit rounded-2xl border border-white/10 bg-surface-container-low p-5 lg:sticky lg:top-24">
-          <div className="flex items-center gap-3 border-b border-white/5 pb-4">
-            <span className="grid size-10 place-items-center rounded-xl bg-primary-container/15 text-primary"><TicketCheck className="size-5" /></span>
-            <div><h2 className="font-heading font-bold">Your seats</h2><p className="text-[11px] text-on-surface-variant">Showtime {showtimeId}</p></div>
-          </div>
-
-          <div className="min-h-24 space-y-2 py-4">
-            {selectedSeats.length ? selectedSeats.map((seat) => (
-              <div key={seat.seatId} className="flex items-center justify-between rounded-lg bg-surface-container-high px-3 py-2 text-sm">
-                <span><strong>{seat.row}{seat.number}</strong> <span className="text-[10px] text-on-surface-variant">{seat.type}</span></span>
-                <span className="font-semibold text-secondary">{formatVnd(seat.price ?? 0)}</span>
-              </div>
-            )) : <p className="py-6 text-center text-sm text-on-surface-variant">Select available seats from the map.</p>}
-          </div>
-
-          <div className="flex items-center justify-between border-t border-white/5 py-4 font-heading text-lg font-bold">
-            <span>Total</span><span className="text-secondary">{formatVnd(total)}</span>
-          </div>
-
-          {activeHold ? (
-            <div className="space-y-3">
-              <div className="flex items-start gap-2 rounded-lg bg-secondary/10 p-3 text-xs leading-5 text-secondary">
-                <Clock3 className="mt-0.5 size-4 shrink-0" /> Your seats are held until the countdown reaches zero.
-              </div>
-              <button type="button" disabled className="w-full cursor-not-allowed rounded-xl bg-primary-container px-4 py-3 font-bold text-white opacity-60">Continue to payment</button>
-              <button type="button" onClick={releaseSeats} disabled={release.isPending} className="w-full rounded-xl bg-surface-container-high px-4 py-3 text-sm font-semibold hover:bg-surface-bright disabled:opacity-50">
-                {release.isPending ? 'Releasing…' : 'Release seats'}
-              </button>
-              <p className="text-center text-[10px] text-on-surface-variant">Payment handoff remains disabled until Booking/PAY-001 integration.</p>
-            </div>
-          ) : (
-            <button type="button" onClick={holdSeats} disabled={!selectedSeatIds.length || acquire.isPending} className="w-full rounded-xl bg-primary-container px-4 py-3 font-bold text-white shadow-crimson transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-45">
-              {acquire.isPending ? 'Holding seats…' : `Hold ${selectedSeatIds.length || ''} seat${selectedSeatIds.length === 1 ? '' : 's'}`}
-            </button>
-          )}
-
-          <p className="mt-4 flex items-start gap-2 text-[10px] leading-4 text-on-surface-variant"><ShieldCheck className="mt-0.5 size-3.5 shrink-0 text-secondary" />Availability is confirmed atomically by the server when you hold the seats.</p>
-        </aside>
+        <BookingSummary selectedSeats={selectedSeats} total={total} activeHold={activeHold} acquirePending={acquire.isPending} releasePending={release.isPending} onRemove={toggleSeat} onHold={holdSeats} onRelease={releaseSeats} />
       </div>
+
+      <section className="sticky bottom-0 z-40 border-t border-white/5 bg-surface-container-lowest/95 px-4 py-3 shadow-[0_-4px_20px_rgba(0,0,0,0.7)] backdrop-blur sm:px-6">
+        <div className="mx-auto flex max-w-[1400px] flex-col items-center justify-between gap-3 sm:flex-row">
+          <Link to="/showtimes" className="inline-flex items-center gap-2 text-xs font-semibold text-on-surface-variant hover:text-white"><ArrowLeft className="size-4" />Back to Showtime Selection (Step 4)</Link>
+          <div className="flex min-w-0 items-center gap-3 text-xs"><span className="rounded bg-primary-container px-2 py-1 font-bold text-white">{selectedSeats.length} SEAT{selectedSeats.length === 1 ? '' : 'S'}</span><strong className="max-w-56 truncate">{selectedSeats.map((seat) => `${seat.row}${seat.number}`).join(', ') || 'No seats selected'}</strong><span className="text-on-surface-variant/30">|</span><strong className="font-heading text-base">{formatVnd(total)}</strong></div>
+          <button type="button" onClick={activeHold ? undefined : holdSeats} disabled={Boolean(activeHold) || !selectedSeats.length || acquire.isPending} className="inline-flex items-center gap-2 rounded-lg bg-primary-container px-5 py-2.5 text-xs font-bold text-white shadow-crimson disabled:cursor-not-allowed disabled:opacity-45">{activeHold ? 'F&B integration pending' : 'Lock Seats & Continue'}{activeHold ? <Utensils className="size-4" /> : <ArrowRight className="size-4" />}</button>
+        </div>
+      </section>
     </main>
   )
 }
 
 export default SeatSelectionPage
-

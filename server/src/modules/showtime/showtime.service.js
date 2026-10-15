@@ -1,5 +1,5 @@
 import { movieService } from "../movie/movie.service.js";
-import { findPublicShowtimes } from "./showtime.repository.js";
+import { findBookableShowtimeById, findPublicShowtimes } from "./showtime.repository.js";
 
 const getVietnamDateRange = (date) => {
   if (!date) return undefined;
@@ -46,5 +46,23 @@ export const listShowtimes = async (query, now = new Date()) => {
       total,
       totalPages: total === 0 ? 0 : Math.ceil(total / query.limit),
     },
+  };
+};
+
+// Exported Showtime read contract for Booking. Missing layout snapshots fail closed because
+// Booking must never resolve seats from a newer mutable Room layout.
+export const getBookableShowtimeForBooking = async (showtimeId, now = new Date()) => {
+  const showtime = await findBookableShowtimeById(showtimeId, now);
+  if (!showtime) return null;
+  return {
+    showtimeId: showtime._id.toString(),
+    roomId: showtime.roomId.toString(),
+    roomLayoutVersion: showtime.roomLayoutVersion,
+    startAt: new Date(showtime.startAt).toISOString(),
+    endAt: new Date(showtime.endAt).toISOString(),
+    status: showtime.status,
+    movie: { ...showtime.movie, id: showtime.movie.id.toString() },
+    cinema: { ...showtime.cinema, id: showtime.cinema.id.toString() },
+    room: { ...showtime.room, id: showtime.room.id.toString() },
   };
 };

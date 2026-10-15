@@ -5,6 +5,10 @@ import { branchSeeds } from "../src/seeds/seed-branches.js";
 import { movieSeeds, seedMovies } from "../src/seeds/seed-movies.js";
 import { roomSeeds, seedRooms } from "../src/seeds/seed-rooms.js";
 import {
+  DEVELOPMENT_SEAT_PRICE_VND,
+  seedSeatHoldDemoData,
+} from "../src/seeds/seed-seat-hold.js";
+import {
   assertDevelopmentSeedTarget,
   deterministicObjectId,
 } from "../src/seeds/seed-utils.js";
@@ -127,6 +131,59 @@ test("room seed never overwrites a layout versioned after insert", async () => {
       assert.notEqual(updateOne.update.$setOnInsert[field], undefined, `${field} must be in $setOnInsert`);
     }
   }
+});
+
+test("SeatHold development seed adds immutable prices without resetting runtime state", async () => {
+  const showtimeId = deterministicObjectId("showtime:test");
+  const roomId = deterministicObjectId("room:test");
+  const seatId = deterministicObjectId("room:test:seat:A1");
+  let seatOperations;
+  const now = new Date("2026-10-15T04:00:00.000Z");
+  const database = {
+    collection(name) {
+      if (name === "showtimes") {
+        return {
+          find() {
+            return {
+              async toArray() {
+                return [{ _id: showtimeId, roomId, roomLayoutVersion: 1 }];
+              },
+            };
+          },
+        };
+      }
+      if (name === "rooms") {
+        return {
+          async findOne() {
+            return {
+              _id: roomId,
+              layoutVersion: 1,
+              seats: [{ _id: seatId, type: "STANDARD", status: "ENABLED" }],
+            };
+          },
+        };
+      }
+      if (name === "showtime_seats") {
+        return {
+          async bulkWrite(operations, options) {
+            seatOperations = operations;
+            assert.deepEqual(options, { ordered: true });
+            return { matchedCount: 1, modifiedCount: 1, upsertedCount: 0 };
+          },
+        };
+      }
+      throw new Error(`Unexpected collection ${name}`);
+    },
+  };
+
+  const result = await seedSeatHoldDemoData(database, now);
+  const update = seatOperations[0].updateOne.update;
+
+  assert.equal(result.showtimes, 1);
+  assert.equal(update.$set.priceSnapshot, DEVELOPMENT_SEAT_PRICE_VND.STANDARD);
+  assert.equal(update.$setOnInsert.state, "AVAILABLE");
+  assert.equal(update.$set.state, undefined);
+  assert.equal(update.$set.holdId, undefined);
 });
 
 test("remote development seed requires an explicit opt-in", () => {

@@ -37,6 +37,7 @@ const projectAvailability = ({ seat, state, ownerId, now, unitPrice }) => {
     row: seat.row,
     number: seat.number,
     type: seat.type,
+    isAccessible: Boolean(seat.isAccessible),
     availability,
     ...(holdExpiresAt ? { holdExpiresAt } : {}),
     ...(Number.isSafeInteger(unitPrice) ? { price: unitPrice } : {}),
@@ -129,6 +130,14 @@ export const createSeatAvailabilityService = ({
       roomLayoutVersion: showtime.roomLayoutVersion,
       generatedAt: now.toISOString(),
       currency: quote?.currency ?? "VND",
+      showtime: {
+        id: String(showtime.showtimeId ?? showtimeId),
+        startAt: showtime.startAt,
+        endAt: showtime.endAt,
+        movie: showtime.movie,
+        cinema: showtime.cinema,
+        room: showtime.room,
+      },
       seats: layout.seats.map((seat) =>
         projectAvailability({
           seat,
