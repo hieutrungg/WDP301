@@ -92,12 +92,6 @@ function MovieDetailPage() {
               </div>
               
               <div className="mt-8 flex flex-wrap gap-3">
-                <Link
-                  to={buildMovieShowtimesPath(movie.id)}
-                  className="inline-flex items-center gap-2 rounded-lg bg-primary-container px-5 py-3 text-sm font-bold text-white shadow-crimson transition-transform hover:-translate-y-0.5"
-                >
-                  <CalendarDays className="size-4" aria-hidden="true" /> Choose a showtime
-                </Link>
                 {movie.trailerUrl && (
                   <TrailerPlayerButton
                     trailerUrl={movie.trailerUrl}
@@ -105,6 +99,9 @@ function MovieDetailPage() {
                     className="inline-flex items-center gap-2 rounded-lg bg-primary-container px-5 py-3 text-sm font-bold text-white shadow-crimson transition-transform hover:-translate-y-0.5"
                   />
                 )}
+                <Link to={buildMovieShowtimesPath(movie.id)} state={{ movie }} className="inline-flex items-center gap-2 rounded-lg bg-primary-container px-5 py-3 text-sm font-bold text-white shadow-crimson transition-transform hover:-translate-y-0.5">
+                  <CalendarDays className="size-4" aria-hidden="true" /> View Showtimes
+                </Link>
                 <Link to="/movies" className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-surface-container-high/80 px-5 py-3 text-sm font-semibold text-on-surface hover:bg-surface-container-highest">
                   <ArrowLeft className="size-4" aria-hidden="true" /> Back to lineup
                 </Link>

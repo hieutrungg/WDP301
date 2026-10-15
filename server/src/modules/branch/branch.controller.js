@@ -10,6 +10,15 @@ export const listBranches = async (req, res, next) => {
   }
 };
 
+export const listPublicCinemas = async (req, res, next) => {
+  try {
+    const { items, meta } = await branchService.listPublicCinemas(req.validated.query);
+    res.json({ success: true, data: items, meta });
+  } catch (error) {
+    next(error);
+  }
+};
+
 export const getBranchSummary = async (_req, res, next) => {
   try {
     res.json({ success: true, data: await branchService.getBranchSummary() });

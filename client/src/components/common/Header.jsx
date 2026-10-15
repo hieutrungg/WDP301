@@ -10,7 +10,6 @@ import { useAuth } from "../../features/auth/hooks/useAuth";
 const navItems = [
   { label: "Home", to: "/" },
   { label: "Movies", to: "/movies" },
-  { label: "Showtimes", to: "/showtimes" },
   { label: "Theatres & Tickets", href: "/#theatres-&-tickets" },
   { label: "Offers", href: "/#offers" },
 ];

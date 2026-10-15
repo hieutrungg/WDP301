@@ -112,6 +112,36 @@ export const listBranches = async ({ q, status, page, limit, sort, order }) => {
   };
 };
 
+export const listPublicCinemas = async ({ q, page, limit }) => {
+  const filter = { status: BRANCH_STATUS.ACTIVE };
+  if (q) {
+    const pattern = new RegExp(escapeRegex(q), "i");
+    filter.$or = [{ branchName: pattern }, { address: pattern }];
+  }
+
+  const [branches, total] = await Promise.all([
+    findBranches({
+      filter,
+      sort: { branchName: 1, _id: 1 },
+      skip: (page - 1) * limit,
+      limit,
+    }),
+    countBranches(filter),
+  ]);
+
+  return {
+    items: branches.map((branch) => ({
+      id: branch._id.toString(),
+      branchName: branch.branchName,
+      address: branch.address,
+      email: branch.email ?? null,
+      hotline: branch.hotline ?? null,
+      status: branch.status,
+    })),
+    meta: { page, limit, total, totalPages: Math.ceil(total / limit) },
+  };
+};
+
 export const getBranchSummary = async () => {
   const [byStatus, roomCount] = await Promise.all([countBranchesByStatus(), countAllRooms()]);
   const active = byStatus[BRANCH_STATUS.ACTIVE] ?? 0;

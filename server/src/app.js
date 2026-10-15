@@ -5,7 +5,9 @@ import cookieParser from "cookie-parser";
 import accountRoutes from "./modules/account/account.routes.js";
 import authRoutes from "./modules/auth/auth.routes.js";
 import branchRoutes from "./modules/branch/branch.routes.js";
+import cinemaRoutes from "./modules/branch/cinema.routes.js";
 import movieRoutes from "./modules/movie/movie.routes.js";
+import showtimeRoutes from "./modules/showtime/showtime.routes.js";
 import roomRoutes from "./modules/room/room.routes.js";
 import { notFound } from "./middlewares/notFoundMiddleware.js";
 import { errorHandler } from "./middlewares/errorMiddleware.js";
@@ -33,7 +35,9 @@ app.get("/api/health", (req, res) => {
 app.use("/api/auth", authRoutes);
 app.use("/api/accounts", accountRoutes);
 app.use("/api/branches", branchRoutes);
+app.use("/api/cinemas", cinemaRoutes);
 app.use("/api/movies", movieRoutes);
+app.use("/api", showtimeRoutes);
 app.use("/api/rooms", roomRoutes);
 
 app.use(notFound);

@@ -65,6 +65,17 @@ export const listBranchesQuerySchema = z.strictObject({
   order: z.enum(["asc", "desc"]).default("asc"),
 });
 
+export const publicCinemasQuerySchema = z.strictObject({
+  q: z
+    .string()
+    .trim()
+    .max(100, "Search text is too long")
+    .optional()
+    .transform((value) => value || undefined),
+  page: z.coerce.number().int().min(1).max(10000).default(1),
+  limit: z.coerce.number().int().min(1).max(BRANCH_PAGE_LIMIT_MAX).default(20),
+});
+
 export const createBranchSchema = z.object({
   branchName: branchNameField,
   address: addressField,
