@@ -4,6 +4,7 @@ import EditProfilePage from '../../features/account/pages/EditProfilePage'
 import ProfilePage from '../../features/account/pages/ProfilePage'
 import BranchManagementPage from '../../features/branch/pages/BranchManagementPage'
 import SeatMapConfigPage from '../../features/room/pages/SeatMapConfigPage'
+import ManagerShowtimesPage from '../../features/manager-showtimes/pages/ManagerShowtimesPage'
 import AdminLayout from '../../layouts/AdminLayout'
 import ManagerLayout from '../../layouts/ManagerLayout'
 import PublicLayout from '../../layouts/PublicLayout'
@@ -65,6 +66,7 @@ function AppRouter() {
           <Route element={<PermissionRoute role="MANAGER" />}>
             <Route element={<ManagerLayout />}>
               <Route index element={<Navigate to="seat-maps" replace />} />
+              <Route path="showtimes" element={<ManagerShowtimesPage />} />
               <Route element={<PermissionRoute permission="room.manage" />}>
                 <Route path="seat-maps" element={<SeatMapConfigPage />} />
               </Route>

@@ -30,6 +30,23 @@ export const createSeatHoldRepository = ({
   const listByShowtime = (showtimeId, session) =>
     showtimeSeatModel.find({ showtimeId }).session(session ?? null).lean().exec();
 
+  const deleteUnpublishedShowtimeSeats = (showtimeId) =>
+    showtimeSeatModel.deleteMany({ showtimeId }).exec();
+
+  const hasActiveShowtimeClaims = async (showtimeId, now = new Date()) => {
+    const [claimedSeat, activeHold] = await Promise.all([
+      showtimeSeatModel.exists({
+        showtimeId,
+        $or: [
+          { state: SHOWTIME_SEAT_STATE.SOLD },
+          { state: SHOWTIME_SEAT_STATE.HELD, holdExpiresAt: { $gt: now } },
+        ],
+      }),
+      seatHoldModel.exists({ showtimeId, status: SEAT_HOLD_STATUS.ACTIVE, expiresAt: { $gt: now } }),
+    ]);
+    return Boolean(claimedSeat || activeHold);
+  };
+
   const initializeShowtimeSeats = async ({ showtimeId, roomLayoutVersion, seats }) => {
     const session = await connection.startSession();
     let result;
@@ -262,7 +279,9 @@ export const createSeatHoldRepository = ({
 
   return {
     acquire,
+    deleteUnpublishedShowtimeSeats,
     findByOwnerAndCheckoutKey,
+    hasActiveShowtimeClaims,
     initializeShowtimeSeats,
     listByShowtime,
     release,
