@@ -270,3 +270,30 @@ export const describeCell = (draft, rowIndex, columnIndex, numbers) => {
   if (cell.status === 'DISABLED') parts.push('blocked')
   return `${parts.join(', ')} (column ${columnIndex + 1})`
 }
+
+// What differs between two drafts, for confirmation dialogs. Cells outside the shared area
+// (added/removed rows or columns) count as changed.
+export const diffDrafts = (from, to) => {
+  const rows = Math.max(from.rowLabels.length, to.rowLabels.length)
+  const columns = Math.max(from.columnCount, to.columnCount)
+  let changedCells = 0
+
+  for (let row = 0; row < rows; row += 1) {
+    for (let column = 0; column < columns; column += 1) {
+      const a = from.cells[row]?.[column]
+      const b = to.cells[row]?.[column]
+      if (!a || !b || a.kind !== b.kind || a.seatType !== b.seatType || a.status !== b.status || a.isAccessible !== b.isAccessible) {
+        changedCells += 1
+      }
+    }
+  }
+
+  const labelsChanged = from.rowLabels.some((label, index) => to.rowLabels[index] !== undefined && to.rowLabels[index] !== label)
+
+  return {
+    changedCells,
+    rowDelta: to.rowLabels.length - from.rowLabels.length,
+    columnDelta: to.columnCount - from.columnCount,
+    labelsChanged,
+  }
+}

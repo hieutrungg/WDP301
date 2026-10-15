@@ -97,3 +97,16 @@ test('server field paths map back to editor cells', () => {
   assert.deepEqual(locateFieldError('rowLabels.4', 3), { type: 'row', rowIndex: 4 })
   assert.equal(locateFieldError('columnCount', 3), null)
 })
+
+test('diffDrafts counts changed cells, resized area and relabelled rows', async () => {
+  const { diffDrafts } = await import('../src/features/room/utils/seatLayout.js')
+  const base = createStarterDraft(2, 3)
+  assert.deepEqual(diffDrafts(base, base), { changedCells: 0, rowDelta: 0, columnDelta: 0, labelsChanged: false })
+
+  let edited = updateCells(base, [[0, 0], [1, 2]], (cell) => applyTool(cell, 'VIP'))
+  edited = { ...edited, rowLabels: ['A', 'Z'] }
+  assert.deepEqual(diffDrafts(base, edited), { changedCells: 2, rowDelta: 0, columnDelta: 0, labelsChanged: true })
+
+  const grown = resizeDraft(base, 3, 3)
+  assert.deepEqual(diffDrafts(base, grown), { changedCells: 3, rowDelta: 1, columnDelta: 0, labelsChanged: false })
+})

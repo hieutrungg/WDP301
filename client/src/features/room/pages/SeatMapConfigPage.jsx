@@ -1,10 +1,10 @@
-import { CircleCheck, History, Info, Lock, RefreshCw, Save, TriangleAlert, Undo2 } from 'lucide-react'
+import { Armchair, CircleCheck, History, Info, Lock, RefreshCw, Save, TriangleAlert, Undo2 } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router'
-import { toast } from 'sonner'
 import { getApiErrorMessage, getApiFieldErrors } from '../../../lib/api/apiError'
 import { createSeatLayoutRequest, updateSeatLayoutRequest } from '../api/roomApi'
 import CapacityPanel from '../components/CapacityPanel'
+import ConfirmDialog from '../components/ConfirmDialog'
 import GridSetupPanel from '../components/GridSetupPanel'
 import RoomPicker from '../components/RoomPicker'
 import SeatGrid from '../components/SeatGrid'
@@ -13,9 +13,11 @@ import SeatLegend from '../components/SeatLegend'
 import SeatToolbar from '../components/SeatToolbar'
 import { useRoomList, useSeatLayout } from '../hooks/useRooms'
 import { DEFAULT_ZOOM_INDEX, EDITOR_TOOLS, ZOOM_LEVELS } from '../utils/editorTools'
+import { showSeatMapToast } from '../utils/seatMapToast'
 import {
   applyTool,
   createStarterDraft,
+  diffDrafts,
   draftFromLayout,
   draftsEqual,
   locateFieldError,
@@ -118,6 +120,7 @@ function SeatMapConfigPage() {
   const [saving, setSaving] = useState(false)
   const [serverErrors, setServerErrors] = useState([])
   const [conflict, setConflict] = useState('')
+  const [confirmation, setConfirmation] = useState(null)
 
   const roomList = useRoomList(listToken)
   const rooms = roomList.data?.items
@@ -190,14 +193,33 @@ function SeatMapConfigPage() {
 
   const selectRoom = (nextRoomId) => {
     if (nextRoomId === roomId) return
-    if (changed && !window.confirm('Discard your unsaved seat map changes?')) return
-    setSearchParams({ roomId: nextRoomId }, { replace: true })
+    if (changed) setConfirmation({ kind: 'switch', roomId: nextRoomId })
+    else setSearchParams({ roomId: nextRoomId }, { replace: true })
   }
 
-  const revert = () => {
-    if (!changed || !window.confirm('Revert to the last saved layout? Unsaved changes will be lost.')) return
+  const requestRevert = () => {
+    if (changed && !saving) setConfirmation({ kind: 'revert' })
+  }
+
+  const confirmAction = () => {
+    const pending = confirmation
+    setConfirmation(null)
+    if (!pending) return
+
+    if (pending.kind === 'switch') {
+      setSearchParams({ roomId: pending.roomId }, { replace: true })
+      return
+    }
+
+    const discarded = diffDrafts(active.baseline, active.draft).changedCells
     setEditor((previous) => ({ ...previous, draft: previous.baseline }))
     setServerErrors([])
+    showSeatMapToast({
+      tone: 'revert',
+      title: 'Changes reverted',
+      description: `The editor is back to the saved layout${active.isNew ? '' : ` (version ${active.version})`}.`,
+      chips: [{ label: 'Discarded', value: `${discarded} position${discarded === 1 ? '' : 's'}`, icon: Undo2 }],
+    })
   }
 
   const reloadLatest = () => {
@@ -223,28 +245,42 @@ function SeatMapConfigPage() {
       setListToken((token) => token + 1)
 
       if (result.changed) {
-        toast.success(`Seat map saved as version ${result.layout.layoutVersion}`, {
-          description: `${result.room.roomName}: ${result.layout.summary.operationalSeatCapacity} operational seats.`,
+        const capacity = result.layout.summary.operationalSeatCapacity
+        const before = active.isNew ? null : summarizeDraft(active.baseline).operationalSeatCapacity
+        const delta = before === null ? null : capacity - before
+
+        showSeatMapToast({
+          tone: 'success',
+          title: active.isNew ? 'Seat map created' : 'Seat map saved',
+          description: `${result.room.roomName} now uses layout version ${result.layout.layoutVersion}. Showtimes created earlier keep their version.`,
+          chips: [
+            { label: 'Version', value: `v${result.layout.layoutVersion}`, icon: History },
+            {
+              label: 'Capacity',
+              value: delta ? `${capacity} (${delta > 0 ? '+' : ''}${delta})` : String(capacity),
+              icon: Armchair,
+            },
+          ],
         })
       } else {
-        toast.info('No changes to save')
+        showSeatMapToast({ tone: 'info', title: 'Nothing to save', description: 'This layout is identical to the saved version, so no new version was created.' })
       }
     } catch (error) {
       const code = getApiErrorCode(error)
 
       if (code === 'INVALID_SEAT_LAYOUT') {
         setServerErrors(getApiFieldErrors(error))
-        toast.error('The seat map has problems. Fix the highlighted items and save again.')
+        showSeatMapToast({ tone: 'error', title: 'The seat map has problems', description: 'Fix the highlighted items and save again. Nothing was saved.' })
       } else if (code === 'SEAT_LAYOUT_IN_USE') {
-        toast.error(getApiErrorMessage(error))
+        showSeatMapToast({ tone: 'error', title: 'Layout is locked', description: getApiErrorMessage(error) })
         setLayoutToken((token) => token + 1)
       } else if (RELOAD_CODES.has(code)) {
         setConflict(getApiErrorMessage(error))
       } else if (code === 'ROOM_NOT_FOUND') {
-        toast.error(getApiErrorMessage(error))
+        showSeatMapToast({ tone: 'error', title: 'Room not found', description: getApiErrorMessage(error) })
         setListToken((token) => token + 1)
       } else {
-        toast.error(getApiErrorMessage(error))
+        showSeatMapToast({ tone: 'error', title: 'Could not save the seat map', description: getApiErrorMessage(error) })
       }
     } finally {
       setSaving(false)
@@ -363,7 +399,7 @@ function SeatMapConfigPage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <button type="button" onClick={revert} disabled={!changed || saving} className={toolButton} title="Revert to the last saved layout">
+          <button type="button" onClick={requestRevert} disabled={!changed || saving} className={toolButton} title="Revert to the last saved layout">
             <Undo2 className="size-4" />
             Revert
           </button>
@@ -465,6 +501,25 @@ function SeatMapConfigPage() {
           )}
         </div>
       </div>
+
+      {confirmation && active && (
+        <ConfirmDialog
+          title={confirmation.kind === 'switch' ? 'Leave without saving?' : 'Revert to the saved layout?'}
+          description={
+            confirmation.kind === 'switch'
+              ? 'You have unsaved seat map changes in this room. Switching rooms will discard them.'
+              : 'Every edit you made since the last save will be discarded and the map returns to its saved state.'
+          }
+          details={[
+            { label: 'Positions changed', value: diffDrafts(active.baseline, active.draft).changedCells },
+            { label: 'Capacity now → saved', value: `${summary.operationalSeatCapacity} → ${summarizeDraft(active.baseline).operationalSeatCapacity}` },
+          ]}
+          icon={confirmation.kind === 'switch' ? TriangleAlert : Undo2}
+          confirmLabel={confirmation.kind === 'switch' ? 'Discard and switch' : 'Revert changes'}
+          onConfirm={confirmAction}
+          onCancel={() => setConfirmation(null)}
+        />
+      )}
     </div>
   )
 }
