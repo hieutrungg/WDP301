@@ -87,3 +87,29 @@ export const verifyEmailSchema = z.object({
 export const resendVerificationSchema = z.object({
   email: normalizedEmail,
 });
+
+const otpField = z
+  .string({ error: "Verification code is required" })
+  .trim()
+  .regex(/^\d{6}$/, "Verification code must be 6 digits");
+
+export const forgotPasswordSchema = z.object({
+  email: normalizedEmail,
+});
+
+export const verifyResetOtpSchema = z.object({
+  email: normalizedEmail,
+  otp: otpField,
+});
+
+export const resetPasswordSchema = z
+  .object({
+    email: normalizedEmail,
+    otp: otpField,
+    newPassword: strongPassword,
+    confirmPassword: z.string({ error: "Please confirm your password" }),
+  })
+  .refine((data) => data.newPassword === data.confirmPassword, {
+    path: ["confirmPassword"],
+    message: "Passwords do not match",
+  });

@@ -40,7 +40,8 @@ function RequirementIcon({ state }) {
   return <span className="size-4 shrink-0 rounded-full bg-surface-bright" />
 }
 
-function PasswordStrength({ value = '' }) {
+// `compact` keeps the checklist in one column for narrow cards such as the auth pages.
+function PasswordStrength({ value = '', compact = false }) {
   const { level, label } = describe(value)
   const style = levels[level]
 
@@ -69,14 +70,14 @@ function PasswordStrength({ value = '' }) {
         <h5 className="font-heading text-xs font-bold tracking-wider text-tertiary uppercase">
           Password Requirements
         </h5>
-        <ul className="grid grid-cols-1 gap-2 text-xs sm:grid-cols-2">
+        <ul className={`grid grid-cols-1 gap-2 text-xs ${compact ? '' : 'sm:grid-cols-2'}`}>
           {passwordRules.map((rule) => {
             const state = !value ? 'pending' : rule.test(value) ? 'met' : 'failed'
 
             return (
               <li
                 key={rule.id}
-                className={`flex items-center gap-2 ${rule.id === 'special' ? 'sm:col-span-2' : ''}`}
+                className={`flex items-center gap-2 ${rule.id === 'special' && !compact ? 'sm:col-span-2' : ''}`}
               >
                 <RequirementIcon state={state} />
                 <span

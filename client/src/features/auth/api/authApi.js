@@ -36,3 +36,18 @@ export const googleLoginRequest = async (payload) => {
   const response = await httpClient.post('/auth/google', payload)
   return response.data
 }
+
+export const forgotPasswordRequest = async (email) => {
+  const response = await httpClient.post('/auth/forgot-password', { email })
+  return response.data
+}
+
+export const verifyResetOtpRequest = async (payload) => {
+  const response = await httpClient.post('/auth/forgot-password/verify-otp', payload)
+  return response.data
+}
+
+export const resetPasswordRequest = async (payload) => {
+  const response = await httpClient.post('/auth/reset-password', payload)
+  return response.data
+}

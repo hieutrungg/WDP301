@@ -11,6 +11,7 @@ import {
   createAccount,
   activateAccount,
   deletePendingAccount,
+  setAccountPasswordHash,
 } from "../account/account.repository.js";
 import { findRoleByName } from "../role-permission/role.repository.js";
 import {
@@ -19,12 +20,16 @@ import {
   deleteVerifications,
   findVerification,
   incrementAttemptCount,
+  markVerificationVerified,
 } from "./email-verification.repository.js";
-import { sendRegistrationOtpEmail } from "./email.service.js";
+import { sendPasswordResetOtpEmail, sendRegistrationOtpEmail } from "./email.service.js";
 import { googleTokenVerifier } from "./google.service.js";
 import { AppError } from "../../utils/AppError.js";
 
 const REGISTER_PURPOSE = "REGISTER_EMAIL";
+const RESET_PASSWORD_PURPOSE = "RESET_PASSWORD";
+// Time allowed to choose a new password once the reset code has been verified.
+const RESET_WINDOW_MINUTES = 10;
 const OTP_EXPIRY_MINUTES = 5;
 const OTP_MAX_ATTEMPTS = 5;
 const RESEND_COOLDOWN_MS = 60 * 1000;
@@ -41,7 +46,15 @@ const handleDuplicateKeyError = (error) => {
   throw duplicateError(field);
 };
 
-const createOtpVerification = async (account, previousOtpHash = null) => {
+const otpEmailSenders = {
+  [REGISTER_PURPOSE]: sendRegistrationOtpEmail,
+  [RESET_PASSWORD_PURPOSE]: sendPasswordResetOtpEmail,
+};
+
+const createOtpVerification = async (
+  account,
+  { purpose = REGISTER_PURPOSE, previousOtpHash = null } = {},
+) => {
   let otp;
   do {
     otp = crypto.randomInt(100000, 1000000).toString();
@@ -49,20 +62,20 @@ const createOtpVerification = async (account, previousOtpHash = null) => {
   const otpHash = await bcrypt.hash(otp, BCRYPT_ROUNDS);
   const expiresAt = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
 
-  await deleteVerifications(account._id, REGISTER_PURPOSE);
+  await deleteVerifications(account._id, purpose);
   const verification = await createVerification({
     accountId: account._id,
     email: account.email,
-    purpose: REGISTER_PURPOSE,
+    purpose,
     otpHash,
     expiresAt,
     attemptCount: 0,
   });
 
   try {
-    await sendRegistrationOtpEmail({
+    await otpEmailSenders[purpose]({
       email: account.email,
-      fullName: account.profile.fullName,
+      fullName: account.profile?.fullName || account.username,
       otp,
       expiresInMinutes: OTP_EXPIRY_MINUTES,
     });
@@ -268,6 +281,32 @@ export const register = async (registration) => {
   return { email: account.email };
 };
 
+const assertValidOtp = async (verification, otp) => {
+  if (verification.expiresAt.getTime() <= Date.now()) {
+    await deleteVerificationById(verification._id);
+    throw new AppError(400, "Verification code has expired");
+  }
+
+  if (verification.attemptCount >= OTP_MAX_ATTEMPTS) {
+    throw new AppError(429, "Too many incorrect attempts. Request a new code.");
+  }
+
+  if (!(await bcrypt.compare(otp, verification.otpHash))) {
+    await incrementAttemptCount(verification._id);
+    throw new AppError(400, "Invalid verification code");
+  }
+};
+
+const assertResendCooldown = (verification) => {
+  if (!verification) return;
+
+  const elapsed = Date.now() - verification.createdAt.getTime();
+  if (elapsed < RESEND_COOLDOWN_MS) {
+    const retryAfter = Math.ceil((RESEND_COOLDOWN_MS - elapsed) / 1000);
+    throw new AppError(429, `Please wait ${retryAfter} seconds before requesting another code`);
+  }
+};
+
 export const verifyEmail = async ({ email, otp }) => {
   const account = await findAccountByEmail(email);
 
@@ -281,20 +320,7 @@ export const verifyEmail = async ({ email, otp }) => {
     throw new AppError(400, "Verification code is invalid or expired");
   }
 
-  if (verification.expiresAt.getTime() <= Date.now()) {
-    await deleteVerificationById(verification._id);
-    throw new AppError(400, "Verification code has expired");
-  }
-
-  if (verification.attemptCount >= OTP_MAX_ATTEMPTS) {
-    throw new AppError(429, "Too many incorrect attempts. Request a new code.");
-  }
-
-  const matches = await bcrypt.compare(otp, verification.otpHash);
-  if (!matches) {
-    await incrementAttemptCount(verification._id);
-    throw new AppError(400, "Invalid verification code");
-  }
+  await assertValidOtp(verification, otp);
 
   const result = await activateAccount(account._id);
   if (result.modifiedCount !== 1) {
@@ -312,15 +338,80 @@ export const resendVerification = async ({ email }) => {
   }
 
   const currentVerification = await findVerification(account._id, REGISTER_PURPOSE);
-  if (
-    currentVerification &&
-    Date.now() - currentVerification.createdAt.getTime() < RESEND_COOLDOWN_MS
-  ) {
-    const retryAfter = Math.ceil(
-      (RESEND_COOLDOWN_MS - (Date.now() - currentVerification.createdAt.getTime())) / 1000,
-    );
-    throw new AppError(429, `Please wait ${retryAfter} seconds before requesting another code`);
+  assertResendCooldown(currentVerification);
+
+  await createOtpVerification(account, { previousOtpHash: currentVerification?.otpHash });
+};
+
+const notRegisteredError = () =>
+  new AppError(404, "No account is registered with this email address", [
+    { field: "email", message: "No account is registered with this email address" },
+  ]);
+
+const findResetVerification = async (email) => {
+  const account = await findAccountByEmail(email);
+  const verification = account
+    ? await findVerification(account._id, RESET_PASSWORD_PURPOSE)
+    : null;
+
+  if (!verification) {
+    throw new AppError(400, "Verification code is invalid or expired");
   }
 
-  await createOtpVerification(account, currentVerification?.otpHash);
+  return { account, verification };
+};
+
+// UC04 steps 3-5. The SRS asks for an explicit error when the email is not registered.
+export const requestPasswordReset = async ({ email }) => {
+  const account = await findAccountByEmail(email);
+
+  if (!account) {
+    throw notRegisteredError();
+  }
+
+  if (account.status === "PENDING_VERIFICATION") {
+    throw new AppError(400, "Please verify your email address before resetting your password");
+  }
+
+  if (account.status !== "ACTIVE") {
+    throw new AppError(403, "This account is not allowed to reset its password");
+  }
+
+  const currentVerification = await findVerification(account._id, RESET_PASSWORD_PURPOSE);
+  assertResendCooldown(currentVerification);
+
+  await createOtpVerification(account, {
+    purpose: RESET_PASSWORD_PURPOSE,
+    previousOtpHash: currentVerification?.otpHash,
+  });
+};
+
+// UC04 step 6: check the code before the new password form is shown.
+export const verifyPasswordResetOtp = async ({ email, otp }) => {
+  const { verification } = await findResetVerification(email);
+
+  await assertValidOtp(verification, otp);
+  await markVerificationVerified(
+    verification._id,
+    new Date(Date.now() + RESET_WINDOW_MINUTES * 60 * 1000),
+  );
+};
+
+// UC04 steps 8-10: a verified code can be used exactly once.
+export const resetPassword = async ({ email, otp, newPassword }) => {
+  const { account, verification } = await findResetVerification(email);
+
+  if (!verification.verifiedAt) {
+    throw new AppError(400, "Please verify your code before choosing a new password");
+  }
+
+  await assertValidOtp(verification, otp);
+
+  const consumed = await deleteVerificationById(verification._id);
+  if (consumed.deletedCount !== 1) {
+    throw new AppError(400, "Verification code is invalid or expired");
+  }
+
+  const passwordHash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
+  await setAccountPasswordHash(account._id, passwordHash);
 };
