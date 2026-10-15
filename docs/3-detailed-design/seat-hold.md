@@ -8,8 +8,8 @@
 | Module owner | Booking / SeatHold owner (`MEMBER_4` mapping must be confirmed on the team board) |
 | Required reviewers | Room owner, Showtime owner, Payment/Ticket owner, integration owner |
 | Requirement status | `APPROVED_READY` for UC20 + BR14-16,18,54-55 |
-| Contract status | `PROPOSED_FOR_REVIEW` |
-| Implementation authorization | This artifact does not authorize `BOOK-003` until the review gates in section 14 are closed |
+| Contract status | `APPROVED_READY` for Hà-owned SeatHold/availability scope recorded on the team task board |
+| Implementation authorization | `BOOK-002..008`, `BOOK-012` SeatHold scope and `ROOM-007..008` are approved; cross-owner Booking/Payment transitions still require their named reviewers |
 
 This document turns approved decisions A-17 through A-20 into a reviewable technical contract. It does not change the SRS, shared enums, error middleware, Room schema, Showtime schema, or Payment/Ticket contract.
 
@@ -207,7 +207,7 @@ ShowtimeSeat
   showtimeId
   seatId
   roomLayoutVersion
-  state: AVAILABLE | HELD | SOLD                       # proposed module enum
+  state: AVAILABLE | HELD | SOLD | UNAVAILABLE         # Booking module enum
   holdId?
   holdOwnerId?
   holdExpiresAt?
@@ -408,7 +408,7 @@ All items below must be recorded as approved on the task board/contract review b
 - [ ] Showtime owner approves bookable-state/cutoff read port.
 - [ ] Pricing owner approves quote/snapshot fields and seat-type pricing boundary.
 - [ ] Payment/Ticket owner approves `payableReference`, expiry and verified-success port.
-- [ ] Team approves `SeatHold`/`ShowtimeSeat` persistence enums and indexes.
+- [x] Team task board approves `SeatHold`/`ShowtimeSeat` transaction/index work for `BOOK-004`.
 - [ ] Infrastructure owner confirms production and isolated test MongoDB run as replica sets with transactions.
 - [ ] Team approves lazy + scheduled cleanup topology and operational ownership.
 - [ ] Auth owner decides public availability and authentication/permission rules for hold creation.

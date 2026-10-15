@@ -13,3 +13,5 @@ export const acquireSeatHoldSchema = z.object({
 
 export const seatHoldIdParamsSchema = z.object({ holdId: objectId });
 
+export const showtimeIdParamsSchema = z.object({ showtimeId: objectId });
+
