@@ -12,6 +12,7 @@ import {
   findBranchById,
   findBranchByName,
   findBranches,
+  findBranchesByIds,
   setBranchStatus,
   updateBranchById,
 } from "./branch.repository.js";
@@ -120,6 +121,19 @@ export const getBranchSummary = async () => {
 };
 
 export const getBranch = async (branchId) => toBranchDetail(await requireBranch(branchId));
+
+// Read contract for other modules (Room): id -> { id, branchName, status }, no dependency counts.
+export const getBranchSummariesByIds = async (branchIds) => {
+  if (branchIds.length === 0) return new Map();
+
+  const branches = await findBranchesByIds(branchIds, { branchName: 1, status: 1 });
+  return new Map(
+    branches.map(({ _id, branchName, status }) => [
+      _id.toString(),
+      { id: _id.toString(), branchName, status },
+    ]),
+  );
+};
 
 export const createBranch = async (input) => {
   await assertNameAvailable(input.branchName);

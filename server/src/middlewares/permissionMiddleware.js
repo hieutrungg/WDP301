@@ -24,3 +24,27 @@ export const requirePermission =
       return next(error);
     }
   };
+
+// Must run after requireAuth. For use cases whose actor is a specific role rather than a grant:
+// account requirePermission already loaded for this request.
+export const requireRole =
+  (...roleNames) =>
+  async (req, _res, next) => {
+    try {
+      if (!req.auth?.accountId) {
+        throw new AppError(401, "Authentication required");
+      }
+
+      const account = req.auth.account ?? (await getCurrentAccount(req.auth.accountId));
+      const roles = new Set(account.roles.map(({ name }) => name));
+
+      if (!roleNames.some((name) => roles.has(name))) {
+        throw new AppError(403, "You do not have permission to perform this action", [], "FORBIDDEN");
+      }
+
+      req.auth.account = account;
+      return next();
+    } catch (error) {
+      return next(error);
+    }
+  };

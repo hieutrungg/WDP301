@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { MOVIE_STATUSES } from "../src/modules/movie/movie.constants.js";
 import { branchSeeds } from "../src/seeds/seed-branches.js";
 import { movieSeeds, seedMovies } from "../src/seeds/seed-movies.js";
-import { roomSeeds } from "../src/seeds/seed-rooms.js";
+import { roomSeeds, seedRooms } from "../src/seeds/seed-rooms.js";
 import {
   assertDevelopmentSeedTarget,
   deterministicObjectId,
@@ -100,6 +100,32 @@ test("branch and room fixtures satisfy the approved M0 invariants", () => {
     assert.equal(new Set(room.seats.map(({ _id }) => _id.toString())).size, room.seats.length);
     assert.equal(new Set(room.seats.map(({ row, number }) => `${row}:${number}`)).size, room.seats.length);
     assert.ok(room.seats.every((seat) => !("isBooked" in seat)));
+    assert.deepEqual(room.seatLayout.rowLabels, [...new Set(room.seats.map(({ row }) => row))]);
+    assert.ok(room.seats.every(({ column }) => column >= 1 && column <= room.seatLayout.columnCount));
+  }
+});
+
+test("room seed never overwrites a layout versioned after insert", async () => {
+  let operations;
+  const database = {
+    collection(name) {
+      assert.equal(name, "rooms");
+      return {
+        async bulkWrite(ops) {
+          operations = ops;
+          return { matchedCount: 0, modifiedCount: 0, upsertedCount: ops.length };
+        },
+      };
+    },
+  };
+
+  await seedRooms(database);
+
+  for (const { updateOne } of operations) {
+    for (const field of ["layoutVersion", "seatLayout", "seats", "capacity"]) {
+      assert.equal(updateOne.update.$set[field], undefined, `${field} must not be in $set`);
+      assert.notEqual(updateOne.update.$setOnInsert[field], undefined, `${field} must be in $setOnInsert`);
+    }
   }
 });
 

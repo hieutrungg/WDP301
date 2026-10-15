@@ -6,6 +6,7 @@ import accountRoutes from "./modules/account/account.routes.js";
 import authRoutes from "./modules/auth/auth.routes.js";
 import branchRoutes from "./modules/branch/branch.routes.js";
 import movieRoutes from "./modules/movie/movie.routes.js";
+import roomRoutes from "./modules/room/room.routes.js";
 import { notFound } from "./middlewares/notFoundMiddleware.js";
 import { errorHandler } from "./middlewares/errorMiddleware.js";
 import { env } from "./config/env.js";
@@ -33,6 +34,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/accounts", accountRoutes);
 app.use("/api/branches", branchRoutes);
 app.use("/api/movies", movieRoutes);
+app.use("/api/rooms", roomRoutes);
 
 app.use(notFound);
 app.use(errorHandler);

@@ -19,6 +19,9 @@ export const countBranchesByStatus = async () => {
 
 export const findBranchById = (branchId) => Branch.findById(branchId).lean().exec();
 
+export const findBranchesByIds = (branchIds, projection) =>
+  Branch.find({ _id: { $in: branchIds } }, projection).lean().exec();
+
 // Uses the same collation as the unique index, so "f-cinema central" matches "F-Cinema Central".
 export const findBranchByName = (branchName, { excludeId } = {}) =>
   Branch.findOne({ branchName, ...(excludeId ? { _id: { $ne: excludeId } } : {}) })

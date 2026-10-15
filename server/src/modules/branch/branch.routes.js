@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { requireAuth } from "../../middlewares/authMiddleware.js";
-import { requirePermission } from "../../middlewares/permissionMiddleware.js";
+import { requirePermission, requireRole } from "../../middlewares/permissionMiddleware.js";
 import { validate } from "../../middlewares/validateMiddleware.js";
 import { BRANCH_ERROR } from "./branch.constants.js";
 import {
@@ -27,8 +27,9 @@ const validateBranchId = validate(branchIdParamsSchema, {
 });
 const validateBody = (schema) => validate(schema, { code: BRANCH_ERROR.VALIDATION_FAILED });
 
-// Management surface: default-deny on the global grant. Branch-scoped RBAC is not approved yet.
-router.use(requireAuth, requirePermission("branch.manage"));
+// Management surface is Admin-only (System administration, SCREEN_FLOW §5). MANAGER also holds
+// branch.manage in the seed, so the role is checked as well. Branch-scoped RBAC is not approved yet.
+router.use(requireAuth, requirePermission("branch.manage"), requireRole("ADMIN"));
 
 router.get(
   "/",

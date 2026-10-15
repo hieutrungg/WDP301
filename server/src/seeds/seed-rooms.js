@@ -12,13 +12,16 @@ const createStandardLayout = (roomSeedKey, rows = 5, seatsPerRow = 8) => {
         _id: deterministicObjectId(`${roomSeedKey}:seat:${row}${number}`),
         row,
         number,
+        column: number,
         type: "STANDARD",
         status: "ENABLED",
+        isAccessible: false,
       });
     }
   }
 
-  return seats;
+  const rowLabels = Array.from({ length: rows }, (_, rowIndex) => String.fromCharCode(65 + rowIndex));
+  return { seats, seatLayout: { rowLabels, columnCount: seatsPerRow } };
 };
 
 export const roomSeeds = [
@@ -65,8 +68,8 @@ export const roomSeeds = [
     }),
   ),
 ].map((room) => {
-  const seats = createStandardLayout(room.seedKey);
-  return { ...room, layoutVersion: 1, seats, capacity: seats.length, status: "ACTIVE" };
+  const { seats, seatLayout } = createStandardLayout(room.seedKey);
+  return { ...room, layoutVersion: 1, seatLayout, seats, capacity: seats.length, status: "ACTIVE" };
 });
 
 export const seedRooms = async (database) => {
@@ -79,13 +82,16 @@ export const seedRooms = async (database) => {
 
     const _id = deterministicObjectId(seedKey);
     const branchId = deterministicObjectId(branchSeedKey);
+    const { layoutVersion, seatLayout, seats, capacity, ...identity } = room;
 
     return {
       updateOne: {
         filter: { _id },
         update: {
-          $set: { ...room, branchId, updatedAt: now },
-          $setOnInsert: { _id, createdAt: now },
+          $set: { ...identity, branchId, updatedAt: now },
+          // Layout fields are written on insert only: re-seeding must not overwrite a layout a
+          // Manager has since versioned through UC41 (A-14).
+          $setOnInsert: { _id, createdAt: now, layoutVersion, seatLayout, seats, capacity },
         },
         upsert: true,
       },

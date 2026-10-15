@@ -17,6 +17,7 @@ let Branch;
 let adminCookie;
 let customerCookie;
 let directGrantCookie;
+let managerCookie;
 let lockedCookie;
 
 const request = async (path, { method = "GET", body, cookie } = {}) => {
@@ -71,9 +72,11 @@ before(async () => {
     { name: "branch.view", description: "View cinema branches" },
     { name: "branch.manage", description: "Manage cinema branches" },
   ]);
-  const [adminRole, customerRole] = await Role.create([
+  const [adminRole, customerRole, managerRole] = await Role.create([
     { name: "ADMIN", description: "System administrator", permissionIds: [branchView._id, branchManage._id] },
     { name: "CUSTOMER", description: "Cinema customer", permissionIds: [branchView._id] },
+    // The seed also grants branch.manage to MANAGER; the module is still Admin-only.
+    { name: "MANAGER", description: "Cinema manager", permissionIds: [branchView._id, branchManage._id] },
   ]);
 
   await createAccount("branch_admin", { roleIds: [adminRole._id] });
@@ -82,6 +85,7 @@ before(async () => {
     roleIds: [customerRole._id],
     directPermissionIds: [branchManage._id],
   });
+  await createAccount("branch_manager", { roleIds: [managerRole._id] });
   await createAccount("branch_locked", { roleIds: [adminRole._id] });
 
   await new Promise((resolve) => {
@@ -92,6 +96,7 @@ before(async () => {
   adminCookie = await signIn("branch_admin");
   customerCookie = await signIn("branch_customer");
   directGrantCookie = await signIn("branch_direct");
+  managerCookie = await signIn("branch_manager");
   lockedCookie = await signIn("branch_locked");
 });
 
@@ -115,9 +120,22 @@ test("branch management authorization", async (t) => {
     assert.equal(body.code, "FORBIDDEN");
   });
 
-  await t.test("honours a direct permission grant", async () => {
+  await t.test("rejects a MANAGER even though it holds branch.manage", async () => {
+    const read = await request("/branches", { cookie: managerCookie });
+    assert.equal(read.response.status, 403);
+    assert.equal(read.body.code, "FORBIDDEN");
+
+    const write = await request("/branches", {
+      method: "POST",
+      cookie: managerCookie,
+      body: { branchName: "Manager Attempt", address: "1 Test Street, HCMC" },
+    });
+    assert.equal(write.response.status, 403);
+  });
+
+  await t.test("a direct grant alone does not replace the ADMIN role", async () => {
     const { response } = await request("/branches", { cookie: directGrantCookie });
-    assert.equal(response.status, 200);
+    assert.equal(response.status, 403);
   });
 
   await t.test("applies an account lock on the very next request", async () => {
