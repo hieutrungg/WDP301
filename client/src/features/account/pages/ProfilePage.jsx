@@ -1,18 +1,14 @@
 import { ChevronRight, House, KeyRound, Pencil } from 'lucide-react'
-import { useState } from 'react'
-import { Link } from 'react-router'
+import { Link, useNavigate } from 'react-router'
 import { useAuth } from '../../auth/hooks/useAuth'
-import ChangePasswordModal from '../components/ChangePasswordModal'
-import EditProfileModal from '../components/EditProfileModal'
 import PersonalInfoSection from '../components/PersonalInfoSection'
 import ProfileSummaryCard from '../components/ProfileSummaryCard'
 
 function ProfilePage() {
   const { account } = useAuth()
-  const [modal, setModal] = useState(null)
-  const closeModal = () => setModal(null)
-  const openEditProfile = () => setModal('edit')
-  const openChangePassword = () => setModal('password')
+  const navigate = useNavigate()
+  const openEditProfile = () => navigate('/profile/edit')
+  const openChangePassword = () => navigate('/profile/change-password')
 
   return (
     <div className="relative w-full overflow-hidden bg-gradient-to-b from-surface-container-lowest to-background pt-20">
@@ -83,8 +79,6 @@ function ProfilePage() {
           </div>
         </div>
       </div>
-      {modal === 'edit' && <EditProfileModal account={account} onClose={closeModal} />}
-      {modal === 'password' && <ChangePasswordModal onClose={closeModal} />}
     </div>
   )
 }

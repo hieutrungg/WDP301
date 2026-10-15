@@ -1,4 +1,6 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router'
+import ChangePasswordPage from '../../features/account/pages/ChangePasswordPage'
+import EditProfilePage from '../../features/account/pages/EditProfilePage'
 import ProfilePage from '../../features/account/pages/ProfilePage'
 import BranchManagementPage from '../../features/branch/pages/BranchManagementPage'
 import AdminLayout from '../../layouts/AdminLayout'
@@ -31,6 +33,8 @@ function AppRouter() {
           <Route path="movies/:movieId" element={<MovieDetailPage />} />
           <Route element={<ProtectedRoute />}>
             <Route path="profile" element={<ProfilePage />} />
+            <Route path="profile/edit" element={<EditProfilePage />} />
+            <Route path="profile/change-password" element={<ChangePasswordPage />} />
             <Route path="staff" element={<StaffLayout />}>
               <Route index element={<CounterPosPage />} />
               <Route path="pos" element={<CounterPosPage />} />
