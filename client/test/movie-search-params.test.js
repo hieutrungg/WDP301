@@ -6,6 +6,7 @@ import {
   MOVIE_PAGE_SIZE,
   readMovieSearchParams,
 } from '../src/features/movie-showtime/utils/movieSearchParams.js'
+import { buildMovieShowtimesPath } from '../src/features/movie-showtime/utils/movieNavigation.js'
 
 test('movie search parameters are trimmed and converted to an API query', () => {
   const state = readMovieSearchParams(
@@ -46,4 +47,10 @@ test('visible pagination stays inside the available page range', () => {
   assert.deepEqual(getVisibleMoviePages(4, 8), [2, 3, 4, 5, 6])
   assert.deepEqual(getVisibleMoviePages(8, 8), [4, 5, 6, 7, 8])
   assert.deepEqual(getVisibleMoviePages(1, 0), [])
+})
+
+test('movie detail navigation passes the selected movie to showtimes', () => {
+  const movieId = '507f1f77bcf86cd799439011'
+
+  assert.equal(buildMovieShowtimesPath(movieId), `/showtimes?movieId=${movieId}`)
 })
