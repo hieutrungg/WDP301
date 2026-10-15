@@ -46,3 +46,22 @@ export const movieShowtimeParamsValidator = (req, _res, next) => {
 };
 
 export const movieShowtimeQueryValidator = validateShowtimeQuery(movieListQuerySchema);
+
+export const createShowtimeSchema = z.strictObject({
+  movieId: objectId,
+  roomId: objectId,
+  startAt: z.string().datetime({ offset: true }),
+});
+
+export const rescheduleShowtimeSchema = z.strictObject({
+  startAt: z.string().datetime({ offset: true }),
+});
+
+export const showtimeIdParamsValidator = (req, _res, next) => {
+  const result = objectId.safeParse(req.params.showtimeId);
+  if (!result.success) {
+    return next(new AppError(400, "Invalid showtime ID", [], SHOWTIME_ERROR.INVALID_SHOWTIME));
+  }
+  req.validated = { ...req.validated, params: { showtimeId: result.data } };
+  return next();
+};

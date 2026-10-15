@@ -88,6 +88,12 @@ export const createSeatAvailabilityService = ({
     }
   };
 
+  const discardForUnpublishedShowtime = (showtimeId) =>
+    repository.deleteUnpublishedShowtimeSeats(new mongoose.Types.ObjectId(showtimeId));
+
+  const hasActiveClaims = (showtimeId, now = clock()) =>
+    repository.hasActiveShowtimeClaims(new mongoose.Types.ObjectId(showtimeId), now);
+
   const getSeatAvailability = async ({ showtimeId, ownerId }) => {
     const now = clock();
     const showtime = await showtimeReader.getBookableShowtime(showtimeId, now);
@@ -150,7 +156,7 @@ export const createSeatAvailabilityService = ({
     };
   };
 
-  return { getSeatAvailability, initializeForPublishedShowtime };
+  return { discardForUnpublishedShowtime, getSeatAvailability, hasActiveClaims, initializeForPublishedShowtime };
 };
 
 export { projectAvailability, seatIdentity };

@@ -56,9 +56,21 @@ Priority (`P0`–`P3`) phản ánh mức cần giải quyết requirement/risk, 
 
 `REQUIREMENT NOT FINALIZED` và `NOT IMPLEMENTED`. Cần owner chốt cutoff, eligibility, full/partial amount, ticket/concession bundle, checked-in behavior, Staff/Manager authority, auto/manual path, retry và state matrix. UC49 hiện tham chiếu BR57-59 không tồn tại.
 
+### Manager Showtime creation integration
+
+UC17 create-screen/API implementation is in the working tree. Before integrating it, the Showtime owner and affected module reviewers still need to confirm the `SHOW-001` write contract, cleanup-buffer configuration location, stable overlap/inactive-reference error codes, and whether Manager role alone is sufficient for this mutation (there is no approved `showtime.manage` permission code). The current draft uses the approved fixed 15-minute default, `movieId`/`roomId`/UTC `startAt`, and a Manager-role guard. Consumers are Manager Showtime UI and Booking seat availability. New records use the approved Showtime fields; no migration/backfill was run, and any legacy records need review before rollout.
+
 ### Showtime cancellation
 
 Safe lifecycle đã `APPROVED` nhưng `NOT IMPLEMENTED`: `DRAFT/PUBLISHED/CANCELLED`, derived display states, configurable 15-minute default cleanup, layout snapshot on publish và edit/cancel chỉ trước khi có hold/giao dịch. Cancellation có paid/pending transaction tiếp tục `BLOCKED_BY_DECISION` đến khi Refund contract được duyệt.
+
+### Manager Showtime mutation integration
+
+Working tree now includes Manager create, reschedule (date/time only), and safe cancellation UI/API. Cancellation is a status transition to `CANCELLED`; it never hard-deletes the Showtime. The UI does not implement the sample's GM PIN, customer notification matrix, or refund actions because those contracts are not approved. Before integration/merge, Showtime owner and Booking reviewer must review the additive `PATCH /api/showtimes/:showtimeId` and `POST /api/showtimes/:showtimeId/cancel` contracts, error codes, role authorization, and race-safety between a hold acquisition and mutation. The current guard checks active SeatHold and `HELD`/`SOLD` ShowtimeSeat state before mutation; cancellation with any sales/pending transaction remains blocked.
+
+### Showtime discovery API and customer screen
+
+`GET /api/showtimes` supports `movieId`, `cinemaId`, and `date` filters; `GET /api/movies/:movieId/showtimes` scopes by movie and accepts branch/date filters. Both return published future sessions. The public `/showtimes` screen already uses these server responses and the public Cinema API for branch/date selection. Added `GET /api/showtimes/:showtimeId` for a public future-showtime detail. Room-overlap checks compare half-open time intervals (`existing.start < requested.end` and `existing.end > requested.start`), so an immediately following session is allowed; legacy `startTime`/`endTime` fields are considered as fallback values.
 
 ### Seat holding / Double booking
 

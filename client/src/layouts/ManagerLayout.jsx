@@ -13,7 +13,7 @@ import {
   X,
 } from 'lucide-react'
 import { useState } from 'react'
-import { Link, NavLink, Outlet, useNavigate } from 'react-router'
+import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router'
 import { toast } from 'sonner'
 import AppLogo from '../components/common/AppLogo'
 import { useAuth } from '../features/auth/hooks/useAuth'
@@ -23,7 +23,7 @@ import { useAuth } from '../features/auth/hooks/useAuth'
 const navItems = [
   { label: 'Dashboard', icon: LayoutDashboard },
   { label: 'Movies', icon: Film },
-  { label: 'Showtimes', icon: CalendarClock },
+  { label: 'Showtimes', icon: CalendarClock, to: '/manager/showtimes' },
   { label: 'Seat Maps', icon: Armchair, to: '/manager/seat-maps', permission: 'room.manage' },
   { label: 'Promotions', icon: TicketPercent },
   { label: 'Staff Shifts', icon: UsersRound },
@@ -73,10 +73,12 @@ function ManagerLayout() {
   const [menuOpen, setMenuOpen] = useState(false)
   const [isLoggingOut, setIsLoggingOut] = useState(false)
   const { account, logout } = useAuth()
+  const location = useLocation()
   const navigate = useNavigate()
   const displayName = account?.profile?.fullName || account?.username || ''
   const roleLabel = account?.roles?.map(({ name }) => name).join(', ')
   const permissions = new Set(account?.permissions?.map(({ name }) => name))
+  const showtimePage = location.pathname.startsWith('/manager/showtimes')
 
   const handleLogout = async () => {
     setIsLoggingOut(true)
@@ -141,9 +143,9 @@ function ManagerLayout() {
             <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-1.5 text-xs text-on-surface-variant">
               <span className="hidden sm:inline">Operational hub</span>
               <ChevronRight className="hidden size-3.5 sm:block" />
-              <span className="hidden sm:inline">Auditorium settings</span>
+              <span className="hidden sm:inline">{showtimePage ? 'Schedule & programming' : 'Auditorium settings'}</span>
               <ChevronRight className="hidden size-3.5 sm:block" />
-              <span className="truncate font-semibold text-primary">Configure room seat maps</span>
+              <span className="truncate font-semibold text-primary">{showtimePage ? 'Showtime management' : 'Configure room seat maps'}</span>
             </nav>
           </div>
 
