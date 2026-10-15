@@ -8,7 +8,7 @@ import ManagerShowtimesPage from '../../features/manager-showtimes/pages/Manager
 import AdminLayout from '../../layouts/AdminLayout'
 import ManagerLayout from '../../layouts/ManagerLayout'
 import PublicLayout from '../../layouts/PublicLayout'
-import LandingPage from '../../pages/public/LandingPage'
+import RoleHomeRoute from './RoleHomeRoute'
 import LoginPage from '../../pages/public/LoginPage'
 import RegisterPage from '../../pages/public/RegisterPage'
 import VerifyEmailPage from '../../pages/public/VerifyEmailPage'
@@ -29,7 +29,7 @@ function AppRouter() {
     <BrowserRouter>
       <Routes>
         <Route element={<PublicLayout />}>
-          <Route index element={<LandingPage />} />
+          <Route index element={<RoleHomeRoute />} />
           <Route path="login" element={<LoginPage />} />
           <Route path="register" element={<RegisterPage />} />
           <Route path="verify-email" element={<VerifyEmailPage />} />
@@ -65,7 +65,7 @@ function AppRouter() {
         <Route path="manager" element={<ProtectedRoute />}>
           <Route element={<PermissionRoute role="MANAGER" />}>
             <Route element={<ManagerLayout />}>
-              <Route index element={<Navigate to="seat-maps" replace />} />
+              <Route index element={<Navigate to="showtimes" replace />} />
               <Route path="showtimes" element={<ManagerShowtimesPage />} />
               <Route element={<PermissionRoute permission="room.manage" />}>
                 <Route path="seat-maps" element={<SeatMapConfigPage />} />

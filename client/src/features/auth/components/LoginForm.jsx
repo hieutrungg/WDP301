@@ -12,6 +12,7 @@ import { toast } from 'sonner'
 import { getApiErrorMessage } from '../../../lib/api/apiError'
 import { useLogin } from '../hooks/useLogin'
 import { loginSchema } from '../schema/loginSchema'
+import { getLoginDestination } from '../utils/loginDestination'
 import { AuthInput, AuthServerError, PasswordInput } from './AuthFormField'
 import GoogleSignInButton from './GoogleSignInButton'
 
@@ -37,9 +38,9 @@ function LoginForm() {
     setServerError('')
 
     try {
-      await login(values)
+      const account = await login(values)
       toast.success('Welcome back to F-Cinema!')
-      navigate(location.state?.from?.pathname || '/', { replace: true })
+      navigate(getLoginDestination(account, location.state?.from?.pathname), { replace: true })
     } catch (error) {
       setServerError(getApiErrorMessage(error))
     }
