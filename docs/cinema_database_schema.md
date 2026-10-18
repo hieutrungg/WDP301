@@ -380,10 +380,11 @@ Sản phẩm đồ ăn, thức uống bán tại rạp.
 | `_id` | `ObjectId` | Khóa chính (Primary Key) |
 | `categoryId` | `ObjectId` | Tham chiếu đến `concession_categories._id` |
 | `name` | `string` | Tên sản phẩm |
-| `size` | `string` | Kích cỡ / biến thể |
-| `price` | `number` | Giá bán hiện tại |
+| `size` | `string` | Kích cỡ / biến thể (ví dụ: `Large`, `500ml`) |
+| `unit` | `string` | **Đơn vị tính** hiển thị trong màn hình tồn kho (ví dụ: `tub`, `cup`, `bottle`). Mặc định `unit`. *(thêm mới cho CMS_UC39; tài liệu cũ chưa có — document cũ thiếu trường được coi là `unit`)* |
+| `price` | `number` | Giá bán hiện tại (VND, số nguyên ≥ 0) |
 | `imageUrl` | `string` | Đường dẫn ảnh sản phẩm |
-| `status` | `string` | Trạng thái kinh doanh |
+| `status` | `string` | Trạng thái kinh doanh: `ACTIVE` hoặc `INACTIVE`. Chỉ sản phẩm `ACTIVE` xuất hiện trong danh sách tồn kho và được nhập kho *(giá trị enum được chốt cho CMS_UC39/UC40)* |
 
 ---
 
@@ -411,8 +412,11 @@ Số lượng tồn kho hiện tại của từng sản phẩm tại từng chi 
 | `_id` | `ObjectId` | Khóa chính (Primary Key) |
 | `branchId` | `ObjectId` | Tham chiếu đến `branches._id` |
 | `concessionId` | `ObjectId` | Tham chiếu đến `concessions._id` |
-| `quantity` | `number` | Số lượng tồn hiện tại (không được âm) |
-| `updatedAt` | `Date` | Thời điểm cập nhật tồn kho gần nhất |
+| `quantity` | `number` | Số lượng tồn hiện tại (số nguyên, không được âm) |
+| `minThreshold` | `number` | **Ngưỡng tồn tối thiểu** (số nguyên ≥ 0, mặc định `10`). Sản phẩm có `0 < quantity ≤ minThreshold` là *low stock*. Nằm ở inventory (không ở `concessions`) để mỗi chi nhánh đặt ngưỡng riêng *(thêm mới cho CMS_UC39)* |
+| `updatedAt` | `Date` | Thời điểm cập nhật tồn kho gần nhất (Mongoose tự cập nhật) |
+
+> **Trạng thái tồn kho không được lưu.** Backend tính khi truy vấn: `quantity = 0` → `OUT_OF_STOCK`; `quantity ≤ minThreshold` → `LOW_STOCK`; còn lại → `IN_STOCK`. Sản phẩm `ACTIVE` chưa có document `inventories` ở chi nhánh được coi là `quantity = 0`, `minThreshold = 10` (hiển thị `OUT_OF_STOCK`). Document `inventories` được tạo (upsert) ở lần nhập kho đầu tiên.
 
 ---
 
@@ -441,8 +445,11 @@ Lịch sử biến động kho, dùng làm nhật ký kiểm toán (audit trail)
 | `type` | `string` | Loại biến động (ví dụ: `IMPORT`, `SALE`, `ADJUSTMENT`, `WASTE`) |
 | `quantity` | `number` | Số lượng biến động (> 0) |
 | `recordedBy` | `ObjectId` | Tham chiếu đến `accounts._id` (nhân viên ghi nhận) |
-| `transactionDate` | `Date` | Thời điểm giao dịch |
-| `note` | `string` | Ghi chú bổ sung |
+| `transactionDate` | `Date` | Thời điểm giao dịch. Với `IMPORT` là thời điểm nhận hàng do nhân viên khai báo (không được ở tương lai) |
+| `note` | `string` | Ghi chú bổ sung (tối đa 500 ký tự) |
+| `receiptCode` | `string` | **Mã phiếu nhập** (dạng `RC-YYYYMMDD-XXXXXX`) gom các dòng của cùng một lần nhập kho CMS_UC40. Chỉ có ở giao dịch `IMPORT` *(thêm mới cho CMS_UC40)* |
+
+> Mỗi dòng sản phẩm trong một phiếu nhập là một document riêng. Giao dịch là bất biến (chỉ thêm, không sửa/xóa).
 
 ---
 
@@ -699,6 +706,7 @@ erDiagram
         ObjectId categoryId FK
         string name
         string size
+        string unit
         number price
         string status
     }
@@ -720,6 +728,7 @@ erDiagram
         ObjectId branchId FK
         ObjectId concessionId FK
         number quantity
+        number minThreshold
     }
 
     suppliers {
@@ -738,6 +747,7 @@ erDiagram
         number quantity
         ObjectId recordedBy FK
         Date transactionDate
+        string receiptCode
     }
 ```
 
@@ -760,6 +770,12 @@ erDiagram
 | `showtime_seats` | `{ showtimeId: 1, seatId: 1 }` | Compound Unique | Mỗi ghế chỉ có một bản ghi trạng thái trong một suất chiếu |
 | `inventories` | `{ branchId: 1, concessionId: 1 }` | Compound Unique | Mỗi chi nhánh chỉ có một bản ghi tồn kho cho mỗi sản phẩm |
 | `movie_reviews` | `{ movieId: 1, customerAccountId: 1 }` | Compound Unique | Mỗi khách hàng chỉ đánh giá một lần cho mỗi phim |
+
+### 4.1.1. Index thường (không unique)
+
+| Collection | Index | Mục đích |
+| :--- | :--- | :--- |
+| `stock_transactions` | `{ branchId: 1, type: 1, transactionDate: -1 }` | Danh sách phiếu nhập gần đây của một chi nhánh (CMS_UC40) |
 
 ### 4.2. Ràng buộc trên Embedded Document
 
@@ -789,8 +805,10 @@ erDiagram
 | Refund Request | Payment và booking được tham chiếu phải thuộc về khách hàng yêu cầu và thỏa điều kiện hoàn tiền |
 | Voucher | `usedCount` không vượt quá `usageLimit`; voucher phải còn trong thời hạn hiệu lực |
 | Promotion | `startDate` phải trước hoặc bằng `endDate` |
-| Inventory | `quantity` không được âm |
-| Stock Transaction | `quantity` phải dương; `supplierId` có thể bỏ trống với loại giao dịch không liên quan nhà cung cấp |
+| Inventory | `quantity` là số nguyên không âm; `minThreshold` là số nguyên ≥ 0 |
+| Concession | `status` thuộc `ACTIVE`/`INACTIVE`; `price` là số nguyên VND ≥ 0; chỉ sản phẩm `ACTIVE` được hiển thị tồn kho và nhập kho |
+| Stock Transaction | `quantity` phải là số nguyên dương (BR-49); `supplierId` có thể bỏ trống với loại giao dịch không liên quan nhà cung cấp; `IMPORT` phải có `receiptCode` và `transactionDate` không ở tương lai |
+| Stock-in (CMS_UC40) | Một phiếu nhập có 1–50 dòng, mỗi sản phẩm tối đa một dòng; chi nhánh lấy từ `accounts.employeeProfile.branchId` của người thực hiện, không nhận từ request |
 | Order | Mọi món phải có `quantity > 0`; `itemId` phải khớp với collection mà `itemType` chỉ định |
 
 ### 4.4. Kiểm soát truy cập đồng thời (Concurrency)
@@ -799,6 +817,7 @@ erDiagram
 
 * **Chọn ghế:** backend thực hiện cập nhật nguyên tử (atomic update) trên document `showtime_seats` tương ứng. Ghế chỉ được chuyển từ `AVAILABLE` sang `LOCKED` khi ghế đang trống hoặc khóa trước đó đã hết hạn. Compound unique index `(showtimeId, seatId)` đảm bảo chỉ có một document trạng thái cho mỗi ghế trong một suất chiếu.
 * **Cập nhật kho:** chỉ trừ kho khi còn đủ số lượng. Backend dùng các thao tác update nguyên tử của MongoDB; khi một nghiệp vụ cần cập nhật nhiều document liên quan, sử dụng MongoDB transaction để đảm bảo nhất quán.
+* **Nhập kho (CMS_UC40):** mỗi dòng dùng `$inc` với `upsert` trên `inventories (branchId, concessionId)` nên các lần nhập/bán đồng thời không ghi đè nhau. Toàn bộ dòng của một phiếu và các document `stock_transactions` tương ứng nằm trong **một MongoDB transaction** (cần replica set, ví dụ Atlas): lỗi ở bất kỳ bước nào sẽ hoàn tác tất cả, tồn kho giữ nguyên số cũ. Các dòng được xử lý theo thứ tự `concessionId` cố định để tránh khóa chéo.
 
 ---
 
@@ -806,3 +825,16 @@ erDiagram
 
 Collection sau có trong database nhưng chưa được mô tả trong tài liệu thiết kế nên chưa xác định được cấu trúc trường:
 * **Hệ thống:** `email_verifications`
+
+---
+
+## 6. Lịch sử thay đổi schema
+
+| Ngày | Collection | Thay đổi | Lý do | Migration |
+| :--- | :--- | :--- | :--- | :--- |
+| 2026-10-17 | `concessions` | Thêm `unit` (string, mặc định `unit`); chốt enum `status` = `ACTIVE`/`INACTIVE` | CMS_UC39 hiển thị đơn vị tính của từng sản phẩm | Không cần backfill: document thiếu `unit` được đọc là `unit`. Seed dev ghi giá trị cụ thể |
+| 2026-10-17 | `inventories` | Thêm `minThreshold` (số nguyên ≥ 0, mặc định 10) | CMS_UC39 cần ngưỡng tồn tối thiểu để đánh dấu low stock; đặt theo chi nhánh | Không cần backfill: document thiếu giá trị được đọc là 10; document mới nhận mặc định khi upsert |
+| 2026-10-17 | `stock_transactions` | Thêm `receiptCode`; thêm index `{ branchId, type, transactionDate: -1 }` | CMS_UC40 gom nhiều dòng của một lần nhập và liệt kê phiếu nhập gần đây | Không cần backfill: giao dịch cũ không có `receiptCode` (hiển thị `—`) |
+| 2026-10-17 | `permissions`, `roles` *(dữ liệu, không đổi cấu trúc)* | Thêm quyền `inventory.stock_in`, gán cho role `STAFF`; đảm bảo `inventory.view` gán cho `STAFF` và `MANAGER` | CMS_UC40 chỉ dành cho Staff; Manager chỉ xem tồn kho (CMS_UC39) | `server/src/seeds/seed-inventory.js` (idempotent, `$addToSet`) |
+
+**Chưa thay đổi (cố ý):** `combos` chưa có tồn kho riêng; tồn kho combo bị hoãn đến khi có quyết định về công thức/thành phần (xem `docs/REQUIREMENTS_STATUS.md`, UC39/40).

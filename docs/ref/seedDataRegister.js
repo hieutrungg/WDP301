@@ -327,6 +327,11 @@ var permissionSeeds = [
     description: "Manage inventory"
   },
 
+  {
+    name: "inventory.stock_in",
+    description: "Receive goods into branch concession stock"
+  },
+
 
   // ----------------------------------------------------------
   // STAFF
@@ -522,7 +527,8 @@ var staffPermissionNames = [
 
   "room.view",
 
-  "inventory.view"
+  "inventory.view",
+  "inventory.stock_in"
 
 ];
 

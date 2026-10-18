@@ -8,7 +8,7 @@ import ManagerShowtimesPage from '../../features/manager-showtimes/pages/Manager
 import AdminLayout from '../../layouts/AdminLayout'
 import ManagerLayout from '../../layouts/ManagerLayout'
 import PublicLayout from '../../layouts/PublicLayout'
-import RoleHomeRoute from './RoleHomeRoute'
+import LandingPage from '../../pages/public/LandingPage'
 import LoginPage from '../../pages/public/LoginPage'
 import RegisterPage from '../../pages/public/RegisterPage'
 import VerifyEmailPage from '../../pages/public/VerifyEmailPage'
@@ -23,13 +23,16 @@ import CounterPosPage from '../../features/counter-pos/pages/CounterPosPage'
 import CounterPaymentPage from '../../features/counter-pos/pages/CounterPaymentPage'
 import CounterCompletePage from '../../features/counter-pos/pages/CounterCompletePage'
 import SeatSelectionPage from '../../features/seat-selection/pages/SeatSelectionPage'
+import StockInPage from '../../features/inventory/pages/StockInPage'
+import StockLevelsPage from '../../features/inventory/pages/StockLevelsPage'
 
 function AppRouter() {
   return (
     <BrowserRouter>
       <Routes>
         <Route element={<PublicLayout />}>
-          <Route index element={<RoleHomeRoute />} />
+          {/* Home stays reachable for every role (logo link). Role redirect (A-16) happens on login only. */}
+          <Route index element={<LandingPage />} />
           <Route path="login" element={<LoginPage />} />
           <Route path="register" element={<RegisterPage />} />
           <Route path="verify-email" element={<VerifyEmailPage />} />
@@ -42,11 +45,24 @@ function AppRouter() {
             <Route path="booking/:showtimeId/seats" element={<SeatSelectionPage />} />
             <Route path="profile/edit" element={<EditProfilePage />} />
             <Route path="profile/change-password" element={<ChangePasswordPage />} />
-            <Route path="staff" element={<StaffLayout />}>
-              <Route index element={<CounterPosPage />} />
+          </Route>
+        </Route>
+
+        {/* Staff surface has its own shell, like admin/manager. UX guard only; the API enforces
+            inventory.view / inventory.stock_in + the STAFF role. */}
+        <Route path="staff" element={<ProtectedRoute />}>
+          <Route element={<PermissionRoute role="STAFF" />}>
+            <Route element={<StaffLayout />}>
+              <Route index element={<Navigate to="pos" replace />} />
               <Route path="pos" element={<CounterPosPage />} />
               <Route path="pos/payment" element={<CounterPaymentPage />} />
               <Route path="pos/complete" element={<CounterCompletePage />} />
+              <Route element={<PermissionRoute permission="inventory.view" />}>
+                <Route path="inventory" element={<StockLevelsPage stockInPath="/staff/inventory/stock-in" />} />
+              </Route>
+              <Route element={<PermissionRoute permission="inventory.stock_in" />}>
+                <Route path="inventory/stock-in" element={<StockInPage backPath="/staff/inventory" />} />
+              </Route>
             </Route>
           </Route>
         </Route>
@@ -67,6 +83,9 @@ function AppRouter() {
             <Route element={<ManagerLayout />}>
               <Route index element={<Navigate to="showtimes" replace />} />
               <Route path="showtimes" element={<ManagerShowtimesPage />} />
+              <Route element={<PermissionRoute permission="inventory.view" />}>
+                <Route path="inventory" element={<StockLevelsPage />} />
+              </Route>
               <Route element={<PermissionRoute permission="room.manage" />}>
                 <Route path="seat-maps" element={<SeatMapConfigPage />} />
               </Route>

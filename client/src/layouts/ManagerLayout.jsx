@@ -1,5 +1,6 @@
 import {
   Armchair,
+  Boxes,
   CalendarClock,
   ChartLine,
   ChevronRight,
@@ -25,6 +26,7 @@ const navItems = [
   { label: 'Movies', icon: Film },
   { label: 'Showtimes', icon: CalendarClock, to: '/manager/showtimes' },
   { label: 'Seat Maps', icon: Armchair, to: '/manager/seat-maps', permission: 'room.manage' },
+  { label: 'Concession Stock', icon: Boxes, to: '/manager/inventory', permission: 'inventory.view' },
   { label: 'Promotions', icon: TicketPercent },
   { label: 'Staff Shifts', icon: UsersRound },
   { label: 'Reports', icon: ChartLine },
@@ -79,6 +81,10 @@ function ManagerLayout() {
   const roleLabel = account?.roles?.map(({ name }) => name).join(', ')
   const permissions = new Set(account?.permissions?.map(({ name }) => name))
   const showtimePage = location.pathname.startsWith('/manager/showtimes')
+  const inventoryPage = location.pathname.startsWith('/manager/inventory')
+  let breadcrumb = ['Auditorium settings', 'Configure room seat maps']
+  if (showtimePage) breadcrumb = ['Schedule & programming', 'Showtime management']
+  if (inventoryPage) breadcrumb = ['Concession & inventory', 'Concession stock levels']
 
   const handleLogout = async () => {
     setIsLoggingOut(true)
@@ -143,9 +149,9 @@ function ManagerLayout() {
             <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-1.5 text-xs text-on-surface-variant">
               <span className="hidden sm:inline">Operational hub</span>
               <ChevronRight className="hidden size-3.5 sm:block" />
-              <span className="hidden sm:inline">{showtimePage ? 'Schedule & programming' : 'Auditorium settings'}</span>
+              <span className="hidden sm:inline">{breadcrumb[0]}</span>
               <ChevronRight className="hidden size-3.5 sm:block" />
-              <span className="truncate font-semibold text-primary">{showtimePage ? 'Showtime management' : 'Configure room seat maps'}</span>
+              <span className="truncate font-semibold text-primary">{breadcrumb[1]}</span>
             </nav>
           </div>
 
