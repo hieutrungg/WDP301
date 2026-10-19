@@ -1,0 +1,15 @@
+export const BOOKING_STATUS = Object.freeze({
+  PENDING_PAYMENT: "PENDING_PAYMENT",
+  CONFIRMED: "CONFIRMED",
+  EXPIRED: "EXPIRED",
+});
+
+export const BOOKING_STATUSES = Object.freeze(Object.values(BOOKING_STATUS));
+
+// Module-local until the shared API owner reviews the mounted Booking route.
+export const BOOKING_ERROR = Object.freeze({
+  HOLD_NOT_AVAILABLE: "BOOKING_HOLD_NOT_AVAILABLE",
+  HOLD_EXPIRED: "BOOKING_HOLD_EXPIRED",
+  INVALID_PRICE_SNAPSHOT: "INVALID_BOOKING_PRICE_SNAPSHOT",
+  REQUEST_KEY_REUSED: "BOOKING_REQUEST_KEY_REUSED",
+});

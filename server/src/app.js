@@ -10,7 +10,11 @@ import movieRoutes from "./modules/movie/movie.routes.js";
 import showtimeRoutes from "./modules/showtime/showtime.routes.js";
 import roomRoutes from "./modules/room/room.routes.js";
 import inventoryRoutes from "./modules/inventory/inventory.routes.js";
-import { seatAvailabilityRoutes, seatHoldRoutes } from "./modules/booking/booking.module.js";
+import {
+  bookingRoutes,
+  seatAvailabilityRoutes,
+  seatHoldRoutes,
+} from "./modules/booking/booking.module.js";
 import { notFound } from "./middlewares/notFoundMiddleware.js";
 import { errorHandler } from "./middlewares/errorMiddleware.js";
 import { env } from "./config/env.js";
@@ -44,6 +48,7 @@ app.use("/api/rooms", roomRoutes);
 app.use("/api/showtimes/:showtimeId/seats", seatAvailabilityRoutes);
 app.use("/api/seat-holds", seatHoldRoutes);
 app.use("/api/inventory", inventoryRoutes);
+app.use("/api/bookings", bookingRoutes);
 
 app.use(notFound);
 app.use(errorHandler);

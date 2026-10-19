@@ -7,6 +7,9 @@ import { createSeatHoldController } from "./seat-hold.controller.js";
 import { createSeatHoldRouter } from "./seat-hold.routes.js";
 import { createSeatHoldService } from "./seat-hold.service.js";
 import { showtimeSeatPriceQuoter } from "./seat-price.service.js";
+import { createBookingController } from "./booking.controller.js";
+import { createBookingRouter } from "./booking.routes.js";
+import { createBookingService } from "./booking.service.js";
 
 const showtimeReader = {
   getBookableShowtime: getBookableShowtimeForBooking,
@@ -28,9 +31,17 @@ export const seatHoldService = createSeatHoldService({
   priceQuoter: showtimeSeatPriceQuoter,
 });
 
+export const bookingService = createBookingService({
+  seatHoldPort: {
+    getLiveHoldForBooking: (command) => seatHoldService.getLiveHoldForBooking(command),
+  },
+});
+
 export const seatAvailabilityRoutes = createSeatAvailabilityRouter(
   createSeatAvailabilityController(seatAvailabilityService),
 );
 
 export const seatHoldRoutes = createSeatHoldRouter(createSeatHoldController(seatHoldService));
+
+export const bookingRoutes = createBookingRouter(createBookingController(bookingService));
 
