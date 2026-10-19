@@ -1,7 +1,10 @@
 import mongoose from "mongoose";
 import { SeatHold } from "./seat-hold.model.js";
 import { ShowtimeSeat } from "./showtime-seat.model.js";
-import { SEAT_HOLD_STATUS, SHOWTIME_SEAT_STATE } from "./seat-hold.constants.js";
+import {
+  SEAT_HOLD_STATUS,
+  SHOWTIME_SEAT_STATE,
+} from "./seat-hold.constants.js";
 
 export class SeatClaimConflictError extends Error {
   constructor() {
@@ -12,7 +15,9 @@ export class SeatClaimConflictError extends Error {
 
 export class ShowtimeSeatInitializationConflictError extends Error {
   constructor() {
-    super("Showtime seats were already initialized from a different layout snapshot");
+    super(
+      "Showtime seats were already initialized from a different layout snapshot",
+    );
     this.name = "ShowtimeSeatInitializationConflictError";
   }
 }
@@ -28,7 +33,11 @@ export const createSeatHoldRepository = ({
   connection = mongoose.connection,
 } = {}) => {
   const listByShowtime = (showtimeId, session) =>
-    showtimeSeatModel.find({ showtimeId }).session(session ?? null).lean().exec();
+    showtimeSeatModel
+      .find({ showtimeId })
+      .session(session ?? null)
+      .lean()
+      .exec();
 
   const deleteUnpublishedShowtimeSeats = (showtimeId) =>
     showtimeSeatModel.deleteMany({ showtimeId }).exec();
@@ -42,22 +51,33 @@ export const createSeatHoldRepository = ({
           { state: SHOWTIME_SEAT_STATE.HELD, holdExpiresAt: { $gt: now } },
         ],
       }),
-      seatHoldModel.exists({ showtimeId, status: SEAT_HOLD_STATUS.ACTIVE, expiresAt: { $gt: now } }),
+      seatHoldModel.exists({
+        showtimeId,
+        status: SEAT_HOLD_STATUS.ACTIVE,
+        expiresAt: { $gt: now },
+      }),
     ]);
     return Boolean(claimedSeat || activeHold);
   };
 
-  const initializeShowtimeSeats = async ({ showtimeId, roomLayoutVersion, seats }) => {
+  const initializeShowtimeSeats = async ({
+    showtimeId,
+    roomLayoutVersion,
+    seats,
+  }) => {
     const session = await connection.startSession();
     let result;
 
     try {
       await session.withTransaction(async () => {
         const existing = await listByShowtime(showtimeId, session);
-        const expectedSeatIds = new Set(seats.map(({ seatId }) => seatId.toString()));
+        const expectedSeatIds = new Set(
+          seats.map(({ seatId }) => seatId.toString()),
+        );
         const hasDifferentSnapshot = existing.some(
           ({ seatId, roomLayoutVersion: storedVersion }) =>
-            storedVersion !== roomLayoutVersion || !expectedSeatIds.has(seatId.toString()),
+            storedVersion !== roomLayoutVersion ||
+            !expectedSeatIds.has(seatId.toString()),
         );
         if (hasDifferentSnapshot || existing.length > seats.length) {
           throw new ShowtimeSeatInitializationConflictError();
@@ -69,7 +89,12 @@ export const createSeatHoldRepository = ({
               updateOne: {
                 filter: { showtimeId, seatId },
                 update: {
-                  $setOnInsert: { showtimeId, seatId, roomLayoutVersion, state },
+                  $setOnInsert: {
+                    showtimeId,
+                    seatId,
+                    roomLayoutVersion,
+                    state,
+                  },
                 },
                 upsert: true,
               },
@@ -83,7 +108,8 @@ export const createSeatHoldRepository = ({
           initialized.length !== seats.length ||
           initialized.some(
             ({ seatId, roomLayoutVersion: storedVersion }) =>
-              storedVersion !== roomLayoutVersion || !expectedSeatIds.has(seatId.toString()),
+              storedVersion !== roomLayoutVersion ||
+              !expectedSeatIds.has(seatId.toString()),
           )
         ) {
           throw new ShowtimeSeatInitializationConflictError();
@@ -92,7 +118,8 @@ export const createSeatHoldRepository = ({
       });
       return result;
     } catch (error) {
-      if (isDuplicateKey(error)) throw new ShowtimeSeatInitializationConflictError();
+      if (isDuplicateKey(error))
+        throw new ShowtimeSeatInitializationConflictError();
       throw error;
     } finally {
       await session.endSession();
@@ -100,9 +127,91 @@ export const createSeatHoldRepository = ({
   };
 
   const findByOwnerAndCheckoutKey = (ownerId, checkoutKey, session) =>
-    seatHoldModel.findOne({ ownerId, checkoutKey }).session(session ?? null).lean().exec();
+    seatHoldModel
+      .findOne({ ownerId, checkoutKey })
+      .session(session ?? null)
+      .lean()
+      .exec();
 
-  const expireConflictingHolds = async ({ showtimeId, seatIds, now, session }) => {
+  const findLiveForBooking = async ({ holdId, ownerId, now, session }) => {
+    const hold = await seatHoldModel
+      .findOne({
+        _id: holdId,
+        ownerId,
+      })
+      .session(session ?? null)
+      .lean()
+      .exec();
+    if (!hold) return null;
+    if (
+      hold.status !== SEAT_HOLD_STATUS.ACTIVE ||
+      new Date(hold.expiresAt).getTime() <= now.getTime()
+    ) {
+      return hold;
+    }
+
+    const claims = await showtimeSeatModel
+      .find({
+        holdId: hold._id,
+        holdOwnerId: hold.ownerId,
+        state: SHOWTIME_SEAT_STATE.HELD,
+        holdExpiresAt: { $gt: now },
+      })
+      .select({ seatId: 1, priceSnapshot: 1 })
+      .session(session ?? null)
+      .lean()
+      .exec();
+    const expectedSeatIds = [...hold.seatIds].map(String).sort();
+    const claimedSeatIds = claims.map(({ seatId }) => seatId.toString()).sort();
+    if (
+      expectedSeatIds.length !== claimedSeatIds.length ||
+      expectedSeatIds.some((seatId, index) => seatId !== claimedSeatIds[index])
+    ) {
+      return null;
+    }
+
+    if (!Array.isArray(hold.priceSnapshot?.lines)) return hold;
+
+    const holdPrices = new Map(
+      hold.priceSnapshot.lines.map(({ seatId, unitPrice }) => [
+        seatId.toString(),
+        unitPrice,
+      ]),
+    );
+    if (
+      claims.some(
+        ({ seatId, priceSnapshot }) =>
+          holdPrices.get(seatId.toString()) !== priceSnapshot,
+      )
+    ) {
+      return null;
+    }
+
+    // Establish a write dependency on the hold in the caller's transaction. Release and lazy
+    // expiry also write this document, so MongoDB will abort one side instead of allowing a
+    // Booking to commit from seat claims that changed concurrently.
+    return seatHoldModel
+      .findOneAndUpdate(
+        {
+          _id: hold._id,
+          ownerId: hold.ownerId,
+          status: SEAT_HOLD_STATUS.ACTIVE,
+          expiresAt: { $gt: now },
+          updatedAt: hold.updatedAt,
+        },
+        { $set: { updatedAt: now } },
+        { new: true, session },
+      )
+      .lean()
+      .exec();
+  };
+
+  const expireConflictingHolds = async ({
+    showtimeId,
+    seatIds,
+    now,
+    session,
+  }) => {
     const expiredClaims = await showtimeSeatModel
       .find({
         showtimeId,
@@ -115,7 +224,11 @@ export const createSeatHoldRepository = ({
       .lean()
       .exec();
 
-    const holdIds = [...new Set(expiredClaims.map(({ holdId }) => holdId?.toString()).filter(Boolean))];
+    const holdIds = [
+      ...new Set(
+        expiredClaims.map(({ holdId }) => holdId?.toString()).filter(Boolean),
+      ),
+    ];
     if (holdIds.length === 0) return;
 
     await showtimeSeatModel.updateMany(
@@ -127,7 +240,11 @@ export const createSeatHoldRepository = ({
       { session },
     );
     await seatHoldModel.updateMany(
-      { _id: { $in: holdIds }, status: SEAT_HOLD_STATUS.ACTIVE, expiresAt: { $lte: now } },
+      {
+        _id: { $in: holdIds },
+        status: SEAT_HOLD_STATUS.ACTIVE,
+        expiresAt: { $lte: now },
+      },
       { $set: { status: SEAT_HOLD_STATUS.EXPIRED } },
       { session },
     );
@@ -154,15 +271,17 @@ export const createSeatHoldRepository = ({
 
     try {
       await showtimeSeatModel.create(
-        [{
-          ...key,
-          roomLayoutVersion: hold.roomLayoutVersion,
-          state: SHOWTIME_SEAT_STATE.HELD,
-          holdId: hold._id,
-          holdOwnerId: hold.ownerId,
-          holdExpiresAt: hold.expiresAt,
-          priceSnapshot: unitPrice,
-        }],
+        [
+          {
+            ...key,
+            roomLayoutVersion: hold.roomLayoutVersion,
+            state: SHOWTIME_SEAT_STATE.HELD,
+            holdId: hold._id,
+            holdOwnerId: hold.ownerId,
+            holdExpiresAt: hold.expiresAt,
+            priceSnapshot: unitPrice,
+          },
+        ],
         { session },
       );
     } catch (error) {
@@ -188,7 +307,11 @@ export const createSeatHoldRepository = ({
         }
 
         const holdId = new mongoose.Types.ObjectId();
-        const hold = { ...holdInput, _id: holdId, status: SEAT_HOLD_STATUS.ACTIVE };
+        const hold = {
+          ...holdInput,
+          _id: holdId,
+          status: SEAT_HOLD_STATUS.ACTIVE,
+        };
         await expireConflictingHolds({
           showtimeId: hold.showtimeId,
           seatIds: hold.seatIds,
@@ -197,7 +320,10 @@ export const createSeatHoldRepository = ({
         });
 
         const priceBySeat = new Map(
-          hold.priceSnapshot.lines.map(({ seatId, unitPrice }) => [seatId.toString(), unitPrice]),
+          hold.priceSnapshot.lines.map(({ seatId, unitPrice }) => [
+            seatId.toString(),
+            unitPrice,
+          ]),
         );
         for (const seatId of hold.seatIds) {
           await claimSeat({
@@ -233,7 +359,11 @@ export const createSeatHoldRepository = ({
 
     try {
       await session.withTransaction(async () => {
-        const hold = await seatHoldModel.findById(holdId).session(session).lean().exec();
+        const hold = await seatHoldModel
+          .findById(holdId)
+          .session(session)
+          .lean()
+          .exec();
         if (!hold) {
           result = { outcome: "NOT_FOUND" };
           return;
@@ -247,7 +377,10 @@ export const createSeatHoldRepository = ({
           return;
         }
 
-        const status = hold.expiresAt <= now ? SEAT_HOLD_STATUS.EXPIRED : SEAT_HOLD_STATUS.RELEASED;
+        const status =
+          hold.expiresAt <= now
+            ? SEAT_HOLD_STATUS.EXPIRED
+            : SEAT_HOLD_STATUS.RELEASED;
         await showtimeSeatModel.updateMany(
           { holdId: hold._id, state: SHOWTIME_SEAT_STATE.HELD },
           {
@@ -262,7 +395,9 @@ export const createSeatHoldRepository = ({
             {
               $set: {
                 status,
-                ...(status === SEAT_HOLD_STATUS.RELEASED ? { releasedAt: now } : {}),
+                ...(status === SEAT_HOLD_STATUS.RELEASED
+                  ? { releasedAt: now }
+                  : {}),
               },
             },
             { new: true, session },
@@ -281,6 +416,7 @@ export const createSeatHoldRepository = ({
     acquire,
     deleteUnpublishedShowtimeSeats,
     findByOwnerAndCheckoutKey,
+    findLiveForBooking,
     hasActiveShowtimeClaims,
     initializeShowtimeSeats,
     listByShowtime,
@@ -289,4 +425,3 @@ export const createSeatHoldRepository = ({
 };
 
 export const seatHoldRepository = createSeatHoldRepository();
-

@@ -338,6 +338,18 @@ mongosh "<atlas-connection-string>" --file docs/ref/seedDataRegister.js
 
 Không commit connection string chứa username/password.
 
+### Migration Booking trên database đang có dữ liệu
+
+Ba script `.js` trong `docs/ref` dùng cứng database `cinema_management`, kể cả khi URI trỏ đến database khác. `create_empty_db.js` còn cập nhật validator của collection đã tồn tại; seed role có thể ghi lại danh sách quyền. Không chạy lại bootstrap/seed để sửa lỗi index trên `cinema_management_dev`.
+
+Với Booking, đặt `MONGODB_URI` trong `server/.env` trỏ đúng database cần cập nhật, rồi chạy từ thư mục `server`:
+
+```powershell
+node src/migrations/20261017-booking-009-indexes.js
+```
+
+Migration đọc các index hiện có, giữ nguyên tên nếu key và options tương đương (ví dụ `uniq_booking_code` hoặc `bookingCode_1`), rồi chỉ tạo index còn thiếu. Các unique index toàn collection có sẵn cho `payableReference`, `holdId`, `customerAccountId + requestKey` cũng được giữ nguyên: Booking mới bắt buộc có các field này nên vẫn được bảo vệ. Ràng buộc rộng hơn với dữ liệu legacy thiếu field vẫn còn; migration không chuyển các index đó thành partial hoặc backfill dữ liệu. Index không tương thích khác làm migration dừng; không tự xóa hoặc thay thế index. Booking model tắt `autoIndex` để backend không tạo lại index bằng tên khác; phải chạy migration thành công trước khi dùng API tạo Booking trên database mới.
+
 ## 13. Lỗi thường gặp
 
 ### `Missing required environment variables`
@@ -384,6 +396,7 @@ Kiểm tra `MONGODB_URI` phải trỏ tới `cinema_management`.
 - MongoDB Server chưa chạy.
 - Sai host/port trong `MONGODB_URI`.
 - Nếu dùng Atlas, kiểm tra Network Access và database user.
+- Nếu lỗi ghi `querySrv ECONNREFUSED _mongodb._tcp...`, Node.js không truy vấn được DNS SRV của Atlas. Thử `Resolve-DnsName -Type SRV _mongodb._tcp.<cluster-host>` trên Windows. Nếu DNS proxy của máy từ chối truy vấn nhưng DNS công cộng trả kết quả, có thể đặt `MONGODB_DNS_SERVERS=1.1.1.1,8.8.8.8` trong `server/.env` rồi khởi động lại backend. Tùy chọn này chỉ áp dụng cho tiến trình Node của backend; bỏ dòng đó khi DNS hệ thống hoạt động bình thường.
 
 ### Frontend gọi sai API hoặc bị CORS
 

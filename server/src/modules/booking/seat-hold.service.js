@@ -146,7 +146,10 @@ export const createSeatHoldService = ({
     };
   };
 
-  return { acquireSeatHold, releaseSeatHold };
+  const getLiveHoldForBooking = ({ holdId, ownerId, now = clock(), session } = {}) =>
+    repository.findLiveForBooking({ holdId, ownerId, now, session });
+
+  return { acquireSeatHold, getLiveHoldForBooking, releaseSeatHold };
 };
 
 export { commandHash, normalizeSeatIds, serializeHold, validatePriceQuote };
