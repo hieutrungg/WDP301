@@ -9,6 +9,15 @@ export const listShowtimes = async (req, res, next) => {
   }
 };
 
+export const listManagerShowtimes = async (req, res, next) => {
+  try {
+    const result = await showtimeService.listManagerShowtimes(req.validated.query);
+    res.json({ success: true, data: result.data, meta: result.meta });
+  } catch (error) {
+    next(error);
+  }
+};
+
 export const getShowtimeById = async (req, res, next) => {
   try {
     const data = await showtimeService.getPublicShowtimeById(req.validated.params.showtimeId);

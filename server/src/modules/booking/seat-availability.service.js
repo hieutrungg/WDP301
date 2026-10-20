@@ -51,7 +51,12 @@ export const createSeatAvailabilityService = ({
   priceQuoter,
   clock = () => new Date(),
 } = {}) => {
-  const initializeForPublishedShowtime = async ({ showtimeId, roomId, roomLayoutVersion }) => {
+  const initializeForPublishedShowtime = async ({
+    showtimeId,
+    roomId,
+    roomLayoutVersion,
+    pricesBySeatType,
+  }) => {
     const layout = await roomLayoutReader.getLayoutVersion(roomId, roomLayoutVersion);
     if (!layout || !Array.isArray(layout.seats) || layout.seats.length === 0) {
       throw error(
@@ -67,6 +72,7 @@ export const createSeatAvailabilityService = ({
         seat.status === "ENABLED"
           ? SHOWTIME_SEAT_STATE.AVAILABLE
           : SHOWTIME_SEAT_STATE.UNAVAILABLE,
+      priceSnapshot: pricesBySeatType?.[seat.type],
     }));
 
     try {
@@ -93,6 +99,20 @@ export const createSeatAvailabilityService = ({
 
   const hasActiveClaims = (showtimeId, now = clock()) =>
     repository.hasActiveShowtimeClaims(new mongoose.Types.ObjectId(showtimeId), now);
+
+  const getAvailabilitySummary = async (showtimeIds, now = clock()) => {
+    if (!showtimeIds.length) return new Map();
+    const rows = await repository.summarizeAvailabilityByShowtime(
+      showtimeIds.map((id) => new mongoose.Types.ObjectId(id)),
+      now,
+    );
+    return new Map(
+      rows.map((row) => [row._id.toString(), {
+        totalSeatCount: row.totalSeatCount,
+        availableSeatCount: row.availableSeatCount,
+      }]),
+    );
+  };
 
   const getSeatAvailability = async ({ showtimeId, ownerId }) => {
     const now = clock();
@@ -156,7 +176,7 @@ export const createSeatAvailabilityService = ({
     };
   };
 
-  return { discardForUnpublishedShowtime, getSeatAvailability, hasActiveClaims, initializeForPublishedShowtime };
+  return { discardForUnpublishedShowtime, getAvailabilitySummary, getSeatAvailability, hasActiveClaims, initializeForPublishedShowtime };
 };
 
 export { projectAvailability, seatIdentity };

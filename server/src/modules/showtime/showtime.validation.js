@@ -18,6 +18,14 @@ const listQuerySchema = z.strictObject({
 });
 
 const movieListQuerySchema = listQuerySchema.omit({ movieId: true });
+const managerListQuerySchema = z.strictObject({
+  view: z.enum(["schedule", "history"]).default("schedule"),
+  date: dateString.optional(),
+  cinemaId: objectId.optional(),
+  q: z.string().trim().max(100).optional(),
+  page: z.coerce.number().int().min(1).max(10000).default(1),
+  limit: z.coerce.number().int().min(1).max(SHOWTIME_PAGE_LIMIT_MAX).default(SHOWTIME_PAGE_LIMIT_DEFAULT),
+});
 
 const validateShowtimeQuery = (schema) => (req, _res, next) => {
   const result = schema.safeParse(req.query);
@@ -35,6 +43,7 @@ const validateShowtimeQuery = (schema) => (req, _res, next) => {
 };
 
 export const showtimeQueryValidator = validateShowtimeQuery(listQuerySchema);
+export const managerShowtimeQueryValidator = validateShowtimeQuery(managerListQuerySchema);
 
 export const movieShowtimeParamsValidator = (req, _res, next) => {
   const result = objectId.safeParse(req.params.movieId);

@@ -14,12 +14,14 @@ import {
   cancelPublishedShowtime,
   deleteDraftShowtime,
   findShowtimeById,
+  findManagerShowtimes,
   findPublicShowtimeById,
   findPublicShowtimes,
   findScheduleConflict,
   publishShowtime,
   updatePublishedShowtimeTime,
 } from "./showtime.repository.js";
+import { MVP_SEAT_TYPE_PRICES_VND } from "./showtime.pricing.js";
 
 const getVietnamDateRange = (date) => {
   if (!date) return undefined;
@@ -27,10 +29,16 @@ const getVietnamDateRange = (date) => {
   return { start, end: new Date(start.getTime() + 24 * 60 * 60 * 1000) };
 };
 
-const displayStatusAt = (startAt, endAt, now) => {
-  if (startAt > now) return "UPCOMING";
-  if (endAt > now) return "NOW_SHOWING";
-  return "ENDED";
+const displayStatusAt = (startAt, endAt, now, availability) => {
+  if (endAt <= now) return "ENDED";
+  if (
+    availability?.totalSeatCount > 0 &&
+    availability.availableSeatCount === 0
+  ) {
+    return "SOLD_OUT";
+  }
+  if (startAt <= now) return "NOW_SHOWING";
+  return "UPCOMING";
 };
 
 const roomLayoutReader = {
@@ -40,8 +48,9 @@ const roomLayoutReader = {
     return {
       seats: layout.positions
         .filter(({ positionType }) => positionType === "SEAT")
-        .map(({ seatId, status }) => ({
+        .map(({ seatId, seatType, status }) => ({
           _id: seatId,
+          type: seatType,
           status: status ?? "ENABLED",
         })),
     };
@@ -96,6 +105,16 @@ export const createShowtime = async (
       SHOWTIME_ERROR.ROOM_LAYOUT_REQUIRED,
     );
   }
+  const unpricedSeat = layout.positions
+    .filter(({ positionType }) => positionType === "SEAT")
+    .find(({ seatType }) => !Number.isSafeInteger(MVP_SEAT_TYPE_PRICES_VND[seatType]));
+  if (unpricedSeat) {
+    throw showtimeError(
+      409,
+      `No ticket price is configured for seat type ${unpricedSeat.seatType}`,
+      SHOWTIME_ERROR.SEAT_PRICE_NOT_CONFIGURED,
+    );
+  }
 
   const startAt = new Date(startAtInput);
   if (startAt <= now) {
@@ -131,6 +150,7 @@ export const createShowtime = async (
       showtimeId: draft._id,
       roomId: draft.roomId,
       roomLayoutVersion: draft.roomLayoutVersion,
+      pricesBySeatType: MVP_SEAT_TYPE_PRICES_VND,
     });
     const published = await publishShowtime(draft._id);
     if (!published) {
@@ -245,9 +265,19 @@ export const listShowtimes = async (query, now = new Date()) => {
     dateRange: getVietnamDateRange(query.date),
     now,
   });
+  const availabilityByShowtime = await seatAvailability.getAvailabilitySummary(
+    items.map(({ _id }) => _id),
+    now,
+  );
 
   return {
-    data: items.map((item) => serializePublicShowtime(item, now)),
+    data: items.map((item) =>
+      serializePublicShowtime(
+        item,
+        now,
+        availabilityByShowtime.get(item._id.toString()),
+      ),
+    ),
     meta: {
       page: query.page,
       limit: query.limit,
@@ -257,7 +287,50 @@ export const listShowtimes = async (query, now = new Date()) => {
   };
 };
 
-const serializePublicShowtime = (item, now) => {
+export const listManagerShowtimes = async (query, now = new Date()) => {
+  const { items, total } = await findManagerShowtimes({
+    ...query,
+    dateRange: getVietnamDateRange(query.date),
+    now,
+  });
+  const availabilityByShowtime = await seatAvailability.getAvailabilitySummary(
+    items.map(({ _id }) => _id),
+    now,
+  );
+  return {
+    data: items.map((item) => ({
+      id: item._id.toString(),
+      movieId: item.movieId.toString(),
+      roomId: item.roomId.toString(),
+      roomLayoutVersion: item.roomLayoutVersion,
+      cinemaId: item.cinema.id.toString(),
+      startAt: new Date(item.startAt).toISOString(),
+      endAt: new Date(item.endAt).toISOString(),
+      status: item.status,
+      createdAt: item.createdAt?.toISOString?.() ?? null,
+      updatedAt: item.updatedAt?.toISOString?.() ?? null,
+      displayStatus: item.status === SHOWTIME_STATUS.CANCELLED
+        ? "CANCELLED"
+        : displayStatusAt(
+          new Date(item.startAt),
+          new Date(item.endAt),
+          now,
+          availabilityByShowtime.get(item._id.toString()),
+        ),
+      movie: { ...item.movie, id: item.movie.id.toString() },
+      cinema: { ...item.cinema, id: item.cinema.id.toString() },
+      room: { ...item.room, id: item.room.id.toString() },
+    })),
+    meta: {
+      page: query.page,
+      limit: query.limit,
+      total,
+      totalPages: total === 0 ? 0 : Math.ceil(total / query.limit),
+    },
+  };
+};
+
+const serializePublicShowtime = (item, now, availability) => {
   const startAt = new Date(item.startAt);
   const endAt = new Date(item.endAt);
   return {
@@ -268,7 +341,7 @@ const serializePublicShowtime = (item, now) => {
     startAt: startAt.toISOString(),
     endAt: endAt.toISOString(),
     status: item.status,
-    displayStatus: displayStatusAt(startAt, endAt, now),
+    displayStatus: displayStatusAt(startAt, endAt, now, availability),
     movie: { ...item.movie, id: item.movie.id.toString() },
     cinema: { ...item.cinema, id: item.cinema.id.toString() },
     room: { ...item.room, id: item.room.id.toString() },
@@ -284,7 +357,15 @@ export const getPublicShowtimeById = async (showtimeId, now = new Date()) => {
       SHOWTIME_ERROR.SHOWTIME_NOT_FOUND,
     );
   }
-  return serializePublicShowtime(showtime, now);
+  const availabilityByShowtime = await seatAvailability.getAvailabilitySummary(
+    [showtime._id],
+    now,
+  );
+  return serializePublicShowtime(
+    showtime,
+    now,
+    availabilityByShowtime.get(showtime._id.toString()),
+  );
 };
 
 // Exported Showtime read contract for Booking. Missing layout snapshots fail closed because
