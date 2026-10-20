@@ -8,7 +8,6 @@ import {
   DoorOpen,
   Info,
   LoaderCircle,
-  LockKeyhole,
   MapPin,
   RotateCcw,
   ShieldCheck,
@@ -34,6 +33,7 @@ import {
 } from '../hooks/useSeatAvailability'
 
 const formatVnd = (amount) => `${new Intl.NumberFormat('vi-VN').format(amount ?? 0)} ₫`
+const SEAT_SELECTION_DURATION_MS = 10 * 60 * 1000
 const seatTypeLabel = (type) => ({
   STANDARD: 'Standard',
   VIP: 'VIP Prime',
@@ -59,12 +59,20 @@ const formatCountdown = (milliseconds) => {
   return `${String(minutes).padStart(2, '0')}:${seconds}`
 }
 
-function HoldCountdown({ hold, onExpire }) {
-  const expiresAt = new Date(hold.expiresAt).getTime()
-  const initialServerNow = new Date(hold.serverNow).getTime()
+const createSelectionWindow = (serverNow) => {
+  const startedAt = new Date(serverNow)
+  return {
+    serverNow: startedAt.toISOString(),
+    expiresAt: new Date(startedAt.getTime() + SEAT_SELECTION_DURATION_MS).toISOString(),
+  }
+}
+
+function SelectionCountdown({ expiresAt, serverNow, onExpire }) {
+  const expiresAtMs = new Date(expiresAt).getTime()
+  const initialServerNow = new Date(serverNow).getTime()
   const [serverNowMs, setServerNowMs] = useState(initialServerNow)
   const expired = useRef(false)
-  const remainingMs = Math.max(0, expiresAt - serverNowMs)
+  const remainingMs = Math.max(0, expiresAtMs - serverNowMs)
 
   useEffect(() => {
     const timer = window.setInterval(() => setServerNowMs((value) => value + 1000), 1000)
@@ -105,14 +113,14 @@ function BookingStepper() {
           <span className="shrink-0 rounded-full px-3 py-1.5 text-on-surface-variant/60">7. Payment</span>
         </nav>
         <span className="inline-flex shrink-0 items-center gap-2 rounded-full bg-surface-container px-3 py-1.5 text-xs font-medium">
-          <Zap className="size-4 fill-secondary text-secondary" />Live Seat Lock · Real-time Matrix Active
+          <Zap className="size-4 fill-secondary text-secondary" />Live Seat Availability · Real-time Updates
         </span>
       </div>
     </section>
   )
 }
 
-function SessionBar({ showtime, activeHold, onExpire }) {
+function SessionBar({ showtime, activeHold, selectionWindow, onExpire }) {
   const startAt = showtime?.startAt ? new Date(showtime.startAt) : null
   const endAt = showtime?.endAt ? new Date(showtime.endAt) : null
   const movie = showtime?.movie
@@ -153,10 +161,15 @@ function SessionBar({ showtime, activeHold, onExpire }) {
             <span className="relative size-3 rounded-full bg-primary-container" />
           </span>
           <div>
-            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-on-surface-variant">Holding reservation</p>
+            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-on-surface-variant">Seat selection time</p>
             <p className="font-heading text-2xl font-extrabold text-primary-container">
-              {activeHold ? <HoldCountdown hold={activeHold} onExpire={onExpire} /> : '10:00'}
-              <span className="ml-2 text-xs font-normal text-on-surface-variant">{activeHold ? 'left' : 'ready'}</span>
+              <SelectionCountdown
+                key={activeHold?.expiresAt ?? selectionWindow.expiresAt}
+                expiresAt={activeHold?.expiresAt ?? selectionWindow.expiresAt}
+                serverNow={activeHold?.serverNow ?? selectionWindow.serverNow}
+                onExpire={onExpire}
+              />
+              <span className="ml-2 text-xs font-normal text-on-surface-variant">remaining</span>
             </p>
           </div>
           <Timer className="size-6 text-on-surface-variant" />
@@ -180,7 +193,7 @@ function CurvedScreen() {
   )
 }
 
-function SeatMatrix({ rows, selectedSeatIds, activeHold, onToggle }) {
+function SeatMatrix({ rows, selectedSeatIds, interactionDisabled, onToggle }) {
   const firstPrimeRow = rows.findIndex(([, seats]) => seats.some(({ type }) => type === 'VIP'))
 
   return (
@@ -206,7 +219,7 @@ function SeatMatrix({ rows, selectedSeatIds, activeHold, onToggle }) {
                   {rowSeats.map((seat, index) => (
                     <Fragment key={seat.seatId}>
                       {index === Math.ceil(rowSeats.length / 2) && <span className="w-5 text-center font-mono text-[9px] text-on-surface-variant/20">|</span>}
-                      <SeatButton seat={seat} selected={selectedSeatIds.includes(seat.seatId)} onToggle={onToggle} disabled={Boolean(activeHold)} />
+                      <SeatButton seat={seat} selected={selectedSeatIds.includes(seat.seatId)} onToggle={onToggle} disabled={interactionDisabled} />
                     </Fragment>
                   ))}
                 </div>
@@ -220,7 +233,7 @@ function SeatMatrix({ rows, selectedSeatIds, activeHold, onToggle }) {
   )
 }
 
-function BookingSummary({ selectedSeats, total, activeHold, acquirePending, releasePending, onRemove, onHold, onRelease }) {
+function BookingSummary({ selectedSeats, total, activeHold, selectionExpired, acquirePending, releasePending, onRemove, onHold, onRelease, onRestart }) {
   return (
     <aside className="h-fit rounded-xl bg-surface-container-low p-5 shadow-xl lg:sticky lg:top-24">
       <div className="flex items-center justify-between border-b border-white/5 pb-4">
@@ -238,7 +251,7 @@ function BookingSummary({ selectedSeats, total, activeHold, acquirePending, rele
                 <span className="grid size-9 shrink-0 place-items-center rounded bg-primary-container font-mono text-xs font-bold text-white shadow-crimson">{seat.row}{String(seat.number).padStart(2, '0')}</span>
                 <div className="min-w-0"><p className="truncate text-sm font-bold">Seat {seat.row}{seat.number} · {seatTypeLabel(seat.type)}</p><p className="text-[10px] text-secondary">Server-confirmed showtime price</p></div>
               </div>
-              <div className="flex shrink-0 items-center gap-2"><strong className="text-xs">{formatVnd(seat.price)}</strong><button type="button" disabled={Boolean(activeHold)} onClick={() => onRemove(seat.seatId)} title="Deselect seat" className="rounded p-1 text-on-surface-variant hover:text-error disabled:cursor-not-allowed disabled:opacity-30"><X className="size-4" /></button></div>
+              <div className="flex shrink-0 items-center gap-2"><strong className="text-xs">{formatVnd(seat.price)}</strong><button type="button" disabled={Boolean(activeHold) || selectionExpired} onClick={() => onRemove(seat.seatId)} title="Deselect seat" className="rounded p-1 text-on-surface-variant hover:text-error disabled:cursor-not-allowed disabled:opacity-30"><X className="size-4" /></button></div>
             </div>
           ))}
         </div>
@@ -252,21 +265,28 @@ function BookingSummary({ selectedSeats, total, activeHold, acquirePending, rele
       </div>
 
       <div className="mt-4 space-y-3">
-        {!activeHold ? (
+        {selectionExpired ? (
+          <button type="button" onClick={onRestart} className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary-container px-4 py-3.5 font-bold text-white shadow-crimson transition hover:brightness-110">
+            <RotateCcw className="size-4" />Select seats again
+          </button>
+        ) : !activeHold ? (
           <button type="button" onClick={onHold} disabled={!selectedSeats.length || acquirePending} className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary-container px-4 py-3.5 font-bold text-white shadow-[0_0_20px_rgba(229,9,20,0.45)] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40">
-            {acquirePending ? <LoaderCircle className="size-4 animate-spin" /> : <LockKeyhole className="size-4" />}{acquirePending ? 'Locking seats…' : 'Lock seats for checkout'}
+            {acquirePending ? <LoaderCircle className="size-4 animate-spin" /> : <TicketCheck className="size-4" />}{acquirePending ? 'Confirming selection…' : 'Confirm selected seats'}
           </button>
         ) : (
           <>
-            <button type="button" disabled className="flex w-full cursor-not-allowed items-center justify-center gap-2 rounded-lg bg-primary-container px-4 py-3.5 font-bold text-white opacity-55"><span>Proceed to F&amp;B Combos</span><ArrowRight className="size-4" /></button>
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+              <button type="button" disabled className="flex cursor-not-allowed items-center justify-center gap-2 rounded-lg bg-secondary/15 px-3 py-3 font-bold text-secondary opacity-55"><Utensils className="size-4" /><span>Choose F&amp;B</span></button>
+              <button type="button" disabled className="flex cursor-not-allowed items-center justify-center gap-2 rounded-lg bg-primary-container px-3 py-3 font-bold text-white opacity-55"><span>Skip to payment</span><ArrowRight className="size-4" /></button>
+            </div>
             <button type="button" onClick={onRelease} disabled={releasePending} className="w-full rounded-lg bg-surface-container-high px-4 py-2.5 text-sm font-semibold hover:bg-surface-bright disabled:opacity-50">{releasePending ? 'Releasing…' : 'Release all seats'}</button>
-            <p className="text-center text-[10px] text-on-surface-variant">C13 remains unavailable until the approved cart/concession contract is implemented.</p>
+            <p className="text-center text-[10px] text-on-surface-variant">F&amp;B and Customer Payment routes will become available when their approved contracts are implemented.</p>
           </>
         )}
       </div>
 
       <div className="mt-4 space-y-2 text-[10px] leading-4 text-on-surface-variant/75">
-        <p className="flex gap-2"><LockKeyhole className="mt-0.5 size-3.5 shrink-0 text-error" />Seats are locked for exactly 10 minutes and return to inventory after expiry.</p>
+        <p className="flex gap-2"><Timer className="mt-0.5 size-3.5 shrink-0 text-error" />You have 10 minutes to select seats and continue. The timer runs even when no seat is selected.</p>
         <p className="flex gap-2"><AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-secondary" />Age-rating admission rules shown for this movie still apply at the cinema.</p>
         <p className="flex gap-2"><ShieldCheck className="mt-0.5 size-3.5 shrink-0" />Refund and cancellation eligibility is confirmed only by the approved policy workflow.</p>
       </div>
@@ -282,10 +302,18 @@ function SeatSelectionPage() {
   const release = useReleaseSeatHold(showtimeId)
   const [selectedSeatIds, setSelectedSeatIds] = useState([])
   const [activeHold, setActiveHold] = useState(null)
+  const [selectionWindowOverride, setSelectionWindowOverride] = useState(null)
+  const [selectionExpired, setSelectionExpired] = useState(false)
   const checkoutKey = useRef(null)
 
   const seats = useMemo(() => availability.data?.seats ?? [], [availability.data])
   const showtime = availability.data?.showtime ?? location.state?.showtime
+  const selectionWindow = useMemo(() => {
+    if (selectionWindowOverride) return selectionWindowOverride
+    return availability.data?.generatedAt
+      ? createSelectionWindow(availability.data.generatedAt)
+      : null
+  }, [availability.data, selectionWindowOverride])
   const seatById = useMemo(() => new Map(seats.map((seat) => [seat.seatId, seat])), [seats])
   const rows = useMemo(() => {
     const groups = new Map()
@@ -313,25 +341,36 @@ function SeatSelectionPage() {
   const handleHoldExpired = useCallback(() => {
     setActiveHold(null)
     setSelectedSeatIds([])
+    setSelectionExpired(true)
     checkoutKey.current = null
     availability.refetch()
-    toast.error('Your seat hold expired. Please select the seats again.')
+    toast.error('Your seat selection time expired. Select seats again to continue.')
   }, [availability])
 
+  const restartSelection = () => {
+    setSelectionWindowOverride(createSelectionWindow(new Date()))
+    setSelectionExpired(false)
+    setSelectedSeatIds([])
+    checkoutKey.current = null
+    availability.refetch()
+    toast.info('A new 10-minute seat selection session has started.')
+  }
+
   const toggleSeat = (seatId) => {
-    if (activeHold) return
+    if (activeHold || selectionExpired) return
     setSelectedSeatIds((current) => current.includes(seatId)
       ? current.filter((selectedId) => selectedId !== seatId)
       : [...current, seatId])
   }
 
   const holdSeats = async () => {
+    if (selectionExpired) return toast.error('Seat selection time expired. Start again to continue.')
     if (selectedSeatIds.length === 0) return toast.error('Select at least one available seat.')
     try {
       if (!checkoutKey.current) checkoutKey.current = globalThis.crypto?.randomUUID?.() ?? `checkout-${Date.now()}`
       const result = await acquire.mutateAsync({ showtimeId, seatIds: selectedSeatIds, checkoutKey: checkoutKey.current })
       setActiveHold(result)
-      toast.success('Seats locked for 10 minutes.')
+      toast.success('Seats selected. Choose F&B or continue to payment within 10 minutes.')
     } catch (error) {
       toast.error(getApiErrorMessage(error))
       availability.refetch()
@@ -344,8 +383,10 @@ function SeatSelectionPage() {
       await release.mutateAsync(activeHold.holdId)
       setActiveHold(null)
       setSelectedSeatIds([])
+      setSelectionWindowOverride(createSelectionWindow(new Date()))
+      setSelectionExpired(false)
       checkoutKey.current = null
-      toast.success('Seats released.')
+      toast.success('Seat selection cleared.')
     } catch (error) {
       toast.error(getApiErrorMessage(error))
     }
@@ -363,31 +404,44 @@ function SeatSelectionPage() {
     return <main className="min-h-screen bg-background px-4 pb-12 pt-28"><div className="mx-auto max-w-4xl"><EmptyState title="No seats available" description="This showtime does not have an initialized seat layout." /></div></main>
   }
 
+  if (!selectionWindow) {
+    return <main className="grid min-h-screen place-items-center bg-background pt-20"><div className="text-center text-on-surface-variant"><LoaderCircle className="mx-auto size-9 animate-spin text-primary" /><p className="mt-3 text-sm">Starting seat selection timer…</p></div></main>
+  }
+
   return (
     <main className="min-h-screen bg-background pt-20 text-on-surface">
       <BookingStepper />
-      <SessionBar showtime={showtime} activeHold={activeHold} onExpire={handleHoldExpired} />
+      <SessionBar showtime={showtime} activeHold={activeHold} selectionWindow={selectionWindow} onExpire={handleHoldExpired} />
 
       <div className="mx-auto grid max-w-[1400px] gap-7 px-4 py-8 sm:px-6 lg:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)]">
         <section className="min-w-0 space-y-5">
+          <div className="flex flex-col gap-3 rounded-xl border border-white/5 bg-surface-container-lowest px-4 py-3 shadow-lg sm:flex-row sm:items-center sm:justify-between">
+            <Link to="/showtimes" className="inline-flex shrink-0 items-center gap-2 text-xs font-semibold text-on-surface-variant hover:text-white"><ArrowLeft className="size-4" />Back to Showtime Selection (Step 4)</Link>
+            <div className="flex min-w-0 items-center gap-3 text-xs">
+              <span className="rounded bg-primary-container px-2 py-1 font-bold text-white">{selectedSeats.length} SEAT{selectedSeats.length === 1 ? '' : 'S'}</span>
+              <strong className="max-w-56 truncate">{selectedSeats.map((seat) => `${seat.row}${seat.number}`).join(', ') || 'No seats selected'}</strong>
+              <span className="text-on-surface-variant/30">|</span>
+              <strong className="font-heading text-base">{formatVnd(total)}</strong>
+            </div>
+            <button type="button" onClick={activeHold || selectionExpired ? undefined : holdSeats} disabled={Boolean(activeHold) || selectionExpired || !selectedSeats.length || acquire.isPending} className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-primary-container px-5 py-2.5 text-xs font-bold text-white shadow-crimson disabled:cursor-not-allowed disabled:opacity-45">{selectionExpired ? 'Selection time expired' : activeHold ? 'Seats confirmed · Choose next step' : 'Confirm selected seats'}{activeHold ? <Utensils className="size-4" /> : <ArrowRight className="size-4" />}</button>
+          </div>
           <div className="rounded-xl bg-surface-container-low p-4"><SeatLegend seatTypes={seatTypes} selectedCount={selectedSeats.length} /></div>
-          <SeatMatrix rows={rows} selectedSeatIds={selectedSeatIds} activeHold={activeHold} onToggle={toggleSeat} />
+          {selectionExpired && (
+            <div role="alert" className="flex flex-col gap-3 rounded-xl border border-error/40 bg-error-container/20 p-4 text-sm text-error sm:flex-row sm:items-center sm:justify-between">
+              <span><strong>Seat selection time expired.</strong> Your current selection was cleared. Start again to refresh availability.</span>
+              <button type="button" onClick={restartSelection} className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-primary-container px-4 py-2 font-bold text-white"><RotateCcw className="size-4" />Select again</button>
+            </div>
+          )}
+          <SeatMatrix rows={rows} selectedSeatIds={selectedSeatIds} interactionDisabled={Boolean(activeHold) || selectionExpired} onToggle={toggleSeat} />
           <div className="flex flex-wrap items-center justify-between gap-3 px-1 text-xs text-on-surface-variant/70">
             <span className="inline-flex items-center gap-2"><BadgeCheck className="size-4 text-secondary" />Hall capacity: {seats.length} seats · Layout version {availability.data.roomLayoutVersion}</span>
             <span>Availability generated {new Date(availability.data.generatedAt).toLocaleTimeString('en-GB')}</span>
           </div>
         </section>
 
-        <BookingSummary selectedSeats={selectedSeats} total={total} activeHold={activeHold} acquirePending={acquire.isPending} releasePending={release.isPending} onRemove={toggleSeat} onHold={holdSeats} onRelease={releaseSeats} />
+        <BookingSummary selectedSeats={selectedSeats} total={total} activeHold={activeHold} selectionExpired={selectionExpired} acquirePending={acquire.isPending} releasePending={release.isPending} onRemove={toggleSeat} onHold={holdSeats} onRelease={releaseSeats} onRestart={restartSelection} />
       </div>
 
-      <section className="sticky bottom-0 z-40 border-t border-white/5 bg-surface-container-lowest/95 px-4 py-3 shadow-[0_-4px_20px_rgba(0,0,0,0.7)] backdrop-blur sm:px-6">
-        <div className="mx-auto flex max-w-[1400px] flex-col items-center justify-between gap-3 sm:flex-row">
-          <Link to="/showtimes" className="inline-flex items-center gap-2 text-xs font-semibold text-on-surface-variant hover:text-white"><ArrowLeft className="size-4" />Back to Showtime Selection (Step 4)</Link>
-          <div className="flex min-w-0 items-center gap-3 text-xs"><span className="rounded bg-primary-container px-2 py-1 font-bold text-white">{selectedSeats.length} SEAT{selectedSeats.length === 1 ? '' : 'S'}</span><strong className="max-w-56 truncate">{selectedSeats.map((seat) => `${seat.row}${seat.number}`).join(', ') || 'No seats selected'}</strong><span className="text-on-surface-variant/30">|</span><strong className="font-heading text-base">{formatVnd(total)}</strong></div>
-          <button type="button" onClick={activeHold ? undefined : holdSeats} disabled={Boolean(activeHold) || !selectedSeats.length || acquire.isPending} className="inline-flex items-center gap-2 rounded-lg bg-primary-container px-5 py-2.5 text-xs font-bold text-white shadow-crimson disabled:cursor-not-allowed disabled:opacity-45">{activeHold ? 'F&B integration pending' : 'Lock Seats & Continue'}{activeHold ? <Utensils className="size-4" /> : <ArrowRight className="size-4" />}</button>
-        </div>
-      </section>
     </main>
   )
 }
