@@ -14,6 +14,8 @@ const showtimeSchema = new mongoose.Schema(
       default: SHOWTIME_STATUS.DRAFT,
     },
     roomLayoutVersion: { type: Number, required: true, min: 1 },
+    // Optional on legacy records; every newly published Showtime sets its selected plan version.
+    ticketPricePlanId: { type: mongoose.Schema.Types.ObjectId },
   },
   {
     collection: "showtimes",

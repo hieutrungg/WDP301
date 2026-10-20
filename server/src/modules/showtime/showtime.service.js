@@ -4,6 +4,7 @@ import { createSeatAvailabilityService } from "../booking/seat-availability.serv
 import { movieService } from "../movie/movie.service.js";
 import { findBookableShowtimeById } from "./showtime.repository.js";
 import * as roomService from "../room/room.service.js";
+import { ticketPricingService, TicketPricingUnavailableError } from "../ticket-pricing/ticket-pricing.service.js";
 import {
   SHOWTIME_CLEANUP_BUFFER_MS,
   SHOWTIME_ERROR,
@@ -21,7 +22,6 @@ import {
   publishShowtime,
   updatePublishedShowtimeTime,
 } from "./showtime.repository.js";
-import { MVP_SEAT_TYPE_PRICES_VND } from "./showtime.pricing.js";
 
 const getVietnamDateRange = (date) => {
   if (!date) return undefined;
@@ -41,25 +41,22 @@ const displayStatusAt = (startAt, endAt, now, availability) => {
   return "UPCOMING";
 };
 
-const roomLayoutReader = {
-  async getLayoutVersion(roomId, roomLayoutVersion) {
-    const { layout } = await roomService.getSeatLayout(roomId);
-    if (!layout || layout.layoutVersion !== roomLayoutVersion) return null;
-    return {
-      seats: layout.positions
-        .filter(({ positionType }) => positionType === "SEAT")
-        .map(({ seatId, seatType, status }) => ({
-          _id: seatId,
-          type: seatType,
-          status: status ?? "ENABLED",
-        })),
-    };
-  },
-};
+const roomLayoutReader = { getLayoutVersion: roomService.getLayoutVersionForBooking };
 
 const seatAvailability = createSeatAvailabilityService({ roomLayoutReader });
 const showtimeError = (status, message, code) =>
   new AppError(status, message, [], code);
+
+const resolvePricing = async (startAt, roomType) => {
+  try {
+    return await ticketPricingService.resolveForShowtime({ startAt, roomType });
+  } catch (error) {
+    if (error instanceof TicketPricingUnavailableError) {
+      throw showtimeError(409, error.message, SHOWTIME_ERROR.INVALID_SHOWTIME);
+    }
+    throw error;
+  }
+};
 
 const serializeCreatedShowtime = (showtime, room) => ({
   id: showtime._id.toString(),
@@ -74,13 +71,23 @@ const serializeCreatedShowtime = (showtime, room) => ({
   cinema: { id: room.branch.id, branchName: room.branch.branchName },
 });
 
-export const createShowtime = async (
+export const createShowtimePublisher = ({
+  getMovie = movieService.getMovie,
+  getRoomLayout = roomService.getSeatLayout,
+  findConflict = findScheduleConflict,
+  resolvePricePlan = resolvePricing,
+  createDraft = createDraftShowtime,
+  initializeSeats = seatAvailability.initializeForPublishedShowtime,
+  publish = publishShowtime,
+  discardSeats = seatAvailability.discardForUnpublishedShowtime,
+  deleteDraft = deleteDraftShowtime,
+} = {}) => async (
   { movieId, roomId, startAt: startAtInput },
   now = new Date(),
 ) => {
   const [movie, roomDetail] = await Promise.all([
-    movieService.getMovie(movieId),
-    roomService.getSeatLayout(roomId),
+    getMovie(movieId),
+    getRoomLayout(roomId),
   ]);
   const { room, layout } = roomDetail;
 
@@ -105,17 +112,6 @@ export const createShowtime = async (
       SHOWTIME_ERROR.ROOM_LAYOUT_REQUIRED,
     );
   }
-  const unpricedSeat = layout.positions
-    .filter(({ positionType }) => positionType === "SEAT")
-    .find(({ seatType }) => !Number.isSafeInteger(MVP_SEAT_TYPE_PRICES_VND[seatType]));
-  if (unpricedSeat) {
-    throw showtimeError(
-      409,
-      `No ticket price is configured for seat type ${unpricedSeat.seatType}`,
-      SHOWTIME_ERROR.SEAT_PRICE_NOT_CONFIGURED,
-    );
-  }
-
   const startAt = new Date(startAtInput);
   if (startAt <= now) {
     throw showtimeError(
@@ -127,7 +123,7 @@ export const createShowtime = async (
   const endAt = new Date(
     startAt.getTime() + movie.duration * 60_000 + SHOWTIME_CLEANUP_BUFFER_MS,
   );
-  const conflict = await findScheduleConflict({ roomId, startAt, endAt });
+  const conflict = await findConflict({ roomId, startAt, endAt });
   if (conflict) {
     throw showtimeError(
       409,
@@ -136,23 +132,25 @@ export const createShowtime = async (
     );
   }
 
-  const draft = await createDraftShowtime({
+  const pricing = await resolvePricePlan(startAt, room.roomType);
+  const draft = await createDraft({
     movieId: new mongoose.Types.ObjectId(movieId),
     roomId: new mongoose.Types.ObjectId(roomId),
     startAt,
     endAt,
     status: SHOWTIME_STATUS.DRAFT,
     roomLayoutVersion: layout.layoutVersion,
+    ticketPricePlanId: pricing.ticketPricePlanId,
   });
 
   try {
-    await seatAvailability.initializeForPublishedShowtime({
+    await initializeSeats({
       showtimeId: draft._id,
       roomId: draft.roomId,
       roomLayoutVersion: draft.roomLayoutVersion,
-      pricesBySeatType: MVP_SEAT_TYPE_PRICES_VND,
+      pricesBySeatType: pricing.seatTypePrices,
     });
-    const published = await publishShowtime(draft._id);
+    const published = await publish(draft._id);
     if (!published) {
       throw showtimeError(
         409,
@@ -163,12 +161,14 @@ export const createShowtime = async (
     return serializeCreatedShowtime(published, room);
   } catch (error) {
     await Promise.allSettled([
-      seatAvailability.discardForUnpublishedShowtime(draft._id),
-      deleteDraftShowtime(draft._id),
+      discardSeats(draft._id),
+      deleteDraft(draft._id),
     ]);
     throw error;
   }
 };
+
+export const createShowtime = createShowtimePublisher();
 
 const assertEditableShowtime = async (showtimeId, now) => {
   const showtime = await findShowtimeById(showtimeId);
@@ -193,11 +193,19 @@ const assertEditableShowtime = async (showtimeId, now) => {
   return showtime;
 };
 
-export const rescheduleShowtime = async (
+export const createShowtimeRescheduler = ({
+  assertEditable = assertEditableShowtime,
+  getMovie = movieService.getMovie,
+  getRoomLayout = roomService.getSeatLayout,
+  findConflict = findScheduleConflict,
+  resolvePricePlan = resolvePricing,
+  reprice = seatAvailability.repriceUnclaimedShowtime,
+  updateTime = updatePublishedShowtimeTime,
+} = {}) => async (
   { showtimeId, startAt: startAtInput },
   now = new Date(),
 ) => {
-  const showtime = await assertEditableShowtime(showtimeId, now);
+  const showtime = await assertEditable(showtimeId, now);
   const startAt = new Date(startAtInput);
   if (startAt <= now) {
     throw showtimeError(
@@ -206,11 +214,11 @@ export const rescheduleShowtime = async (
       SHOWTIME_ERROR.START_TIME_NOT_FUTURE,
     );
   }
-  const movie = await movieService.getMovie(showtime.movieId.toString());
+  const movie = await getMovie(showtime.movieId.toString());
   const endAt = new Date(
     startAt.getTime() + movie.duration * 60_000 + SHOWTIME_CLEANUP_BUFFER_MS,
   );
-  const conflict = await findScheduleConflict({
+  const conflict = await findConflict({
     roomId: showtime.roomId.toString(),
     startAt,
     endAt,
@@ -223,12 +231,21 @@ export const rescheduleShowtime = async (
       SHOWTIME_ERROR.SHOWTIME_CONFLICT,
     );
   }
-  const updated = await updatePublishedShowtimeTime({
-    showtimeId,
-    startAt,
-    endAt,
-    now,
-  });
+  let updated;
+  if (showtime.ticketPricePlanId) {
+    const { room } = await getRoomLayout(showtime.roomId.toString());
+    const pricing = await resolvePricePlan(startAt, room.roomType);
+    updated = await reprice({
+      showtimeId, roomId: showtime.roomId, roomLayoutVersion: showtime.roomLayoutVersion,
+      seatTypePrices: pricing.seatTypePrices, now,
+      commit: (session) => updateTime({
+        showtimeId, startAt, endAt, now, ticketPricePlanId: pricing.ticketPricePlanId, session,
+      }),
+    });
+  } else {
+    // Legacy prices are preserved until an explicit, reviewed migration links a plan.
+    updated = await updateTime({ showtimeId, startAt, endAt, now });
+  }
   if (!updated) {
     throw showtimeError(
       409,
@@ -243,6 +260,8 @@ export const rescheduleShowtime = async (
     status: updated.status,
   };
 };
+
+export const rescheduleShowtime = createShowtimeRescheduler();
 
 export const cancelShowtime = async ({ showtimeId }, now = new Date()) => {
   await assertEditableShowtime(showtimeId, now);

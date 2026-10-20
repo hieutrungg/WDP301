@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 import { SeatHold } from "./seat-hold.model.js";
 import { ShowtimeSeat } from "./showtime-seat.model.js";
+import { Booking } from "./booking.model.js";
 import {
   SEAT_HOLD_STATUS,
   SHOWTIME_SEAT_STATE,
@@ -30,6 +31,7 @@ const toPlainObject = (document) =>
 export const createSeatHoldRepository = ({
   seatHoldModel = SeatHold,
   showtimeSeatModel = ShowtimeSeat,
+  bookingModel = Booking,
   connection = mongoose.connection,
 } = {}) => {
   const listByShowtime = (showtimeId, session) =>
@@ -112,7 +114,12 @@ export const createSeatHoldRepository = ({
             storedVersion !== roomLayoutVersion ||
             !expectedSeatIds.has(seatId.toString()),
         );
-        if (hasDifferentSnapshot || existing.length > seats.length) {
+        const expectedPrices = new Map(seats.filter((seat) => seat.priceSnapshot !== undefined)
+          .map(({ seatId, priceSnapshot }) => [String(seatId), priceSnapshot]));
+        const hasDifferentPrices = existing.some(({ seatId, priceSnapshot }) =>
+          expectedPrices.has(String(seatId)) && expectedPrices.get(String(seatId)) !== priceSnapshot,
+        );
+        if (hasDifferentSnapshot || hasDifferentPrices || existing.length > seats.length) {
           throw new ShowtimeSeatInitializationConflictError();
         }
 
@@ -127,7 +134,7 @@ export const createSeatHoldRepository = ({
                     seatId,
                     roomLayoutVersion,
                     state,
-                    priceSnapshot,
+                    ...(priceSnapshot !== undefined ? { priceSnapshot } : {}),
                   },
                 },
                 upsert: true,
@@ -158,6 +165,36 @@ export const createSeatHoldRepository = ({
     } finally {
       await session.endSession();
     }
+  };
+
+  const repriceUnclaimedShowtime = async ({ showtimeId, roomLayoutVersion, seats, now, commit }) => {
+    const session = await connection.startSession();
+    try {
+      let result;
+      await session.withTransaction(async () => {
+        const booking = await bookingModel.exists({ showtimeId }).session(session).exec();
+        if (booking) throw new SeatClaimConflictError();
+        await expireConflictingHolds({ showtimeId, seatIds: seats.map(({ seatId }) => seatId), now, session });
+        const activeHold = await seatHoldModel.exists({ showtimeId, status: SEAT_HOLD_STATUS.ACTIVE, expiresAt: { $gt: now } })
+          .session(session).exec();
+        const rows = await listByShowtime(showtimeId, session);
+        const expected = new Set(seats.map(({ seatId }) => String(seatId)));
+        if (activeHold || rows.length !== seats.length || rows.some((row) =>
+          !expected.has(String(row.seatId)) || row.roomLayoutVersion !== roomLayoutVersion ||
+          ![SHOWTIME_SEAT_STATE.AVAILABLE, SHOWTIME_SEAT_STATE.UNAVAILABLE].includes(row.state) || row.holdId || row.bookingId,
+        )) throw new SeatClaimConflictError();
+        const updated = await showtimeSeatModel.bulkWrite(seats.map(({ seatId, priceSnapshot }) => ({
+          updateOne: {
+            filter: { showtimeId, seatId, roomLayoutVersion, state: { $in: [SHOWTIME_SEAT_STATE.AVAILABLE, SHOWTIME_SEAT_STATE.UNAVAILABLE] } },
+            update: { $set: { priceSnapshot, updatedAt: now } },
+          },
+        })), { session, ordered: true });
+        if (updated.matchedCount !== seats.length) throw new SeatClaimConflictError();
+        result = await commit(session);
+        if (!result) throw new SeatClaimConflictError();
+      });
+      return result;
+    } finally { await session.endSession(); }
   };
 
   const findByOwnerAndCheckoutKey = (ownerId, checkoutKey, session) =>
@@ -287,7 +324,12 @@ export const createSeatHoldRepository = ({
   const claimSeat = async ({ hold, seatId, unitPrice, session }) => {
     const key = { showtimeId: hold.showtimeId, seatId };
     const result = await showtimeSeatModel.updateOne(
-      { ...key, state: SHOWTIME_SEAT_STATE.AVAILABLE },
+      {
+        ...key,
+        state: SHOWTIME_SEAT_STATE.AVAILABLE,
+        // Reject a quote read before an unsold Showtime was repriced concurrently.
+        priceSnapshot: unitPrice,
+      },
       {
         $set: {
           roomLayoutVersion: hold.roomLayoutVersion,
@@ -453,6 +495,7 @@ export const createSeatHoldRepository = ({
     findLiveForBooking,
     hasActiveShowtimeClaims,
     initializeShowtimeSeats,
+    repriceUnclaimedShowtime,
     listByShowtime,
     summarizeAvailabilityByShowtime,
     release,

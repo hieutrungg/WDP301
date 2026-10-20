@@ -24,6 +24,7 @@ import CounterPosPage from '../../features/counter-pos/pages/CounterPosPage'
 import CounterPaymentPage from '../../features/counter-pos/pages/CounterPaymentPage'
 import CounterCompletePage from '../../features/counter-pos/pages/CounterCompletePage'
 import SeatSelectionPage from '../../features/seat-selection/pages/SeatSelectionPage'
+import CheckoutPage from '../../features/booking/pages/CheckoutPage'
 import StockInPage from '../../features/inventory/pages/StockInPage'
 import StockLevelsPage from '../../features/inventory/pages/StockLevelsPage'
 
@@ -55,6 +56,7 @@ function AppRouter() {
           <Route element={<ProtectedRoute />}>
             <Route path="profile" element={<ProfilePage />} />
             <Route path="booking/:showtimeId/seats" element={<SeatSelectionPage />} />
+            <Route path="booking/:showtimeId/checkout" element={<CheckoutPage />} />
             <Route path="profile/edit" element={<EditProfilePage />} />
             <Route path="profile/change-password" element={<ChangePasswordPage />} />
           </Route>
