@@ -6,6 +6,7 @@ import {
 } from "./seat-hold.constants.js";
 import {
   seatHoldRepository,
+  SeatClaimConflictError,
   ShowtimeSeatInitializationConflictError,
 } from "./seat-hold.repository.js";
 
@@ -51,12 +52,7 @@ export const createSeatAvailabilityService = ({
   priceQuoter,
   clock = () => new Date(),
 } = {}) => {
-  const initializeForPublishedShowtime = async ({
-    showtimeId,
-    roomId,
-    roomLayoutVersion,
-    pricesBySeatType,
-  }) => {
+  const initializeForPublishedShowtime = async ({ showtimeId, roomId, roomLayoutVersion, pricesBySeatType }) => {
     const layout = await roomLayoutReader.getLayoutVersion(roomId, roomLayoutVersion);
     if (!layout || !Array.isArray(layout.seats) || layout.seats.length === 0) {
       throw error(
@@ -66,14 +62,20 @@ export const createSeatAvailabilityService = ({
       );
     }
 
-    const seats = layout.seats.map((seat) => ({
-      seatId: new mongoose.Types.ObjectId(seatIdentity(seat)),
-      state:
-        seat.status === "ENABLED"
-          ? SHOWTIME_SEAT_STATE.AVAILABLE
-          : SHOWTIME_SEAT_STATE.UNAVAILABLE,
-      priceSnapshot: pricesBySeatType?.[seat.type],
-    }));
+    const seats = layout.seats.map((seat) => {
+      const price = pricesBySeatType?.[seat.type];
+      if (pricesBySeatType && (!Number.isSafeInteger(price) || price < 0)) {
+        throw error(409, "The price plan must cover every physical seat type", SEAT_HOLD_ERROR.PRICE_QUOTE_FAILED);
+      }
+      return {
+        seatId: new mongoose.Types.ObjectId(seatIdentity(seat)),
+        state:
+          seat.status === "ENABLED"
+            ? SHOWTIME_SEAT_STATE.AVAILABLE
+            : SHOWTIME_SEAT_STATE.UNAVAILABLE,
+        ...(pricesBySeatType ? { priceSnapshot: price } : {}),
+      };
+    });
 
     try {
       const initialized = await repository.initializeShowtimeSeats({
@@ -112,6 +114,28 @@ export const createSeatAvailabilityService = ({
         availableSeatCount: row.availableSeatCount,
       }]),
     );
+  };
+
+  const repriceUnclaimedShowtime = async ({ showtimeId, roomId, roomLayoutVersion, seatTypePrices, now, commit }) => {
+    const layout = await roomLayoutReader.getLayoutVersion(roomId, roomLayoutVersion);
+    if (!layout?.seats?.length) {
+      throw error(409, "The published room layout snapshot is unavailable", SEAT_HOLD_ERROR.SHOWTIME_SEATS_NOT_INITIALIZED);
+    }
+    const seats = layout.seats.map((seat) => {
+      const priceSnapshot = seatTypePrices?.[seat.type];
+      if (!Number.isSafeInteger(priceSnapshot) || priceSnapshot < 0) {
+        throw error(409, "The price plan must cover every physical seat type", SEAT_HOLD_ERROR.PRICE_QUOTE_FAILED);
+      }
+      return { seatId: new mongoose.Types.ObjectId(seatIdentity(seat)), priceSnapshot };
+    });
+    try {
+      return await repository.repriceUnclaimedShowtime({ showtimeId, roomLayoutVersion, seats, now, commit });
+    } catch (cause) {
+      if (cause instanceof SeatClaimConflictError) {
+        throw error(409, "This showtime has booking activity and cannot be repriced", SEAT_HOLD_ERROR.SEAT_UNAVAILABLE);
+      }
+      throw cause;
+    }
   };
 
   const getSeatAvailability = async ({ showtimeId, ownerId }) => {
@@ -176,7 +200,7 @@ export const createSeatAvailabilityService = ({
     };
   };
 
-  return { discardForUnpublishedShowtime, getAvailabilitySummary, getSeatAvailability, hasActiveClaims, initializeForPublishedShowtime };
+  return { discardForUnpublishedShowtime, getAvailabilitySummary, getSeatAvailability, hasActiveClaims, initializeForPublishedShowtime, repriceUnclaimedShowtime };
 };
 
 export { projectAvailability, seatIdentity };

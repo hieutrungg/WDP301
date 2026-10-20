@@ -163,12 +163,12 @@ export const findScheduleConflict = ({ roomId, startAt, endAt, excludeShowtimeId
 export const findShowtimeById = (showtimeId) =>
   Showtime.findById(showtimeId).lean().exec();
 
-export const updatePublishedShowtimeTime = ({ showtimeId, startAt, endAt, now }) =>
+export const updatePublishedShowtimeTime = ({ showtimeId, startAt, endAt, now, ticketPricePlanId, session }) =>
   Showtime.findOneAndUpdate(
     { _id: showtimeId, status: SHOWTIME_STATUS.PUBLISHED, startAt: { $gt: now } },
-    { $set: { startAt, endAt } },
+    { $set: { startAt, endAt, ...(ticketPricePlanId ? { ticketPricePlanId } : {}) } },
     { new: true, runValidators: true },
-  ).lean().exec();
+  ).session(session ?? null).lean().exec();
 
 export const cancelPublishedShowtime = ({ showtimeId, now }) =>
   Showtime.findOneAndUpdate(
