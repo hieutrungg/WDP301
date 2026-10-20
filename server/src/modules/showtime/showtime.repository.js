@@ -4,6 +4,7 @@ import { SHOWTIME_STATUS } from "./showtime.constants.js";
 
 const toObjectId = (value) => new mongoose.Types.ObjectId(value);
 const collection = (name) => mongoose.connection.db.collection(name);
+const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 export const findPublicShowtimes = async ({ movieId, cinemaId, roomId, dateRange, page, limit, now }) => {
   const match = { status: SHOWTIME_STATUS.PUBLISHED };
@@ -60,6 +61,51 @@ export const findPublicShowtimes = async ({ movieId, cinemaId, roomId, dateRange
     },
   ];
 
+  const [result] = await collection("showtimes").aggregate(pipeline).toArray();
+  return { items: result?.items ?? [], total: result?.total?.[0]?.count ?? 0 };
+};
+
+export const findManagerShowtimes = async ({ view, cinemaId, query, dateRange, page, limit, now }) => {
+  const match = view === "history"
+    ? { $or: [{ status: SHOWTIME_STATUS.CANCELLED }, { endAt: { $lte: now } }] }
+    : { status: SHOWTIME_STATUS.PUBLISHED, startAt: { $gt: now } };
+  const pipeline = [
+    { $addFields: { startAt: { $ifNull: ["$startAt", "$startTime"] }, endAt: { $ifNull: ["$endAt", "$endTime"] } } },
+    ...(dateRange ? [{ $match: { startAt: { $gte: dateRange.start, $lt: dateRange.end } } }] : []),
+    { $match: match },
+    { $lookup: { from: "rooms", localField: "roomId", foreignField: "_id", as: "room" } },
+    { $unwind: "$room" },
+    ...(cinemaId ? [{ $match: { "room.branchId": toObjectId(cinemaId) } }] : []),
+    { $lookup: { from: "branches", localField: "room.branchId", foreignField: "_id", as: "cinema" } },
+    { $unwind: "$cinema" },
+    { $lookup: { from: "movies", localField: "movieId", foreignField: "_id", as: "movie" } },
+    { $unwind: "$movie" },
+    ...(query ? [{ $match: { $or: [
+      { "movie.title": { $regex: escapeRegex(query), $options: "i" } },
+      { "room.roomName": { $regex: escapeRegex(query), $options: "i" } },
+      { "cinema.branchName": { $regex: escapeRegex(query), $options: "i" } },
+    ] } }] : []),
+    {
+      $facet: {
+        items: [
+          { $sort: view === "history" ? { startAt: -1, _id: -1 } : { startAt: 1, _id: 1 } },
+          { $skip: (page - 1) * limit },
+          { $limit: limit },
+          { $project: {
+            _id: 1, movieId: 1, roomId: 1, roomLayoutVersion: 1, startAt: 1, endAt: 1, status: 1, createdAt: 1, updatedAt: 1,
+            cinema: { id: "$cinema._id", branchName: "$cinema.branchName", address: "$cinema.address" },
+            room: { id: "$room._id", roomName: "$room.roomName", roomType: "$room.roomType", capacity: "$room.capacity" },
+            movie: {
+              id: "$movie._id", title: "$movie.title", synopsis: "$movie.synopsis", genres: "$movie.genres",
+              cast: "$movie.cast", director: "$movie.director", duration: "$movie.duration", releaseDate: "$movie.releaseDate",
+              language: "$movie.language", ageRating: "$movie.ageRating", posterUrl: "$movie.posterUrl",
+            },
+          } },
+        ],
+        total: [{ $count: "count" }],
+      },
+    },
+  ];
   const [result] = await collection("showtimes").aggregate(pipeline).toArray();
   return { items: result?.items ?? [], total: result?.total?.[0]?.count ?? 0 };
 };

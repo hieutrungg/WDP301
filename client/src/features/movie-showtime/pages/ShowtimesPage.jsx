@@ -3,6 +3,7 @@ import { CalendarDays, ChevronRight, Clock3, Film, MapPin, RefreshCw, Search, Ti
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router'
 import ErrorState from '../../../components/common/ErrorState'
 import { useShowtimes } from '../hooks/useShowtimes'
+import { useSelectedBranchStore } from '../../../lib/store/selectedBranchStore'
 
 const dateFormatter = new Intl.DateTimeFormat('en-US', {
   timeZone: 'UTC',
@@ -71,13 +72,14 @@ function ShowtimesPage() {
   const [searchParams] = useSearchParams()
   const movieId = searchParams.get('movieId') || undefined
   const [selectedDate, setSelectedDate] = useState(dateOptions[0].key)
-  const [selectedCinemaId, setSelectedCinemaId] = useState('')
+  const selectedCinemaId = useSelectedBranchStore((state) => state.selectedBranchId)
+  const setSelectedCinemaId = useSelectedBranchStore((state) => state.setSelectedBranchId)
   const [selectedFormat, setSelectedFormat] = useState('all')
   const [timeRange, setTimeRange] = useState('all')
   const [search, setSearch] = useState('')
   const [customDate, setCustomDate] = useState('')
   const [showDatePicker, setShowDatePicker] = useState(false)
-  const [selectedShowtime, setSelectedShowtime] = useState(null)
+  const [selectedShowtimeId, setSelectedShowtimeId] = useState(null)
   const [refreshToken, setRefreshToken] = useState(0)
   const { data, error, loading } = useShowtimes({
     movieId,
@@ -87,6 +89,7 @@ function ShowtimesPage() {
   })
 
   const showtimes = useMemo(() => data?.showtimes ?? [], [data?.showtimes])
+  const selectedShowtime = showtimes.find(({ id }) => id === selectedShowtimeId) ?? null
   const cinemas = data?.cinemas ?? []
   const movie = data?.movie ?? showtimes[0]?.movie ?? location.state?.movie
   const formatOptions = useMemo(() => [
@@ -176,18 +179,18 @@ function ShowtimesPage() {
         <div className="mx-auto max-w-[1440px] space-y-4">
           <div className="flex flex-col gap-3 border-b border-white/5 pb-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex items-center gap-2 overflow-x-auto pb-1">
-              {dateOptions.map((date) => <button key={date.key} type="button" onClick={() => { setSelectedDate(date.key); setSelectedShowtime(null) }} className={`min-w-[98px] rounded-lg px-3 py-2 text-center transition-colors ${selectedDate === date.key ? 'bg-primary-container text-white shadow-crimson' : 'bg-surface-container text-on-surface hover:bg-surface-container-high'}`}><span className={`block text-[10px] font-bold uppercase tracking-wider ${selectedDate === date.key ? 'text-white/75' : 'text-on-surface-variant'}`}>{date.day}</span><span className="block font-heading text-lg font-bold">{date.date}</span></button>)}
+              {dateOptions.map((date) => <button key={date.key} type="button" onClick={() => { setSelectedDate(date.key); setSelectedShowtimeId(null) }} className={`min-w-[98px] rounded-lg px-3 py-2 text-center transition-colors ${selectedDate === date.key ? 'bg-primary-container text-white shadow-crimson' : 'bg-surface-container text-on-surface hover:bg-surface-container-high'}`}><span className={`block text-[10px] font-bold uppercase tracking-wider ${selectedDate === date.key ? 'text-white/75' : 'text-on-surface-variant'}`}>{date.day}</span><span className="block font-heading text-lg font-bold">{date.date}</span></button>)}
             </div>
             <div className="relative shrink-0">
               <button type="button" onClick={() => setShowDatePicker((open) => !open)} className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-surface-container-high px-4 py-3 text-sm font-semibold transition-colors hover:bg-surface-bright sm:w-auto"><CalendarDays className="size-4 text-secondary" />Select Another Date</button>
-              {showDatePicker && <div className="absolute right-0 z-20 mt-2 w-64 rounded-xl border border-white/10 bg-surface-container p-4 shadow-2xl"><label className="mb-2 block text-xs font-semibold text-on-surface-variant" htmlFor="showtime-date">Select a show date</label><input id="showtime-date" type="date" min={getVietnamDateKey()} value={customDate} onChange={(event) => { setCustomDate(event.target.value); if (event.target.value) { setSelectedDate(event.target.value); setSelectedShowtime(null); setShowDatePicker(false) } }} className="w-full rounded-lg bg-surface-container-high px-3 py-2 text-sm text-on-surface outline-none focus:ring-1 focus:ring-primary-container" /></div>}
+              {showDatePicker && <div className="absolute right-0 z-20 mt-2 w-64 rounded-xl border border-white/10 bg-surface-container p-4 shadow-2xl"><label className="mb-2 block text-xs font-semibold text-on-surface-variant" htmlFor="showtime-date">Select a show date</label><input id="showtime-date" type="date" min={getVietnamDateKey()} value={customDate} onChange={(event) => { setCustomDate(event.target.value); if (event.target.value) { setSelectedDate(event.target.value); setSelectedShowtimeId(null); setShowDatePicker(false) } }} className="w-full rounded-lg bg-surface-container-high px-3 py-2 text-sm text-on-surface outline-none focus:ring-1 focus:ring-primary-container" /></div>}
             </div>
           </div>
 
           <div className="flex flex-col gap-4 border-b border-white/5 pb-4">
             <div className="flex flex-col gap-3 md:flex-row">
               <label className="relative block min-w-0 flex-1"><span className="sr-only">Search theatres</span><Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-on-surface-variant" /><input value={search} onChange={(event) => setSearch(event.target.value)} type="search" placeholder="Search theatres or addresses..." className="w-full rounded-lg bg-surface-container-high py-2.5 pl-10 pr-9 text-xs text-on-surface outline-none placeholder:text-on-surface-variant focus:ring-1 focus:ring-primary-container" /></label>
-              <label className="flex items-center gap-3 rounded-lg bg-surface-container-high px-3 py-2"><MapPin className="size-4 shrink-0 text-primary" /><span className="sr-only">Select a branch</span><select value={selectedCinemaId} onChange={(event) => { setSelectedCinemaId(event.target.value); setSelectedShowtime(null) }} className="min-w-0 flex-1 bg-transparent text-xs text-on-surface outline-none"><option value="" className="bg-surface-container">All active branches</option>{cinemas.map((cinema) => <option key={cinema.id} value={cinema.id} className="bg-surface-container">{cinema.branchName}</option>)}</select></label>
+              <label className="flex items-center gap-3 rounded-lg bg-surface-container-high px-3 py-2"><MapPin className="size-4 shrink-0 text-primary" /><span className="sr-only">Select a branch</span><select value={selectedCinemaId} onChange={(event) => { setSelectedCinemaId(event.target.value); setSelectedShowtimeId(null) }} className="min-w-0 flex-1 bg-transparent text-xs text-on-surface outline-none"><option value="" className="bg-surface-container">All active branches</option>{cinemas.map((cinema) => <option key={cinema.id} value={cinema.id} className="bg-surface-container">{cinema.branchName}</option>)}</select></label>
             </div>
             <div className="flex items-center gap-2 overflow-x-auto"><span className="shrink-0 text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">Format</span>{formatOptions.map((format) => <button key={format} type="button" onClick={() => setSelectedFormat(format)} className={`shrink-0 rounded-full px-3 py-1.5 text-[10px] font-bold transition-colors ${selectedFormat === format ? 'bg-primary-container text-white' : 'bg-surface-container text-on-surface-variant hover:bg-surface-container-high'}`}>{format === 'all' ? 'All Formats' : format}</button>)}</div>
             <div className="flex items-center gap-2 overflow-x-auto"><span className="shrink-0 text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">Time</span>{timeRanges.map((range) => <button key={range.value} type="button" onClick={() => setTimeRange(range.value)} className={`shrink-0 rounded px-3 py-1.5 text-xs transition-colors ${timeRange === range.value ? 'bg-surface-bright font-semibold text-white' : 'bg-surface-container text-on-surface-variant hover:bg-surface-container-high'}`}>{range.label}</button>)}</div>
@@ -211,9 +214,9 @@ function ShowtimesPage() {
                     {cinema.rooms.map(({ room, showtimes: roomShowtimes }) => <section key={room.id}>
                       <div className="mb-3 flex flex-wrap items-center justify-between gap-2"><div><h3 className="font-heading text-sm font-bold">{room.roomName}</h3><p className="mt-1 text-[11px] text-on-surface-variant">{room.roomType || 'Screening room'}</p></div></div>
                       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">{roomShowtimes.map((showtime) => {
-                        const active = selectedShowtime?.id === showtime.id
+                        const active = selectedShowtimeId === showtime.id
                         const startsAt = timeFormatter.format(new Date(showtime.startAt))
-                        return <button key={showtime.id} type="button" onClick={() => setSelectedShowtime(showtime)} className={`rounded-lg border p-3 text-left transition-all ${active ? 'border-primary-container bg-primary-container/10 shadow-crimson' : 'border-white/5 bg-surface-container hover:border-white/15 hover:bg-surface-container-high'}`}><span className={`block font-heading text-xl font-bold ${active ? 'text-primary' : 'text-on-surface'}`}>{startsAt}</span><span className="mt-1 block text-[10px] text-on-surface-variant">{showtime.movie.title}</span><span className={`mt-2 inline-flex rounded px-2 py-1 text-[9px] font-bold uppercase tracking-wider ${active ? 'bg-primary-container text-white' : 'bg-surface-bright text-on-surface'}`}>{active ? 'Selected' : showtime.displayStatus.replaceAll('_', ' ')}</span></button>
+                        return <button key={showtime.id} type="button" onClick={() => setSelectedShowtimeId(showtime.id)} className={`rounded-lg border p-3 text-left transition-all ${active ? 'border-primary-container bg-primary-container/10 shadow-crimson' : 'border-white/5 bg-surface-container hover:border-white/15 hover:bg-surface-container-high'}`}><span className={`block font-heading text-xl font-bold ${active ? 'text-primary' : 'text-on-surface'}`}>{startsAt}</span><span className="mt-1 block text-[10px] text-on-surface-variant">{showtime.movie.title}</span><span className={`mt-2 inline-flex rounded px-2 py-1 text-[9px] font-bold uppercase tracking-wider ${active ? 'bg-primary-container text-white' : 'bg-surface-bright text-on-surface'}`}>{active ? 'Selected' : showtime.displayStatus.replaceAll('_', ' ')}</span></button>
                       })}</div>
                     </section>)}
                   </div>

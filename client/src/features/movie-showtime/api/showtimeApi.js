@@ -1,10 +1,8 @@
 import httpClient from '../../../lib/api/httpClient'
+import { getPublicCinemas } from '../../../lib/api/publicCinemaApi'
 import { getMovie } from './movieApi'
 
-export async function getPublicCinemas(params, signal) {
-  const response = await httpClient.get('/cinemas', { params, signal })
-  return { items: response.data.data, meta: response.data.meta }
-}
+export { getPublicCinemas }
 
 export async function getPublicShowtimes(params, signal) {
   const { movieId, ...query } = params

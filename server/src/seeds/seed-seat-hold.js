@@ -1,12 +1,8 @@
 import { deterministicObjectId, summarizeBulkWrite } from "./seed-utils.js";
+import { MVP_SEAT_TYPE_PRICES_VND } from "../modules/showtime/showtime.pricing.js";
 
-// Development fixtures only. These values make the approved SeatHold flow testable; they are not
-// a production pricing policy and must be replaced by the Showtime/Pricing owner's publish port.
-export const DEVELOPMENT_SEAT_PRICE_VND = Object.freeze({
-  STANDARD: 90_000,
-  VIP: 120_000,
-  DOUBLE_LUXURY: 180_000,
-});
+// Development seed data uses the same seed-first defaults as new Showtime publication.
+export const DEVELOPMENT_SEAT_PRICE_VND = MVP_SEAT_TYPE_PRICES_VND;
 
 const priceForSeat = (seat) => DEVELOPMENT_SEAT_PRICE_VND[seat.type] ?? null;
 
@@ -80,7 +76,6 @@ export const seedSeatHoldDemoData = async (database, now = new Date()) => {
           update: {
             $set: {
               roomLayoutVersion: layout.layoutVersion,
-              priceSnapshot: unitPrice,
               updatedAt: now,
             },
             // Re-running the seed never resets HELD/SOLD runtime state.
@@ -89,6 +84,7 @@ export const seedSeatHoldDemoData = async (database, now = new Date()) => {
               showtimeId: showtime._id,
               seatId: seat._id,
               state: seat.status === "ENABLED" ? "AVAILABLE" : "UNAVAILABLE",
+              priceSnapshot: unitPrice,
               createdAt: now,
             },
           },

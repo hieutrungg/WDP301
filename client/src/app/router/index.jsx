@@ -1,4 +1,5 @@
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router'
+import { useLayoutEffect } from 'react'
+import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router'
 import ChangePasswordPage from '../../features/account/pages/ChangePasswordPage'
 import EditProfilePage from '../../features/account/pages/EditProfilePage'
 import ProfilePage from '../../features/account/pages/ProfilePage'
@@ -26,9 +27,20 @@ import SeatSelectionPage from '../../features/seat-selection/pages/SeatSelection
 import StockInPage from '../../features/inventory/pages/StockInPage'
 import StockLevelsPage from '../../features/inventory/pages/StockLevelsPage'
 
+function ScrollToTop() {
+  const { pathname } = useLocation()
+
+  useLayoutEffect(() => {
+    window.scrollTo(0, 0)
+  }, [pathname])
+
+  return null
+}
+
 function AppRouter() {
   return (
     <BrowserRouter>
+      <ScrollToTop />
       <Routes>
         <Route element={<PublicLayout />}>
           {/* Home stays reachable for every role (logo link). Role redirect (A-16) happens on login only. */}

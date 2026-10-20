@@ -39,6 +39,39 @@ export const createSeatHoldRepository = ({
       .lean()
       .exec();
 
+  const summarizeAvailabilityByShowtime = (showtimeIds, now = new Date()) =>
+    showtimeSeatModel.aggregate([
+      { $match: { showtimeId: { $in: showtimeIds } } },
+      {
+        $group: {
+          _id: "$showtimeId",
+          totalSeatCount: {
+            $sum: { $cond: [{ $ne: ["$state", SHOWTIME_SEAT_STATE.UNAVAILABLE] }, 1, 0] },
+          },
+          availableSeatCount: {
+            $sum: {
+              $cond: [
+                {
+                  $or: [
+                    { $eq: ["$state", SHOWTIME_SEAT_STATE.AVAILABLE] },
+                    {
+                      $and: [
+                        { $eq: ["$state", SHOWTIME_SEAT_STATE.HELD] },
+                        { $ne: [{ $ifNull: ["$holdExpiresAt", null] }, null] },
+                        { $lte: ["$holdExpiresAt", now] },
+                      ],
+                    },
+                  ],
+                },
+                1,
+                0,
+              ],
+            },
+          },
+        },
+      },
+    ]).exec();
+
   const deleteUnpublishedShowtimeSeats = (showtimeId) =>
     showtimeSeatModel.deleteMany({ showtimeId }).exec();
 
@@ -85,7 +118,7 @@ export const createSeatHoldRepository = ({
 
         if (existing.length < seats.length) {
           await showtimeSeatModel.bulkWrite(
-            seats.map(({ seatId, state }) => ({
+            seats.map(({ seatId, state, priceSnapshot }) => ({
               updateOne: {
                 filter: { showtimeId, seatId },
                 update: {
@@ -94,6 +127,7 @@ export const createSeatHoldRepository = ({
                     seatId,
                     roomLayoutVersion,
                     state,
+                    priceSnapshot,
                   },
                 },
                 upsert: true,
@@ -420,6 +454,7 @@ export const createSeatHoldRepository = ({
     hasActiveShowtimeClaims,
     initializeShowtimeSeats,
     listByShowtime,
+    summarizeAvailabilityByShowtime,
     release,
   };
 };

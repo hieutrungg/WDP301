@@ -2,9 +2,11 @@ import {
   Armchair,
   Boxes,
   CalendarClock,
+  CalendarDays,
   ChartLine,
   ChevronRight,
   Film,
+  History,
   House,
   LayoutDashboard,
   LogOut,
@@ -24,7 +26,15 @@ import { useAuth } from '../features/auth/hooks/useAuth'
 const navItems = [
   { label: 'Dashboard', icon: LayoutDashboard },
   { label: 'Movies', icon: Film },
-  { label: 'Showtimes', icon: CalendarClock, to: '/manager/showtimes' },
+  {
+    label: 'Showtimes',
+    icon: CalendarClock,
+    to: '/manager/showtimes',
+    children: [
+      { label: 'Schedule', to: '/manager/showtimes', icon: CalendarDays },
+      { label: 'History', to: '/manager/showtimes?view=history', icon: History, view: 'history' },
+    ],
+  },
   { label: 'Seat Maps', icon: Armchair, to: '/manager/seat-maps', permission: 'room.manage' },
   { label: 'Concession Stock', icon: Boxes, to: '/manager/inventory', permission: 'inventory.view' },
   { label: 'Promotions', icon: TicketPercent },
@@ -33,6 +43,8 @@ const navItems = [
 ]
 
 function SidebarNav({ permissions, onNavigate }) {
+  const location = useLocation()
+  const showtimeHistorySelected = location.search.includes('view=history')
   return (
     <nav className="grid gap-1" aria-label="Manager operations">
       <p className="px-3 pb-2 text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">
@@ -40,19 +52,39 @@ function SidebarNav({ permissions, onNavigate }) {
       </p>
       {navItems
         .filter(({ permission }) => !permission || permissions.has(permission))
-        .map(({ label, icon: Icon, to }) =>
+        .map(({ label, icon: Icon, to, children }) =>
           to ? (
-            <NavLink
-              key={label}
-              to={to}
-              onClick={onNavigate}
-              className={({ isActive }) =>
-                `flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold transition-colors ${isActive ? 'bg-primary-container text-white shadow-crimson' : 'text-on-surface hover:bg-surface-container'}`
-              }
-            >
-              <Icon className="size-4" />
-              {label}
-            </NavLink>
+            <div key={label}>
+              <NavLink
+                to={to}
+                onClick={onNavigate}
+                className={({ isActive }) =>
+                  `flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold transition-colors ${isActive ? 'bg-primary-container text-white shadow-crimson' : 'text-on-surface hover:bg-surface-container'}`
+                }
+              >
+                <Icon className="size-4" />
+                {label}
+              </NavLink>
+              {children && location.pathname.startsWith(to) && (
+                <div className="ml-5 mt-1 grid gap-1 border-l border-white/10 pl-3">
+                  {children.map(({ label: childLabel, to: childTo, icon: ChildIcon, view }) => {
+                    const selected = view === 'history' ? showtimeHistorySelected : !showtimeHistorySelected
+                    return (
+                      <Link
+                        key={childLabel}
+                        to={childTo}
+                        onClick={onNavigate}
+                        aria-current={selected ? 'page' : undefined}
+                        className={`flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition-colors ${selected ? 'bg-surface-container-high text-primary' : 'text-on-surface-variant hover:bg-surface-container hover:text-on-surface'}`}
+                      >
+                        {ChildIcon && <ChildIcon className="size-3.5" />}
+                        {childLabel}
+                      </Link>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
           ) : (
             <span
               key={label}

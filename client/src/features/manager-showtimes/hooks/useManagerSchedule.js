@@ -2,13 +2,13 @@ import { useEffect, useState } from 'react'
 import { getApiErrorMessage } from '../../../lib/api/apiError'
 import { getManagerScheduleData } from '../api/managerShowtimeApi'
 
-export function useManagerSchedule(date, refreshToken) {
+export function useManagerSchedule({ date, view, cinemaId, query, page }, refreshToken) {
   const [state, setState] = useState({ key: '', data: null, error: '' })
-  const key = `${date}:${refreshToken}`
+  const key = `${date}:${view}:${cinemaId}:${query}:${page}:${refreshToken}`
 
   useEffect(() => {
     const controller = new AbortController()
-    getManagerScheduleData(date, controller.signal)
+    getManagerScheduleData({ date, view, cinemaId, query, page }, controller.signal)
       .then((data) => setState({ key, data, error: '' }))
       .catch((error) => {
         if (!controller.signal.aborted) {
@@ -17,7 +17,7 @@ export function useManagerSchedule(date, refreshToken) {
       })
 
     return () => controller.abort()
-  }, [date, key])
+  }, [date, view, cinemaId, query, page, key])
 
   return { ...state, loading: state.key !== key }
 }

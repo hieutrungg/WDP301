@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ChevronDown, LogOut, MapPin, Menu, Search, X } from "lucide-react";
 import AppLogo from "./AppLogo";
 import UserMenu from "./UserMenu";
@@ -6,6 +6,8 @@ import { getUserMenuItems } from "./userMenuItems";
 import { Link, NavLink, useNavigate } from "react-router";
 import { toast } from "sonner";
 import { useAuth } from "../../features/auth/hooks/useAuth";
+import { getPublicCinemas } from "../../lib/api/publicCinemaApi";
+import { useSelectedBranchStore } from "../../lib/store/selectedBranchStore";
 
 const navItems = [
   { label: "Home", to: "/" },
@@ -20,8 +22,63 @@ function Header() {
   const { account, initialized, isAuthenticated, logout } = useAuth();
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState("");
+  const [branches, setBranches] = useState([]);
+  const [branchesLoading, setBranchesLoading] = useState(true);
+  const [branchesError, setBranchesError] = useState(false);
+  const [branchesRequest, setBranchesRequest] = useState(0);
+  const [branchMenuOpen, setBranchMenuOpen] = useState(false);
+  const branchPickerRef = useRef(null);
+  const selectedBranchId = useSelectedBranchStore((state) => state.selectedBranchId);
+  const setSelectedBranchId = useSelectedBranchStore((state) => state.setSelectedBranchId);
+  const selectedBranch = branches.find(({ id }) => id === selectedBranchId);
   const displayName = account?.username || account?.email || "";
   const avatarLabel = displayName.charAt(0).toUpperCase();
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const loadBranches = async () => {
+      setBranchesLoading(true);
+      setBranchesError(false);
+      try {
+        const firstPage = await getPublicCinemas({ page: 1, limit: 50 }, controller.signal);
+        const remainingPages = await Promise.all(
+          Array.from({ length: Math.max(0, firstPage.meta.totalPages - 1) }, (_, index) =>
+            getPublicCinemas({ page: index + 2, limit: 50 }, controller.signal),
+          ),
+        );
+        const allBranches = [firstPage, ...remainingPages].flatMap(({ items }) => items);
+        setBranches(allBranches);
+      } catch {
+        if (!controller.signal.aborted) setBranchesError(true);
+      } finally {
+        if (!controller.signal.aborted) setBranchesLoading(false);
+      }
+    };
+    loadBranches();
+    return () => controller.abort();
+  }, [branchesRequest, setSelectedBranchId]);
+
+  useEffect(() => {
+    if (!branchesLoading && !branchesError && selectedBranchId && !branches.some(({ id }) => id === selectedBranchId)) {
+      setSelectedBranchId("");
+    }
+  }, [branches, branchesError, branchesLoading, selectedBranchId, setSelectedBranchId]);
+
+  useEffect(() => {
+    if (!branchMenuOpen) return undefined;
+    const closeOnOutsideClick = (event) => {
+      if (!branchPickerRef.current?.contains(event.target)) setBranchMenuOpen(false);
+    };
+    const closeOnEscape = (event) => {
+      if (event.key === "Escape") setBranchMenuOpen(false);
+    };
+    document.addEventListener("mousedown", closeOnOutsideClick);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("mousedown", closeOnOutsideClick);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [branchMenuOpen]);
 
   const handleMovieSearch = (event) => {
     event.preventDefault()
@@ -49,14 +106,48 @@ function Header() {
       <div className="mx-auto flex h-20 max-w-[1440px] items-center justify-between gap-3 px-4 sm:px-6 lg:px-8">
         <div className="flex min-w-0 items-center gap-6">
           <AppLogo />
-          <button
-            type="button"
-            className="hidden items-center gap-1 rounded-lg bg-surface-container-high px-3 py-2 text-xs text-on-surface transition-colors hover:bg-surface-variant xl:flex"
-          >
-            <MapPin className="size-4 text-primary-container" />
-            <span>F-Cinema Landmark 81, HCMC</span>
-            <ChevronDown className="size-4 text-on-surface-variant" />
-          </button>
+          <div className="relative hidden xl:block" ref={branchPickerRef}>
+            <button
+              type="button"
+              onClick={() => setBranchMenuOpen((open) => !open)}
+              aria-haspopup="menu"
+              aria-expanded={branchMenuOpen}
+              aria-label="Choose a cinema branch"
+              className="flex max-w-[250px] items-center gap-2 rounded-lg bg-surface-container-high px-3 py-2 text-xs text-on-surface transition-colors hover:bg-surface-variant"
+            >
+              <MapPin className="size-4 shrink-0 text-primary-container" />
+              <span className="truncate">{selectedBranch?.branchName || (branchesLoading ? "Loading cinemas…" : branchesError ? "Cinemas unavailable" : "All cinemas")}</span>
+              <ChevronDown className={`size-4 shrink-0 text-on-surface-variant transition-transform ${branchMenuOpen ? "rotate-180" : ""}`} />
+            </button>
+            {branchMenuOpen && (
+              <div role="menu" aria-label="Cinema branches" className="absolute left-0 top-full z-[60] mt-2 max-h-80 w-72 overflow-y-auto rounded-xl border border-white/10 bg-surface-container-low p-2 shadow-2xl">
+                <button
+                  type="button"
+                  role="menuitemradio"
+                  aria-checked={!selectedBranchId}
+                  onClick={() => { setSelectedBranchId(""); setBranchMenuOpen(false) }}
+                  className="w-full rounded-lg px-3 py-2.5 text-left text-sm font-semibold text-on-surface hover:bg-surface-container-high"
+                >All active branches</button>
+                {branchesLoading ? (
+                  <p role="status" className="px-3 py-4 text-sm text-on-surface-variant">Loading branches…</p>
+                ) : branchesError ? (
+                  <div className="px-3 py-3 text-sm text-on-surface-variant"><p>Could not load branches.</p><button type="button" onClick={() => setBranchesRequest((value) => value + 1)} className="mt-2 font-semibold text-primary hover:underline">Try again</button></div>
+                ) : branches.length ? branches.map((branch) => (
+                  <button
+                    key={branch.id}
+                    type="button"
+                    role="menuitemradio"
+                    aria-checked={selectedBranchId === branch.id}
+                    onClick={() => { setSelectedBranchId(branch.id); setBranchMenuOpen(false) }}
+                    className="w-full rounded-lg px-3 py-2.5 text-left hover:bg-surface-container-high"
+                  >
+                    <span className="block text-sm font-semibold text-on-surface">{branch.branchName}</span>
+                    <span className="mt-0.5 block truncate text-xs text-on-surface-variant">{branch.address}</span>
+                  </button>
+                )) : <p className="px-3 py-4 text-sm text-on-surface-variant">No active branches are available.</p>}
+              </div>
+            )}
+          </div>
         </div>
 
         <nav

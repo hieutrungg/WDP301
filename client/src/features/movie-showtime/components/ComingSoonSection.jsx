@@ -1,36 +1,39 @@
-import { ArrowRight, Bell, CalendarClock } from 'lucide-react'
-import TrailerPlayerButton from './TrailerPlayerButton'
+import { CalendarDays, Film } from 'lucide-react'
+import { Link } from 'react-router'
+
+const releaseDateFormatter = new Intl.DateTimeFormat('en-GB', {
+  day: '2-digit',
+  month: 'short',
+  year: 'numeric',
+  timeZone: 'UTC',
+})
 
 function ComingSoonSection({ movies }) {
+  if (movies.length === 0) return null
+
   return (
-    <section id="showtimes" className="mx-auto w-full max-w-[1440px] px-4 py-10 sm:px-6 lg:px-8">
-      <div className="mb-6 flex flex-col justify-between gap-4 md:flex-row md:items-end">
+    <section className="mx-auto w-full max-w-[1440px] px-4 py-12 sm:px-6 lg:px-8" aria-labelledby="coming-soon-heading">
+      <div className="mb-6 flex items-end justify-between gap-4">
         <div>
-          <div className="flex items-center gap-1 text-secondary"><CalendarClock className="size-5" /><span className="text-[11px] font-bold uppercase tracking-wider">Upcoming Releases</span></div>
-          <div className="mt-1 flex flex-wrap items-center gap-2">
-            <h2 className="font-heading text-2xl font-bold tracking-tight text-on-surface sm:text-3xl">Coming Soon to F-Cinema</h2>
-            <span className="rounded-full bg-secondary-container px-2 py-1 text-[10px] font-bold text-on-secondary-container">SUMMER 2024</span>
-          </div>
+          <p className="font-heading text-xs font-bold uppercase tracking-[0.2em] text-secondary">Mark Your Calendar</p>
+          <h2 id="coming-soon-heading" className="mt-1 font-heading text-2xl font-bold text-on-surface sm:text-3xl">Coming Soon to F-Cinema</h2>
         </div>
-        <a href="#" className="hidden items-center gap-1 text-sm font-semibold text-on-surface-variant sm:flex">View Full Schedule <ArrowRight className="size-4" /></a>
+        <Link to="/movies" className="hidden rounded-lg border border-white/10 px-4 py-2 text-sm font-semibold text-on-surface transition hover:border-primary-container hover:text-primary sm:inline-flex">Explore Movies</Link>
       </div>
-      <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {movies.map((movie) => (
-          <article key={movie.id} className="group flex flex-col overflow-hidden rounded-xl border border-white/5 bg-surface-container shadow-xl">
-            <div className="relative aspect-[16/10] overflow-hidden bg-surface-container-high">
-              <img src={movie.image} alt={`${movie.title} promotional artwork`} className="size-full object-cover transition-transform duration-500 group-hover:scale-105" loading="lazy" />
-              <div className="absolute inset-0 bg-gradient-to-t from-surface-container via-surface-container/20 to-transparent" />
-              <span className="absolute left-3 top-3 rounded bg-primary-container px-2 py-1 text-[10px] font-bold text-white shadow-md">{movie.releaseDate}</span>
-              <span className="absolute right-3 top-3 rounded bg-surface-container-lowest/80 px-2 py-1 text-[10px] font-bold uppercase text-on-surface backdrop-blur-md">{movie.studio}</span>
+          <Link key={movie.id} to={`/movies/${movie.id}`} aria-label={`View details for ${movie.title}`} className="group flex min-w-0 overflow-hidden rounded-xl border border-white/5 bg-surface-container shadow-lg transition hover:-translate-y-1 hover:border-primary-container/50">
+            <div className="relative aspect-[16/10] w-[42%] shrink-0 overflow-hidden bg-surface-container-high sm:w-[38%] lg:w-[42%]">
+              {movie.posterUrl ? <img src={movie.posterUrl} alt={`${movie.title} poster`} loading="lazy" className="size-full object-cover transition-transform duration-500 group-hover:scale-105" /> : <div className="grid size-full place-items-center"><Film className="size-8 text-primary" aria-hidden="true" /></div>}
+              <span className="absolute inset-0 bg-gradient-to-r from-transparent to-surface-container/80" />
             </div>
-            <div className="flex flex-1 flex-col justify-between gap-4 p-4">
-              <div><h3 className="font-heading text-lg font-semibold text-on-surface transition-colors group-hover:text-primary">{movie.title}</h3><p className="mt-1 text-xs text-on-surface-variant">{movie.genres}</p></div>
-              <div className="flex gap-2">
-                <button type="button" className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-surface-container-high px-3 py-2 text-xs text-on-surface transition-colors hover:bg-surface-container-highest"><Bell className="size-4 text-secondary" />Remind Me</button>
-                <TrailerPlayerButton trailerUrl={movie.trailerUrl} title={movie.title} iconOnly className="grid size-9 place-items-center rounded-lg bg-surface-container-high text-on-surface transition-colors hover:bg-surface-container-highest disabled:hover:bg-surface-container-high" iconClassName="size-4" />
-              </div>
+            <div className="flex min-w-0 flex-1 flex-col justify-center gap-2 p-3 sm:p-4">
+              <span className="w-fit rounded bg-secondary-container/20 px-2 py-1 text-[9px] font-bold uppercase tracking-wider text-secondary">Coming Soon</span>
+              <h3 className="line-clamp-2 font-heading text-sm font-bold leading-snug text-on-surface transition-colors group-hover:text-primary sm:text-base">{movie.title}</h3>
+              <p className="line-clamp-1 text-xs text-on-surface-variant">{movie.genres?.join(' · ')}</p>
+              <span className="inline-flex items-center gap-1.5 text-xs font-medium text-on-surface-variant"><CalendarDays className="size-3.5 text-secondary" aria-hidden="true" />{releaseDateFormatter.format(new Date(`${movie.releaseDate.slice(0, 10)}T12:00:00Z`))}</span>
             </div>
-          </article>
+          </Link>
         ))}
       </div>
     </section>

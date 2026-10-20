@@ -24,7 +24,7 @@ function getYouTubeVideoId(trailerUrl) {
 function TrailerPlayerButton({
   trailerUrl,
   title,
-  label = 'Watch trailer',
+  label = 'Watch Trailer',
   className = '',
   iconClassName = 'size-5',
   iconOnly = false,
