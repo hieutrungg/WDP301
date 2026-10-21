@@ -72,7 +72,7 @@ const serializeCreatedShowtime = (showtime, room) => ({
 });
 
 export const createShowtimePublisher = ({
-  getMovie = movieService.getMovie,
+  withMovieForScheduling = movieService.withMovieForScheduling,
   getRoomLayout = roomService.getSeatLayout,
   findConflict = findScheduleConflict,
   resolvePricePlan = resolvePricing,
@@ -85,64 +85,63 @@ export const createShowtimePublisher = ({
   { movieId, roomId, startAt: startAtInput },
   now = new Date(),
 ) => {
-  const [movie, roomDetail] = await Promise.all([
-    getMovie(movieId),
-    getRoomLayout(roomId),
-  ]);
-  const { room, layout } = roomDetail;
+  const { draft, room, pricing } = await withMovieForScheduling(movieId, async (movie, session) => {
+    const roomDetail = await getRoomLayout(roomId);
+    const { room, layout } = roomDetail;
 
-  if (
-    !["ACTIVE", "AVAILABLE"].includes(room.status) ||
-    room.branch.status !== "ACTIVE"
-  ) {
-    throw showtimeError(
-      409,
-      "Select an active room at an active cinema",
-      SHOWTIME_ERROR.ROOM_UNAVAILABLE,
+    if (
+      !["ACTIVE", "AVAILABLE"].includes(room.status) ||
+      room.branch.status !== "ACTIVE"
+    ) {
+      throw showtimeError(
+        409,
+        "Select an active room at an active cinema",
+        SHOWTIME_ERROR.ROOM_UNAVAILABLE,
+      );
+    }
+    if (
+      !layout ||
+      layout.summary.operationalSeatCapacity < 1 ||
+      layout.layoutVersion < 1
+    ) {
+      throw showtimeError(
+        409,
+        "Configure a valid seat map before scheduling this room",
+        SHOWTIME_ERROR.ROOM_LAYOUT_REQUIRED,
+      );
+    }
+    const startAt = new Date(startAtInput);
+    if (startAt <= now) {
+      throw showtimeError(
+        400,
+        "Showtime must start in the future",
+        SHOWTIME_ERROR.START_TIME_NOT_FUTURE,
+      );
+    }
+    const endAt = new Date(
+      startAt.getTime() + movie.duration * 60_000 + SHOWTIME_CLEANUP_BUFFER_MS,
     );
-  }
-  if (
-    !layout ||
-    layout.summary.operationalSeatCapacity < 1 ||
-    layout.layoutVersion < 1
-  ) {
-    throw showtimeError(
-      409,
-      "Configure a valid seat map before scheduling this room",
-      SHOWTIME_ERROR.ROOM_LAYOUT_REQUIRED,
-    );
-  }
-  const startAt = new Date(startAtInput);
-  if (startAt <= now) {
-    throw showtimeError(
-      400,
-      "Showtime must start in the future",
-      SHOWTIME_ERROR.START_TIME_NOT_FUTURE,
-    );
-  }
-  const endAt = new Date(
-    startAt.getTime() + movie.duration * 60_000 + SHOWTIME_CLEANUP_BUFFER_MS,
-  );
-  const conflict = await findConflict({ roomId, startAt, endAt });
-  if (conflict) {
-    throw showtimeError(
-      409,
-      "This room already has a showtime during that time window",
-      SHOWTIME_ERROR.SHOWTIME_CONFLICT,
-    );
-  }
+    const conflict = await findConflict({ roomId, startAt, endAt });
+    if (conflict) {
+      throw showtimeError(
+        409,
+        "This room already has a showtime during that time window",
+        SHOWTIME_ERROR.SHOWTIME_CONFLICT,
+      );
+    }
 
-  const pricing = await resolvePricePlan(startAt, room.roomType);
-  const draft = await createDraft({
-    movieId: new mongoose.Types.ObjectId(movieId),
-    roomId: new mongoose.Types.ObjectId(roomId),
-    startAt,
-    endAt,
-    status: SHOWTIME_STATUS.DRAFT,
-    roomLayoutVersion: layout.layoutVersion,
-    ticketPricePlanId: pricing.ticketPricePlanId,
+    const pricing = await resolvePricePlan(startAt, room.roomType);
+    const draft = await createDraft({
+      movieId: new mongoose.Types.ObjectId(movieId),
+      roomId: new mongoose.Types.ObjectId(roomId),
+      startAt,
+      endAt,
+      status: SHOWTIME_STATUS.DRAFT,
+      roomLayoutVersion: layout.layoutVersion,
+      ticketPricePlanId: pricing.ticketPricePlanId,
+    }, session);
+    return { draft, room, pricing };
   });
-
   try {
     await initializeSeats({
       showtimeId: draft._id,
@@ -168,7 +167,7 @@ export const createShowtimePublisher = ({
   }
 };
 
-export const createShowtime = createShowtimePublisher();
+export const createShowtime = createShowtimePublisher({ withMovieForScheduling: movieService.withMovieForScheduling });
 
 const assertEditableShowtime = async (showtimeId, now) => {
   const showtime = await findShowtimeById(showtimeId);

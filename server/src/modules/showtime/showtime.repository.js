@@ -177,7 +177,10 @@ export const cancelPublishedShowtime = ({ showtimeId, now }) =>
     { new: true, runValidators: true },
   ).lean().exec();
 
-export const createDraftShowtime = (input) => Showtime.create(input);
+export const createDraftShowtime = async (input, session) => {
+  const [draft] = await Showtime.create([input], session ? { session } : {});
+  return draft;
+};
 
 export const publishShowtime = (showtimeId) =>
   Showtime.findOneAndUpdate(

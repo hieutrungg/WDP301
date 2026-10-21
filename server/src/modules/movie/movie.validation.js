@@ -25,7 +25,7 @@ const dateString = z
     return !Number.isNaN(parsedDate.getTime()) && parsedDate.toISOString().slice(0, 10) === value;
   }, "Invalid date");
 
-const movieListQuerySchema = z
+const movieListQueryBaseSchema = z
   .object({
     q: optionalTrimmedString(100),
     genre: optionalTrimmedString(60),
@@ -43,12 +43,14 @@ const movieListQuerySchema = z
     sort: z.enum(["releaseDate", "title", "duration"]).default("releaseDate"),
     order: z.enum(["asc", "desc"]).default("desc"),
   })
-  .strict()
-  .refine(
-    ({ releaseFrom, releaseTo }) =>
-      !releaseFrom || !releaseTo || releaseFrom <= releaseTo,
-    { message: "releaseFrom must be on or before releaseTo", path: ["releaseFrom"] },
-  );
+  .strict();
+
+const validReleaseRange = ({ releaseFrom, releaseTo }) =>
+  !releaseFrom || !releaseTo || releaseFrom <= releaseTo;
+const releaseRangeError = { message: "releaseFrom must be on or before releaseTo", path: ["releaseFrom"] };
+const movieListQuerySchema = movieListQueryBaseSchema.refine(validReleaseRange, releaseRangeError);
+const managerMovieListQuerySchema = movieListQueryBaseSchema.omit({ status: true })
+  .refine(validReleaseRange, releaseRangeError);
 
 const toFieldErrors = (issues) =>
   issues.map((issue) => ({
@@ -71,27 +73,54 @@ export const parseMovieListQuery = (query) => {
   return result.data;
 };
 
+export const parseManagerMovieListQuery = (query) => {
+  const result = managerMovieListQuerySchema.safeParse(query);
+  if (!result.success) {
+    throw new AppError(400, "Invalid movie query", toFieldErrors(result.error.issues), "INVALID_QUERY");
+  }
+  return result.data;
+};
+
 const requiredText = z.string().trim().min(1, "This field is required");
 const httpUrl = z.string().trim().url("Enter a valid URL").refine(
   (value) => /^https?:\/\//i.test(value), "Use an HTTP or HTTPS URL",
 );
-const movieCreateSchema = z.object({
+const movieMetadataSchema = z.object({
   title: requiredText,
   synopsis: requiredText,
   genres: z.array(requiredText).min(1, "Add at least one genre"),
-  cast: z.array(requiredText).default([]),
-  duration: z.number().int().positive(),
+  cast: z.array(requiredText),
   releaseDate: dateString,
   language: requiredText,
   director: requiredText,
   ageRating: requiredText,
   posterUrl: httpUrl,
+  trailerUrl: z.union([httpUrl, z.literal("")]),
+}).strict();
+
+const movieCreateSchema = movieMetadataSchema.extend({
+  cast: z.array(requiredText).default([]),
+  duration: z.number().int().positive(),
   trailerUrl: z.union([httpUrl, z.literal("")]).default(""),
   status: z.enum([MOVIE_STATUSES.DRAFT, MOVIE_STATUSES.PUBLISHED]).default(MOVIE_STATUSES.DRAFT),
 }).strict();
 
+// Lifecycle transitions belong to their own use cases and are never metadata patches.
+const movieUpdateSchema = movieMetadataSchema.extend({ duration: z.number().int().positive() }).partial().refine(
+  (body) => Object.values(body).some((value) => value !== undefined),
+  { message: "Provide at least one movie field to update" },
+);
+
 export const parseMovieCreateBody = (body) => {
   const result = movieCreateSchema.safeParse(body);
+  if (!result.success) {
+    throw new AppError(400, "Invalid movie information", toFieldErrors(result.error.issues), "INVALID_MOVIE_INPUT");
+  }
+  return result.data;
+};
+
+export const parseMovieUpdateBody = (body) => {
+  const result = movieUpdateSchema.safeParse(body);
   if (!result.success) {
     throw new AppError(400, "Invalid movie information", toFieldErrors(result.error.issues), "INVALID_MOVIE_INPUT");
   }

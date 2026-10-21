@@ -134,6 +134,16 @@ Effective union và global enforcement policy đã `APPROVED`; `/auth/me` union 
 
 ## Approval queue
 
+### MOV-102 duration policy and integration — 2026-10-21
+
+The original duration-policy blocker is resolved by explicit owner answers in this conversation on 2026-10-21. Duration changes are `APPROVED_READY` only when no Showtime references the Movie, regardless of Showtime lifecycle/time. This includes editing an unreferenced DRAFT before publication. A DRAFT with a legacy/import Showtime reference still has duration locked; other metadata remains editable. The owner will handle old data themselves; no cleanup/deletion is authorized or performed by this task.
+
+The implementation adds a Showtime-owned reference read service and a Movie-owned transaction guard shared by runtime updates and Showtime draft insertion. It reuses Movie's existing Mongoose `__v` for a real write dependency, without changing `updatedAt` for scheduling alone. Metadata-only edits remain independent of the write guard. No existing Showtime interval, snapshot or transaction is rewritten. Management detail/update return `canEditDuration`; backend rechecks references inside the transaction at save time.
+
+Integration reviewers: Movie (Hiếu / MEMBER_1), Showtime (MEMBER_3), with Booking/RBAC reviewers as affected. Business policy is owner-approved; exact shared service/capability contract requires integration review before merge. Runtime edits and Showtime creation now require MongoDB transactions (replica set/sharded deployment); there is no unsafe standalone fallback. Import/seed writers must run offline or join the same guard. Lifecycle changes/archive remain outside MOV-102. No SRS was changed.
+
+The current Team Development Plan was read on 2026-10-21: its task board contains MOV-001 through MOV-005, and its contract registry does not define MOV-102 management routes. The user explicitly requested MOV-102 and allowed an additive management read contract. The concrete local API proposal/implementation is recorded in `docs/MOV-102-IMPLEMENTATION.md`; its exact paths and shared router integration still need owner/consumer review before merge. No task was marked Done.
+
 Thứ tự đề nghị owner review:
 
 1. P0/P1: Ticket-only Checkout MVP hay gồm Cart/Concession; seat-type pricing source.
