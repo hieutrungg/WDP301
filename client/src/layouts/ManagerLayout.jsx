@@ -38,7 +38,7 @@ const navItems = [
   { label: 'Seat Maps', icon: Armchair, to: '/manager/seat-maps', permission: 'room.manage' },
   { label: 'Concession Stock', icon: Boxes, to: '/manager/inventory', permission: 'inventory.view' },
   { label: 'Promotions', icon: TicketPercent },
-  { label: 'Staff Shifts', icon: UsersRound },
+  { label: 'Staff Shifts', icon: UsersRound, to: '/manager/staff-shifts', permission: 'shift.view' },
   { label: 'Reports', icon: ChartLine },
 ]
 
@@ -114,10 +114,15 @@ function ManagerLayout() {
   const permissions = new Set(account?.permissions?.map(({ name }) => name))
   const showtimePage = location.pathname.startsWith('/manager/showtimes')
   const inventoryPage = location.pathname.startsWith('/manager/inventory')
+  const staffShiftPage = location.pathname.startsWith('/manager/staff-shifts')
   let breadcrumb = ['Auditorium settings', 'Configure room seat maps']
   if (showtimePage) breadcrumb = ['Schedule & programming', 'Showtime management']
   if (inventoryPage) breadcrumb = ['Concession & inventory', 'Concession stock levels']
+<<<<<<< Updated upstream
   if (location.pathname.startsWith('/manager/movies')) breadcrumb = ['Movie catalog & distribution', 'Add new movie']
+=======
+  if (staffShiftPage) breadcrumb = ['Human resources & operations', 'Staff shift monitoring']
+>>>>>>> Stashed changes
 
   const handleLogout = async () => {
     setIsLoggingOut(true)

@@ -10,6 +10,7 @@ import movieRoutes from "./modules/movie/movie.routes.js";
 import showtimeRoutes from "./modules/showtime/showtime.routes.js";
 import roomRoutes from "./modules/room/room.routes.js";
 import inventoryRoutes from "./modules/inventory/inventory.routes.js";
+import staffShiftRoutes from "./modules/staff-shift/staff-shift.routes.js";
 import {
   bookingRoutes,
   seatAvailabilityRoutes,
@@ -48,6 +49,7 @@ app.use("/api/rooms", roomRoutes);
 app.use("/api/showtimes/:showtimeId/seats", seatAvailabilityRoutes);
 app.use("/api/seat-holds", seatHoldRoutes);
 app.use("/api/inventory", inventoryRoutes);
+app.use("/api/staff-shifts", staffShiftRoutes);
 app.use("/api/bookings", bookingRoutes);
 
 app.use(notFound);

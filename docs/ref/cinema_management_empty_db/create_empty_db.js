@@ -1929,3 +1929,11 @@ if (!appdb.getCollectionNames().includes("stock_transactions")) {
 } });
   print("[OK] updated validator for existing stock_transactions");
 }
+
+
+// CMS_UC38 (PROPOSED, pending team review): staff shift monitoring uses only `staff_shifts`.
+// The optional fields createdBy, cancelledBy, cancelledAt, approvedBy, approvedAt and approvalNote are
+// not enforced by the validator above, so existing documents stay valid. Indexes only:
+appdb.getCollection("staff_shifts").createIndex({ branchId: 1, startTime: -1 }, { name: "idx_staff_shift_branch_start" });
+appdb.getCollection("staff_shifts").createIndex({ employeeAccountId: 1, startTime: 1 }, { name: "idx_staff_shift_employee_start" });
+print("[OK] staff_shifts indexes ready");

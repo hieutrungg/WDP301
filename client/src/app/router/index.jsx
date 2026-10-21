@@ -28,6 +28,7 @@ import SeatSelectionPage from '../../features/seat-selection/pages/SeatSelection
 import CheckoutPage from '../../features/booking/pages/CheckoutPage'
 import StockInPage from '../../features/inventory/pages/StockInPage'
 import StockLevelsPage from '../../features/inventory/pages/StockLevelsPage'
+import StaffShiftsPage from '../../features/staff-shifts/pages/StaffShiftsPage'
 
 function ScrollToTop() {
   const { pathname } = useLocation()
@@ -106,6 +107,10 @@ function AppRouter() {
               </Route>
               <Route element={<PermissionRoute permission="room.manage" />}>
                 <Route path="seat-maps" element={<SeatMapConfigPage />} />
+              </Route>
+              {/* UX guard only; the API enforces shift.view / shift.manage + the MANAGER role. */}
+              <Route element={<PermissionRoute permission="shift.view" />}>
+                <Route path="staff-shifts" element={<StaffShiftsPage />} />
               </Route>
             </Route>
           </Route>
