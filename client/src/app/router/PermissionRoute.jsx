@@ -1,15 +1,35 @@
-import { Navigate, Outlet } from 'react-router'
+import { Navigate, Outlet, useLocation } from 'react-router'
 import { useAuth } from '../../features/auth/hooks/useAuth'
+import {
+  hasRequiredPermission,
+  hasRequiredRole,
+} from '../../features/auth/utils/loginDestination'
+import ForbiddenPage from '../../pages/public/ForbiddenPage'
 
-// `role` covers use cases owned by one actor: ADMIN holds every permission, so a permission
-// check alone would also let it in. UX only; the API enforces the same rule.
 function PermissionRoute({ permission, role }) {
-  const { account } = useAuth()
-  const hasPermission =
-    !permission || account?.permissions?.some((item) => item.name === permission)
-  const hasRole = !role || account?.roles?.some((item) => item.name === role)
+  const { account, initialized, isAuthenticated } = useAuth()
+  const location = useLocation()
 
-  return hasPermission && hasRole ? <Outlet /> : <Navigate to="/" replace />
+  if (!initialized) {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center text-sm text-on-surface-variant">
+        Restoring your session...
+      </div>
+    )
+  }
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace state={{ from: location }} />
+  }
+
+  const allowedByRole = hasRequiredRole(account, role)
+  const allowedByPermission = hasRequiredPermission(account, permission)
+
+  if (!allowedByRole || !allowedByPermission) {
+    return <ForbiddenPage standalone={Boolean(role)} />
+  }
+
+  return <Outlet />
 }
 
 export default PermissionRoute

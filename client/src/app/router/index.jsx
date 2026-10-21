@@ -10,6 +10,7 @@ import AddMoviePage from '../../features/manager-movies/pages/AddMoviePage'
 import AdminLayout from '../../layouts/AdminLayout'
 import ManagerLayout from '../../layouts/ManagerLayout'
 import PublicLayout from '../../layouts/PublicLayout'
+import ForbiddenPage from '../../pages/public/ForbiddenPage'
 import LandingPage from '../../pages/public/LandingPage'
 import LoginPage from '../../pages/public/LoginPage'
 import RegisterPage from '../../pages/public/RegisterPage'
@@ -52,6 +53,7 @@ function AppRouter() {
           <Route path="register" element={<RegisterPage />} />
           <Route path="verify-email" element={<VerifyEmailPage />} />
           <Route path="forgot-password" element={<ForgotPasswordPage />} />
+          <Route path="403" element={<ForbiddenPage />} />
           <Route path="showtimes" element={<ShowtimesPage />} />
           <Route path="movies" element={<MoviesPage />} />
           <Route path="movies/:movieId" element={<MovieDetailPage />} />
