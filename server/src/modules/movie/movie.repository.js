@@ -26,6 +26,18 @@ export const buildPublishedMovieFilter = ({
 };
 
 export const createMovieRepository = (movieModel = Movie) => ({
+  findByTitleAndYear(title, year) {
+    return movieModel.findOne({ title, releaseDate: {
+      $gte: new Date(Date.UTC(year, 0, 1)),
+      $lt: new Date(Date.UTC(year + 1, 0, 1)),
+    } }).lean();
+  },
+
+  async create(data) {
+    const movie = await movieModel.create(data);
+    return movie.toObject();
+  },
+
   async listPublished(query) {
     const filter = buildPublishedMovieFilter(query);
     const direction = query.order === "asc" ? 1 : -1;

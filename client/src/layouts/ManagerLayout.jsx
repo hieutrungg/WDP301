@@ -25,7 +25,7 @@ import { useAuth } from '../features/auth/hooks/useAuth'
 // `permission` only hides navigation; the API still enforces access.
 const navItems = [
   { label: 'Dashboard', icon: LayoutDashboard },
-  { label: 'Movies', icon: Film },
+  { label: 'Movies', icon: Film, to: '/manager/movies/new', permission: 'movie.create' },
   {
     label: 'Showtimes',
     icon: CalendarClock,
@@ -117,6 +117,7 @@ function ManagerLayout() {
   let breadcrumb = ['Auditorium settings', 'Configure room seat maps']
   if (showtimePage) breadcrumb = ['Schedule & programming', 'Showtime management']
   if (inventoryPage) breadcrumb = ['Concession & inventory', 'Concession stock levels']
+  if (location.pathname.startsWith('/manager/movies')) breadcrumb = ['Movie catalog & distribution', 'Add new movie']
 
   const handleLogout = async () => {
     setIsLoggingOut(true)
