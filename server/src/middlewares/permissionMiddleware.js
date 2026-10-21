@@ -1,6 +1,8 @@
 import { getCurrentAccount } from "../modules/auth/auth.service.js";
 import { AppError } from "../utils/AppError.js";
 
+const isNonEmptyString = (value) => typeof value === "string" && value.trim().length > 0;
+
 // Must run after requireAuth. Status and effective permissions (role grants + direct grants)
 // are reloaded on every request, so a locked account or revoked grant applies immediately.
 export const requirePermission =
@@ -14,7 +16,10 @@ export const requirePermission =
       const account = await getCurrentAccount(req.auth.accountId);
       const granted = new Set(account.permissions.map(({ name }) => name));
 
-      if (!permissionNames.every((name) => granted.has(name))) {
+      if (
+        permissionNames.length === 0 ||
+        !permissionNames.every((name) => isNonEmptyString(name) && granted.has(name))
+      ) {
         throw new AppError(403, "You do not have permission to perform this action", [], "FORBIDDEN");
       }
 
@@ -38,7 +43,11 @@ export const requireRole =
       const account = req.auth.account ?? (await getCurrentAccount(req.auth.accountId));
       const roles = new Set(account.roles.map(({ name }) => name));
 
-      if (!roleNames.some((name) => roles.has(name))) {
+      if (
+        roleNames.length === 0 ||
+        !roleNames.every(isNonEmptyString) ||
+        !roleNames.some((name) => roles.has(name))
+      ) {
         throw new AppError(403, "You do not have permission to perform this action", [], "FORBIDDEN");
       }
 
