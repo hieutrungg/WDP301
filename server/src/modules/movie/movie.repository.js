@@ -3,6 +3,11 @@ import { PUBLIC_MOVIE_STATUS } from "./movie.constants.js";
 
 const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
+const movieUpdateFields = [
+  "title", "synopsis", "genres", "cast", "releaseDate", "releaseYear", "language",
+  "director", "ageRating", "posterUrl", "trailerUrl", "duration",
+];
+
 export const buildPublishedMovieFilter = ({
   q,
   genre,
@@ -25,9 +30,34 @@ export const buildPublishedMovieFilter = ({
   return filter;
 };
 
+const listMoviesByFilter = async (movieModel, filter, query) => {
+  const direction = query.order === "asc" ? 1 : -1;
+  const sort = { [query.sort]: direction, _id: direction };
+  const skip = (query.page - 1) * query.limit;
+  const [movies, total] = await Promise.all([
+    movieModel.find(filter).sort(sort).skip(skip).limit(query.limit).lean(),
+    movieModel.countDocuments(filter),
+  ]);
+  return { movies, total };
+};
+
 export const createMovieRepository = (movieModel = Movie) => ({
-  findByTitleAndYear(title, year) {
-    return movieModel.findOne({ title, releaseDate: {
+  async withSchedulingLock(movieId, work) {
+    const session = await movieModel.db.startSession();
+    try {
+      let result;
+      await session.withTransaction(async () => {
+        // Real write dependency shared by runtime edits and Showtime insertion.
+        // Reuse Mongoose's existing version key; do not alter Last Modified for scheduling.
+        const movie = await movieModel.findOneAndUpdate({ _id: movieId }, { $inc: { __v: 1 } },
+          { session, returnDocument: "after", timestamps: false }).lean();
+        result = await work(movie, session);
+      });
+      return result;
+    } finally { await session.endSession(); }
+  },
+  findByTitleAndYear(title, year, excludedMovieId) {
+    return movieModel.findOne({ ...(excludedMovieId ? { _id: { $ne: excludedMovieId } } : {}), title, releaseDate: {
       $gte: new Date(Date.UTC(year, 0, 1)),
       $lt: new Date(Date.UTC(year + 1, 0, 1)),
     } }).lean();
@@ -38,18 +68,30 @@ export const createMovieRepository = (movieModel = Movie) => ({
     return movie.toObject();
   },
 
+  findById(movieId) {
+    return movieModel.findById(movieId).lean();
+  },
+
+  updateInfo(movieId, data, session) {
+    const fields = Object.fromEntries(movieUpdateFields
+      .filter((field) => data[field] !== undefined)
+      .map((field) => [field, data[field]]));
+    return movieModel.findOneAndUpdate(
+      { _id: movieId },
+      { $set: fields },
+      { returnDocument: "after", runValidators: true, ...(session ? { session } : {}) },
+    ).lean();
+  },
+
   async listPublished(query) {
     const filter = buildPublishedMovieFilter(query);
-    const direction = query.order === "asc" ? 1 : -1;
-    const sort = { [query.sort]: direction, _id: direction };
-    const skip = (query.page - 1) * query.limit;
+    return listMoviesByFilter(movieModel, filter, query);
+  },
 
-    const [movies, total] = await Promise.all([
-      movieModel.find(filter).sort(sort).skip(skip).limit(query.limit).lean(),
-      movieModel.countDocuments(filter),
-    ]);
-
-    return { movies, total };
+  async listForManagement(query) {
+    const filter = buildPublishedMovieFilter(query);
+    delete filter.status;
+    return listMoviesByFilter(movieModel, filter, query);
   },
 
   findPublishedById(movieId) {

@@ -78,7 +78,7 @@ const publisherFixture = () => {
   const room = { id: String(roomId), roomName: "Room 1", roomType: "STANDARD", status: "ACTIVE", branch: { id: String(id()), status: "ACTIVE", branchName: "Test" } };
   let draft;
   const dependencies = {
-    getMovie: async () => ({ duration: 120 }),
+    withMovieForScheduling: async (_movieId, work) => work({ duration: 120 }),
     getRoomLayout: async () => ({ room, layout: { layoutVersion: 1, summary: { operationalSeatCapacity: 3 } } }),
     findConflict: async () => null,
     resolvePricePlan: (startAt, roomType) => pricingService().resolveForShowtime({ startAt, roomType }),

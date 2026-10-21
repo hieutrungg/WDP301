@@ -28,8 +28,8 @@ const navItems = [
     {
         label: "Movies",
         icon: Film,
-        to: "/manager/movies/new",
-        permission: "movie.create",
+        to: "/manager/movies",
+        permissions: ["movie.update", "movie.create"],
     },
     {
         label: "Showtimes",
@@ -77,11 +77,15 @@ function SidebarNav({ permissions, onNavigate }) {
             </p>
             {navItems
                 .filter(
-                    ({ permission }) =>
-                        !permission || permissions.has(permission),
+                    ({ permission, permissions: anyPermissions }) =>
+                        (!permission || permissions.has(permission)) &&
+                        (!anyPermissions || anyPermissions.some((name) => permissions.has(name))),
                 )
-                .map(({ label, icon: Icon, to, children }) =>
-                    to ? (
+                .map(({ label, icon: Icon, to: target, children }) => {
+                    const to = target === "/manager/movies" && !permissions.has("movie.update")
+                        ? "/manager/movies/new"
+                        : target;
+                    return to ? (
                         <div key={label}>
                             <NavLink
                                 to={to}
@@ -141,8 +145,8 @@ function SidebarNav({ permissions, onNavigate }) {
                                 Soon
                             </span>
                         </span>
-                    ),
-                )}
+                    );
+                })}
         </nav>
     );
 }
@@ -167,7 +171,12 @@ function ManagerLayout() {
     if (inventoryPage)
         breadcrumb = ["Concession & inventory", "Concession stock levels"];
     if (location.pathname.startsWith("/manager/movies")) {
-        breadcrumb = ["Movie catalog & distribution", "Add new movie"];
+        const movieScreen = location.pathname.endsWith("/new")
+            ? "Add new movie"
+            : location.pathname.endsWith("/edit")
+              ? "Update movie"
+              : "Movie management";
+        breadcrumb = ["Movie catalog & distribution", movieScreen];
     }
 
     if (staffShiftPage) {

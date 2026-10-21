@@ -7,6 +7,9 @@ import BranchManagementPage from '../../features/branch/pages/BranchManagementPa
 import SeatMapConfigPage from '../../features/room/pages/SeatMapConfigPage'
 import ManagerShowtimesPage from '../../features/manager-showtimes/pages/ManagerShowtimesPage'
 import AddMoviePage from '../../features/manager-movies/pages/AddMoviePage'
+import UpdateMoviePage from '../../features/manager-movies/pages/UpdateMoviePage'
+import ManagerMoviesPage from '../../features/manager-movies/pages/ManagerMoviesPage'
+import MovieManagementAccess from '../../features/manager-movies/components/MovieManagementAccess'
 import AdminLayout from '../../layouts/AdminLayout'
 import ManagerLayout from '../../layouts/ManagerLayout'
 import PublicLayout from '../../layouts/PublicLayout'
@@ -101,6 +104,10 @@ function AppRouter() {
             <Route element={<ManagerLayout />}>
               <Route index element={<Navigate to="showtimes" replace />} />
               <Route path="showtimes" element={<ManagerShowtimesPage />} />
+              <Route element={<MovieManagementAccess />}>
+                <Route path="movies" element={<ManagerMoviesPage />} />
+                <Route path="movies/:movieId/edit" element={<UpdateMoviePage />} />
+              </Route>
               <Route element={<PermissionRoute permission="movie.create" />}>
                 <Route path="movies/new" element={<AddMoviePage />} />
               </Route>
