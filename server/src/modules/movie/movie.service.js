@@ -19,6 +19,23 @@ const toMovieDto = (movie) => ({
 });
 
 export const createMovieService = (repository = movieRepository) => ({
+  async createMovie(input) {
+    const releaseDate = new Date(`${input.releaseDate}T00:00:00.000Z`);
+    const releaseYear = releaseDate.getUTCFullYear();
+    const duplicate = () => new AppError(409,
+      "A movie with this title and release year already exists",
+      [{ field: "title", message: "This title already exists for the selected release year" }],
+      "MOVIE_DUPLICATE",
+    );
+    if (await repository.findByTitleAndYear(input.title, releaseYear)) throw duplicate();
+    try {
+      return toMovieDto(await repository.create({ ...input, releaseDate, releaseYear }));
+    } catch (error) {
+      if (error.code === 11000 && (error.keyPattern?.releaseYear || error.message?.includes("movie_title_release_year_unique"))) throw duplicate();
+      throw error;
+    }
+  },
+
   async listMovies(query) {
     const { movies, total } = await repository.listPublished(query);
     const totalPages = total === 0 ? 0 : Math.ceil(total / query.limit);

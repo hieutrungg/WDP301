@@ -6,6 +6,7 @@ import ProfilePage from '../../features/account/pages/ProfilePage'
 import BranchManagementPage from '../../features/branch/pages/BranchManagementPage'
 import SeatMapConfigPage from '../../features/room/pages/SeatMapConfigPage'
 import ManagerShowtimesPage from '../../features/manager-showtimes/pages/ManagerShowtimesPage'
+import AddMoviePage from '../../features/manager-movies/pages/AddMoviePage'
 import AdminLayout from '../../layouts/AdminLayout'
 import ManagerLayout from '../../layouts/ManagerLayout'
 import PublicLayout from '../../layouts/PublicLayout'
@@ -97,6 +98,9 @@ function AppRouter() {
             <Route element={<ManagerLayout />}>
               <Route index element={<Navigate to="showtimes" replace />} />
               <Route path="showtimes" element={<ManagerShowtimesPage />} />
+              <Route element={<PermissionRoute permission="movie.create" />}>
+                <Route path="movies/new" element={<AddMoviePage />} />
+              </Route>
               <Route element={<PermissionRoute permission="inventory.view" />}>
                 <Route path="inventory" element={<StockLevelsPage />} />
               </Route>

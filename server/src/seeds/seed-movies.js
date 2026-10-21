@@ -103,7 +103,7 @@ export const seedMovies = async (database) => {
       updateOne: {
         filter: { _id },
         update: {
-          $set: { ...movie, releaseDate: new Date(releaseDate), updatedAt: now },
+          $set: { ...movie, releaseDate: new Date(releaseDate), releaseYear: new Date(releaseDate).getUTCFullYear(), updatedAt: now },
           $setOnInsert: { _id, createdAt: now },
         },
         upsert: true,

@@ -1,5 +1,12 @@
 import { movieService } from "./movie.service.js";
-import { parseMovieListQuery } from "./movie.validation.js";
+import { parseMovieCreateBody, parseMovieListQuery } from "./movie.validation.js";
+
+export const createMovie = async (req, res, next) => {
+  try {
+    const data = await movieService.createMovie(parseMovieCreateBody(req.body));
+    res.status(201).json({ success: true, data });
+  } catch (error) { next(error); }
+};
 
 export const listMovies = async (req, res, next) => {
   try {
