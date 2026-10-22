@@ -5,7 +5,7 @@ const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 const movieUpdateFields = [
   "title", "synopsis", "genres", "cast", "releaseDate", "releaseYear", "language",
-  "director", "ageRating", "posterUrl", "trailerUrl", "duration",
+  "director", "ageRating", "posterUrl", "landscapePosterUrl", "trailerUrl", "duration",
 ];
 
 export const buildPublishedMovieFilter = ({

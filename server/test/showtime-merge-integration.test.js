@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import mongoose from "mongoose";
 import { ShowtimeSeat } from "../src/modules/booking/showtime-seat.model.js";
+import { Room } from "../src/modules/room/room.model.js";
 import { createSeatAvailabilityService } from "../src/modules/booking/seat-availability.service.js";
 import { getPublicShowtimeById, listShowtimes, listManagerShowtimes } from "../src/modules/showtime/showtime.service.js";
 
@@ -42,10 +43,13 @@ test("new price input preserves the upstream name and rejects an incomplete snap
 test("public list/detail and Manager schedule/history retain derived states after the pricing merge", async (t) => {
   const now = new Date("2026-10-20T00:00:00Z");
   const showtimeId = new mongoose.Types.ObjectId();
+  const seatId = new mongoose.Types.ObjectId();
   let status = "PUBLISHED";
-  let availableSeatCount = 0;
+  let availableSeatCount = 1;
+  let snapshotValid = true;
   let startAt = new Date("2026-10-21T10:00:00Z");
   let endAt = new Date("2026-10-21T12:00:00Z");
+  let lastPipeline;
   const item = () => ({
     _id: showtimeId, movieId: new mongoose.Types.ObjectId(), roomId: new mongoose.Types.ObjectId(),
     roomLayoutVersion: 1, status, startAt, endAt,
@@ -55,17 +59,34 @@ test("public list/detail and Manager schedule/history retain derived states afte
   });
   const originalDb = mongoose.connection.db;
   t.mock.method(ShowtimeSeat, "aggregate", () => ({ exec: async () => [{ _id: showtimeId, totalSeatCount: 40, availableSeatCount }] }));
+  t.mock.method(ShowtimeSeat, "find", () => ({
+    session() { return this; },
+    lean() { return this; },
+    exec: async () => [{ showtimeId, seatId, state: "AVAILABLE", roomLayoutVersion: 1, ...(snapshotValid ? { priceSnapshot: 120000 } : {}) }],
+  }));
+  t.mock.method(Room, "findById", () => ({
+    lean() { return this; },
+    exec: async () => ({ _id: item().roomId, layoutVersion: 1, seats: [{ _id: seatId, type: "STANDARD", status: "ENABLED" }] }),
+  }));
   // Stub only the persistence boundary; run the actual repository and service projections.
   mongoose.connection.db = {
     collection: (name) => {
       assert.equal(name, "showtimes");
-      return { aggregate: (pipeline) => ({ toArray: async () => pipeline.some((stage) => stage.$facet)
-        ? [{ items: [item()], total: [{ count: 1 }] }] : [item()] }) };
+      return { aggregate: (pipeline) => ({ toArray: async () => {
+        lastPipeline = pipeline;
+        return pipeline.some((stage) => stage.$facet)
+          ? [{ items: [item()], total: [{ count: 1 }] }] : [item()];
+      } }) };
     },
   };
   try {
-    assert.equal((await listShowtimes({ page: 1, limit: 20 }, now)).data[0].displayStatus, "SOLD_OUT");
-    assert.equal((await getPublicShowtimeById(String(showtimeId), now)).displayStatus, "SOLD_OUT");
+    assert.equal((await listShowtimes({ page: 1, limit: 20 }, now)).data[0].displayStatus, "UPCOMING");
+    assert.equal((await getPublicShowtimeById(String(showtimeId), now)).displayStatus, "UPCOMING");
+    snapshotValid = false;
+    const invalidSnapshotPage = await listShowtimes({ page: 1, limit: 20 }, now);
+    assert.deepEqual(invalidSnapshotPage.data, []);
+    assert.equal(invalidSnapshotPage.meta.total, 0);
+    snapshotValid = true;
     availableSeatCount = 1;
     assert.equal((await listManagerShowtimes({ view: "upcoming", page: 1, limit: 20 }, now)).data[0].displayStatus, "UPCOMING");
     status = "CANCELLED";
@@ -74,5 +95,9 @@ test("public list/detail and Manager schedule/history retain derived states afte
     startAt = new Date("2026-10-19T10:00:00Z");
     endAt = new Date("2026-10-19T12:00:00Z");
     assert.equal((await listManagerShowtimes({ view: "history", page: 1, limit: 20 }, now)).data[0].displayStatus, "ENDED");
+    assert.equal((await listManagerShowtimes({ view: "schedule", date: "2026-10-19", page: 1, limit: 20 }, now)).data[0].displayStatus, "ENDED");
+    assert.ok(lastPipeline.some((stage) =>
+      stage.$match?.status?.$in?.includes("PUBLISHED") && stage.$match.status.$in.includes("CANCELLED"),
+    ));
   } finally { mongoose.connection.db = originalDb; }
 });

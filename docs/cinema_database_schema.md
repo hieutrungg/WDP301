@@ -138,6 +138,7 @@ Danh mục phim và thông tin phát hành.
 | `language` | `string` | Ngôn ngữ chính của phim |
 | `ageRating` | `string` | Giới hạn độ tuổi (ví dụ: `P`, `C13`, `C16`, `C18`) |
 | `posterUrl` | `string` | Đường dẫn ảnh poster |
+| `landscapePosterUrl` | `string` | Đường dẫn poster ngang (tuỳ chọn; mặc định rỗng) |
 | `trailerUrl` | `string` | Đường dẫn video trailer |
 | `status` | `string` | Trạng thái phim (ví dụ: `NOW_SHOWING`, `COMING_SOON`) |
 | `releaseDate` | `Date` | Ngày khởi chiếu |

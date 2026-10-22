@@ -15,6 +15,7 @@ const toMovieDto = (movie) => ({
   director: movie.director,
   ageRating: movie.ageRating,
   posterUrl: movie.posterUrl,
+  landscapePosterUrl: movie.landscapePosterUrl ?? "",
   trailerUrl: movie.trailerUrl ?? "",
   status: movie.status,
 });

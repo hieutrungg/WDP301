@@ -11,8 +11,12 @@ const releaseDateFormatter = new Intl.DateTimeFormat("en-GB", {
 
 function HeroBanner({ movie, loading }) {
   const [failedImageUrl, setFailedImageUrl] = useState("");
+  const [failedLandscapeUrl, setFailedLandscapeUrl] = useState("");
   const hasImage =
     Boolean(movie?.posterUrl) && failedImageUrl !== movie.posterUrl;
+  const hasLandscapeImage =
+    Boolean(movie?.landscapePosterUrl) &&
+    failedLandscapeUrl !== movie.landscapePosterUrl;
   const genres = Array.isArray(movie?.genres)
     ? movie.genres
     : (movie?.genres
@@ -75,11 +79,21 @@ function HeroBanner({ movie, loading }) {
         aria-hidden="true"
         className="pointer-events-none absolute inset-0 overflow-hidden"
       >
+        {hasLandscapeImage && (
+          <img
+            src={movie.landscapePosterUrl}
+            alt=""
+            fetchPriority="high"
+            className="absolute inset-0 size-full scale-[1.02] object-cover object-center opacity-80 blur-[1px]"
+            onError={() => setFailedLandscapeUrl(movie.landscapePosterUrl)}
+          />
+        )}
+        <div className="absolute inset-0 bg-gradient-to-r from-background/80 via-background/35 to-background/5" />
         <div className="absolute -right-20 -top-32 size-[600px] rounded-full bg-secondary-container/15 blur-3xl" />
         <div className="absolute right-1/4 top-1/3 size-[480px] rounded-full bg-primary-container/20 blur-3xl" />
         <div className="absolute -bottom-24 left-1/4 size-[500px] rounded-full bg-surface-container-high/40 blur-3xl" />
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-surface-container-highest/20 via-background/80 to-background" />
-        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-background/70 to-background" />
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-surface-container-highest/10 via-background/10 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-background/30 to-background/90" />
       </div>
 
       <div className="relative z-10 mx-auto w-full max-w-[1440px] px-4 sm:px-6 lg:px-8">
