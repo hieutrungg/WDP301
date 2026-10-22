@@ -2,8 +2,9 @@ import httpClient from '../../../lib/api/httpClient'
 
 // The branch is never sent: the API takes it from the logged-in Manager's employee profile.
 
-export const getShiftDashboardRequest = async (signal) => {
-  const response = await httpClient.get('/staff-shifts/dashboard', { signal })
+// The dashboard follows the date the Manager is looking at.
+export const getShiftDashboardRequest = async (date, signal) => {
+  const response = await httpClient.get('/staff-shifts/dashboard', { params: { date }, signal })
   return response.data.data
 }
 

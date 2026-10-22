@@ -37,6 +37,9 @@ const limitField = z.coerce.number().int().min(1).max(SHIFT_LIST_LIMIT_MAX).defa
 // The branch is never a request field: it comes from the Manager's employee profile.
 export const noQuerySchema = z.strictObject({});
 
+// The dashboard follows the date the Manager is looking at (default: today).
+export const dashboardQuerySchema = z.strictObject({ date: dateField("Date") });
+
 export const listShiftsQuerySchema = z
   .strictObject({
     q: z.preprocess(blankToUndefined, z.string().trim().max(100, "Search text is too long").optional()),
@@ -55,10 +58,24 @@ export const listShiftsQuerySchema = z
         })
         .optional(),
     ),
+    // Every shift awaiting approval across all dates, oldest first.
+    pending: z.preprocess(
+      blankToUndefined,
+      z.enum(["true"], { error: "Pending must be true" }).transform(() => true).optional(),
+    ),
     page: pageField,
     limit: limitField,
   })
   .superRefine((query, context) => {
+    if (query.pending) {
+      for (const field of ["date", "dateFrom", "dateTo", "status"]) {
+        if (query[field]) {
+          context.addIssue({ code: "custom", path: [field], message: `Pending cannot be combined with ${field}` });
+        }
+      }
+      return;
+    }
+
     if (query.date && (query.dateFrom || query.dateTo)) {
       context.addIssue({ code: "custom", path: ["date"], message: "Use either date or dateFrom/dateTo" });
       return;

@@ -14,14 +14,38 @@ export const findShiftsInRange = (branchId, { from, to, employeeIds, station }) 
     .sort({ startTime: -1, _id: 1 })
     .lean();
 
-// Dashboard: shifts that start in the local day, plus overnight shifts that began earlier and have
-// not ended yet.
+// Dashboard: shifts that start in the local day. When `activeAfter` is given (the viewed day is today)
+// it also includes overnight shifts that began earlier and have not ended yet.
 export const findShiftsForDashboard = (branchId, { from, to, activeAfter }) =>
   StaffShift.find({
     branchId,
-    $or: [{ startTime: { $gte: from, $lt: to } }, { startTime: { $lt: from }, endTime: { $gt: activeAfter } }],
+    $or: [
+      { startTime: { $gte: from, $lt: to } },
+      ...(activeAfter ? [{ startTime: { $lt: from }, endTime: { $gt: activeAfter } }] : []),
+    ],
   })
     .sort({ startTime: 1, _id: 1 })
+    .lean();
+
+// Finished shifts nobody approved yet, across ALL dates: stored status still open and the planned
+// end has passed (the same rule as the derived COMPLETED status).
+const awaitingApprovalFilter = (branchId, now, { employeeIds, station } = {}) => ({
+  branchId,
+  status: OPEN_STATUS,
+  endTime: { $lte: now },
+  ...(employeeIds ? { employeeAccountId: { $in: employeeIds } } : {}),
+  ...(station ? { station } : {}),
+});
+
+export const countAwaitingApproval = (branchId, now, filters) =>
+  StaffShift.countDocuments(awaitingApprovalFilter(branchId, now, filters));
+
+// Oldest first, so the longest-waiting shift is reviewed first.
+export const findAwaitingApproval = (branchId, now, { skip, limit, ...filters }) =>
+  StaffShift.find(awaitingApprovalFilter(branchId, now, filters))
+    .sort({ startTime: 1, _id: 1 })
+    .skip(skip)
+    .limit(limit)
     .lean();
 
 export const findShiftById = (shiftId) => StaffShift.findById(shiftId).lean();

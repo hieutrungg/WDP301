@@ -3,6 +3,7 @@ import { after, before, test } from "node:test";
 import "dotenv/config";
 import bcrypt from "bcrypt";
 import mongoose from "mongoose";
+import { localDateOf } from "../src/modules/staff-shift/staff-shift.policy.js";
 
 process.env.NODE_ENV = "test";
 process.env.EMAIL_TEST_MODE = "capture";
@@ -633,4 +634,122 @@ test("the dashboard summarizes today's shifts and what is in progress for the ma
   assert.equal(otherBranch.body.data.totals.inProgress, 0, "another branch does not see these shifts");
 
   await models.StaffShift.deleteOne({ _id: running._id });
+});
+
+const dashboardOf = async (query = "", cookie = cookies.manager) => {
+  const result = await request(`/staff-shifts/dashboard${query}`, { cookie });
+  assert.equal(result.response.status, 200, `dashboard${query}`);
+  return result.body.data;
+};
+
+test("regression: approving a shift moves the cards of the viewed date and the awaiting-approval backlog", async () => {
+  const before = await dashboardOf(`?date=${DAY}`);
+  assert.equal(before.date, DAY);
+  assert.equal(before.isToday, false);
+  assert.ok(before.totals.completed >= 1, "the overnight shift of that date is finished and waiting");
+
+  const result = await approve(shifts.overnight._id.toString());
+  assert.equal(result.response.status, 200);
+
+  const after = await dashboardOf(`?date=${DAY}`);
+  assert.equal(after.totals.approved, before.totals.approved + 1, "Approved goes up");
+  assert.equal(after.totals.completed, before.totals.completed - 1, "Awaiting approval for the date goes down");
+  assert.equal(after.awaitingApprovalTotal, before.awaitingApprovalTotal - 1, "the all-dates backlog goes down");
+  assert.equal(after.totals.shifts, before.totals.shifts, "the shift is not lost");
+});
+
+test("the dashboard counts only the viewed date, defaulting to today, while the backlog covers every date", async () => {
+  const today = await dashboardOf();
+  const past = await dashboardOf(`?date=${DAY}`);
+
+  assert.equal(today.isToday, true);
+  assert.equal(today.totals.shifts, 0, "the fixed past shifts are not today's");
+  assert.equal(past.totals.shifts, 5, "the viewed past date has its own shifts");
+  assert.equal(today.awaitingApprovalTotal, past.awaitingApprovalTotal, "the backlog does not depend on the date");
+
+  for (const query of ["?date=2026-13-45", "?date=20261001", "?branchId=1", "?unknown=1"]) {
+    const bad = await request(`/staff-shifts/dashboard${query}`, { cookie: cookies.manager });
+    assert.equal(bad.response.status, 400, query);
+    assert.equal(bad.body.code, "INVALID_QUERY", query);
+  }
+});
+
+test("a shift still running from yesterday counts for today and for its start date only", async () => {
+  const now = Date.now();
+  const todayLocal = localDateOf(new Date(now));
+  const yesterdayLocal = localDateOf(new Date(now - DAY_MS));
+  const dayBeforeLocal = localDateOf(new Date(now - 2 * DAY_MS));
+  const overnight = await models.StaffShift.create({
+    employeeAccountId: ids.ngoc,
+    branchId: branchA,
+    startTime: new Date(`${todayLocal}T00:00:00.000+07:00`).getTime() - 4 * HOUR,
+    endTime: new Date(now + HOUR),
+    station: "Overnight Running",
+    status: "SCHEDULED",
+  });
+
+  const today = await dashboardOf();
+  assert.ok(today.inProgress.some(({ id }) => id === overnight._id.toString()), "listed as on shift now today");
+
+  const yesterday = await dashboardOf(`?date=${yesterdayLocal}`);
+  assert.equal(yesterday.totals.inProgress, 1, "counted on the date it started");
+  assert.equal((await dashboardOf(`?date=${dayBeforeLocal}`)).totals.inProgress, 0, "not on an earlier date");
+
+  await models.StaffShift.deleteOne({ _id: overnight._id });
+});
+
+test("pending=true lists every shift awaiting approval across dates, oldest first, and drops approved ones", async () => {
+  const [older, newer, otherBranchShift, cancelledOld] = await models.StaffShift.create([
+    { employeeAccountId: ids.mai, branchId: branchA, startTime: local("07:00", "2026-09-28"), endTime: local("15:00", "2026-09-28"), station: "Backlog Counter", status: "SCHEDULED" },
+    { employeeAccountId: ids.duc, branchId: branchA, startTime: local("07:00", "2026-09-29"), endTime: local("15:00", "2026-09-29"), station: "Backlog Gate", status: "SCHEDULED" },
+    { employeeAccountId: ids.other, branchId: branchB, startTime: local("07:00", "2026-09-27"), endTime: local("15:00", "2026-09-27"), station: "Backlog Other", status: "SCHEDULED" },
+    { employeeAccountId: ids.ngoc, branchId: branchA, startTime: local("07:00", "2026-09-26"), endTime: local("15:00", "2026-09-26"), station: "Backlog Cancelled", status: "CANCELLED" },
+  ]);
+
+  const result = await request("/staff-shifts?pending=true&limit=50", { cookie: cookies.manager });
+  assert.equal(result.response.status, 200);
+
+  const stations = result.body.data.map(({ station }) => station);
+  assert.ok(stations.includes("Backlog Counter") && stations.includes("Backlog Gate"));
+  assert.ok(!stations.includes("Backlog Other"), "another branch is not listed");
+  assert.ok(!stations.includes("Backlog Cancelled"), "a cancelled shift is not awaiting approval");
+  assert.ok(result.body.data.every(({ status }) => status === "COMPLETED"), "only finished, unapproved shifts");
+
+  const starts = result.body.data.map(({ startTime }) => Date.parse(startTime));
+  assert.deepEqual(starts, [...starts].sort((left, right) => left - right), "oldest first");
+  assert.equal(result.body.meta.total, (await dashboardOf()).awaitingApprovalTotal, "same number as the dashboard card");
+
+  assert.deepEqual(names(await request("/staff-shifts?pending=true&q=Mai%20Anh", { cookie: cookies.manager })), ["Le Thi Mai Anh"]);
+  const byStation = await request("/staff-shifts?pending=true&station=Backlog%20Gate", { cookie: cookies.manager });
+  assert.deepEqual(byStation.body.data.map(({ station }) => station), ["Backlog Gate"]);
+
+  const firstPage = await request("/staff-shifts?pending=true&limit=1&page=1", { cookie: cookies.manager });
+  assert.equal(firstPage.body.data.length, 1);
+  assert.equal(firstPage.body.meta.totalPages, firstPage.body.meta.total);
+
+  const total = result.body.meta.total;
+  assert.equal((await approve(older._id.toString())).response.status, 200);
+  const afterApproval = await request("/staff-shifts?pending=true&limit=50", { cookie: cookies.manager });
+  assert.equal(afterApproval.body.meta.total, total - 1, "an approved shift leaves the list");
+  assert.ok(!afterApproval.body.data.some(({ id }) => id === older._id.toString()));
+  assert.equal((await dashboardOf()).awaitingApprovalTotal, total - 1, "and the dashboard card follows");
+
+  const otherManager = await request("/staff-shifts?pending=true&limit=50", { cookie: cookies.managerB });
+  assert.ok(otherManager.body.data.some(({ id }) => id === otherBranchShift._id.toString()), "the other branch sees its own backlog");
+
+  await models.StaffShift.deleteMany({ _id: { $in: [older._id, newer._id, otherBranchShift._id, cancelledOld._id] } });
+});
+
+test("pending cannot be combined with a date or a status, and must be true", async () => {
+  for (const query of [
+    `pending=true&date=${DAY}`,
+    `pending=true&dateFrom=${DAY}`,
+    "pending=true&status=COMPLETED",
+    "pending=false",
+    "pending=yes",
+  ]) {
+    const result = await request(`/staff-shifts?${query}`, { cookie: cookies.manager });
+    assert.equal(result.response.status, 400, query);
+    assert.equal(result.body.code, "INVALID_QUERY", query);
+  }
 });

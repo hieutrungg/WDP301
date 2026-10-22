@@ -32,16 +32,18 @@ function useRemoteResource(requestKey, load) {
   return { data: result.data, error: result.error, loading: result.key !== requestKey }
 }
 
-export function useShiftDashboard(refreshToken) {
-  return useRemoteResource(`dashboard:${refreshToken}`, (signal) => getShiftDashboardRequest(signal))
+export function useShiftDashboard(date, refreshToken) {
+  return useRemoteResource(`dashboard:${date}:${refreshToken}`, (signal) => getShiftDashboardRequest(date, signal))
 }
 
-export function useShiftList({ q, date, status, station, page, limit, refreshToken }) {
+// `pending` lists every shift awaiting approval across dates; the API rejects a date or a status with it.
+export function useShiftList({ q, date, status, station, pending, page, limit, refreshToken }) {
   const params = {
     q: q || undefined,
-    date,
-    status: status || undefined,
+    date: pending ? undefined : date,
+    status: pending ? undefined : status || undefined,
     station: station || undefined,
+    pending: pending ? 'true' : undefined,
     page,
     limit,
   }

@@ -1,6 +1,14 @@
 import { BadgeCheck, ClipboardCheck, Eye } from 'lucide-react'
 import ShiftStatusBadge from './ShiftStatusBadge'
-import { employeeInitials, formatDateTime, formatMinutes, formatTime, localDateOf, plannedMinutes } from '../utils/staffShiftFormat'
+import {
+  employeeInitials,
+  formatDateLabel,
+  formatDateTime,
+  formatMinutes,
+  formatTime,
+  localDateOf,
+  plannedMinutes,
+} from '../utils/staffShiftFormat'
 
 const headClass = 'px-4 py-3 text-left text-[11px] font-bold uppercase tracking-wider text-on-surface-variant'
 
@@ -13,7 +21,9 @@ function ScheduleCell({ shift }) {
         {formatTime(shift.startTime)} – {formatTime(shift.endTime)}
         {crossesMidnight && <span className="ml-1 text-[11px] font-bold text-secondary">+1 day</span>}
       </p>
-      <p className="text-xs text-on-surface-variant">{formatMinutes(plannedMinutes(shift))} planned</p>
+      <p className="text-xs text-on-surface-variant">
+        {formatDateLabel(localDateOf(shift.startTime))} · {formatMinutes(plannedMinutes(shift))} planned
+      </p>
     </div>
   )
 }

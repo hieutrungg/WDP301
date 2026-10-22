@@ -22,7 +22,9 @@ import { canApprove, canCancel, deriveStatus, localDateOf, localDateRangeToUtc }
 import {
   approveShiftIfCompleted,
   cancelShiftIfOpen,
+  countAwaitingApproval,
   createShift as insertShift,
+  findAwaitingApproval,
   findDistinctStations,
   findOverlappingShift,
   findShiftById,
@@ -138,13 +140,11 @@ const buildHistory = (row) =>
 // status filter runs here; the range cap keeps that set small.
 export const listShifts = async (
   account,
-  { q, date, dateFrom, dateTo, status, station, page, limit },
+  { q, date, dateFrom, dateTo, status, station, pending, page, limit },
   now = new Date(),
 ) => {
   const branchId = requireBranchId(account);
   await requireBranch(branchId);
-  const first = date ?? dateFrom ?? localDateOf(now);
-  const { from, to } = localDateRangeToUtc(first, date ?? dateTo ?? first);
 
   let employeeIds;
   if (q) {
@@ -152,6 +152,19 @@ export const listShifts = async (
     if (employeeIds.length === 0) return { items: [], meta: buildMeta(page, limit, 0) };
   }
 
+  // Every shift awaiting approval whatever its date, oldest first, paginated in the database.
+  if (pending) {
+    const filters = { employeeIds, station };
+    const [total, awaiting] = await Promise.all([
+      countAwaitingApproval(branchId, now, filters),
+      findAwaitingApproval(branchId, now, { ...filters, skip: (page - 1) * limit, limit }),
+    ]);
+
+    return { items: await serializeShifts(awaiting, now), meta: buildMeta(page, limit, total) };
+  }
+
+  const first = date ?? dateFrom ?? localDateOf(now);
+  const { from, to } = localDateRangeToUtc(first, date ?? dateTo ?? first);
   const shifts = await findShiftsInRange(branchId, { from, to, employeeIds, station });
   const rows = (await serializeShifts(shifts, now)).filter((row) => !status || row.status === status);
 
@@ -159,14 +172,23 @@ export const listShifts = async (
   return { items: rows.slice(offset, offset + limit), meta: buildMeta(page, limit, rows.length) };
 };
 
-// UC38 steps 1-2: live statistics and the shifts being worked right now.
-export const getDashboard = async (account, now = new Date()) => {
+// UC38 steps 1-2: statistics for the viewed date (default today), the shifts being worked right now,
+// and the all-dates backlog of shifts awaiting approval. The totals follow `date`, so approving a shift
+// of that date moves the cards; `awaitingApprovalTotal` ignores the date, so a backlog from earlier days
+// is never hidden.
+export const getDashboard = async (account, { date } = {}, now = new Date()) => {
   const branchId = requireBranchId(account);
   const branch = await requireBranch(branchId);
   const today = localDateOf(now);
-  const { from, to } = localDateRangeToUtc(today, today);
+  const viewed = date ?? today;
+  const { from, to } = localDateRangeToUtc(viewed, viewed);
 
-  const rows = await serializeShifts(await findShiftsForDashboard(branchId, { from, to, activeAfter: now }), now);
+  // Overnight shifts that are still running only matter when looking at today.
+  const [shifts, awaitingApprovalTotal] = await Promise.all([
+    findShiftsForDashboard(branchId, { from, to, activeAfter: viewed === today ? now : undefined }),
+    countAwaitingApproval(branchId, now),
+  ]);
+  const rows = await serializeShifts(shifts, now);
   const countOf = (status) => rows.filter((row) => row.status === status).length;
   const inProgress = rows.filter((row) => row.status === SHIFT_STATUS.IN_PROGRESS);
 
@@ -178,8 +200,10 @@ export const getDashboard = async (account, now = new Date()) => {
 
   return {
     branch,
-    date: today,
+    date: viewed,
+    isToday: viewed === today,
     generatedAt: now,
+    awaitingApprovalTotal,
     totals: {
       shifts: rows.length,
       scheduled: countOf(SHIFT_STATUS.SCHEDULED),

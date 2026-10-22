@@ -1,10 +1,12 @@
 import { BadgeCheck, CalendarClock, ClipboardCheck, Radio } from 'lucide-react'
 import { getApiErrorMessage } from '../../../lib/api/apiError'
-import { employeeInitials, formatTime } from '../utils/staffShiftFormat'
+import { employeeInitials, formatDateLabel, formatTime } from '../utils/staffShiftFormat'
 
-function StatCard({ label, icon: Icon, value, caption, loading, accent = 'text-on-surface', children }) {
-  return (
-    <div className="rounded-2xl border border-white/5 bg-surface-container-low p-4">
+const cardClass = 'rounded-2xl border border-white/5 bg-surface-container-low p-4'
+
+function StatCard({ label, icon: Icon, value, caption, loading, accent = 'text-on-surface', onClick, actionLabel, children }) {
+  const body = (
+    <>
       <div className="flex items-center justify-between gap-3">
         <p className="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">{label}</p>
         <Icon className="size-4 text-on-surface-variant" aria-hidden="true" />
@@ -15,9 +17,24 @@ function StatCard({ label, icon: Icon, value, caption, loading, accent = 'text-o
         <p className={`mt-2 font-heading text-3xl font-extrabold ${accent}`}>{value}</p>
       )}
       <p className="mt-1 text-xs text-on-surface-variant">{caption}</p>
+      {actionLabel && <p className="mt-2 text-xs font-bold text-primary">{actionLabel}</p>}
       {children}
-    </div>
+    </>
   )
+
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        className={`${cardClass} text-left transition-colors hover:border-primary/40 hover:bg-surface-container`}
+      >
+        {body}
+      </button>
+    )
+  }
+
+  return <div className={cardClass}>{body}</div>
 }
 
 function Panel({ title, caption, children }) {
@@ -51,13 +68,16 @@ function PanelMessage({ children }) {
   return <p className="px-4 py-6 text-center text-sm text-on-surface-variant">{children}</p>
 }
 
-// UC38 steps 1-2: live statistics of the chosen branch's shifts today. The figures follow the
-// planned schedule; they do not say who actually turned up.
-function ShiftDashboard({ dashboard, onRetry }) {
+// UC38 steps 1-2. The cards describe the date being viewed (today by default); the planned schedule
+// only, not who actually turned up. "Awaiting approval" is the backlog across ALL dates, so a shift
+// finished on an earlier day is never hidden and approving any shift visibly changes it.
+function ShiftDashboard({ dashboard, onRetry, onReviewAwaiting }) {
   const { data, loading, error } = dashboard
   const isLoading = loading && !data
   const totals = data?.totals
   const show = (value) => (error && !data ? '—' : (value ?? 0))
+  const when = data ? (data.isToday ? 'today' : `on ${formatDateLabel(data.date)}`) : 'today'
+  const awaitingTotal = data?.awaitingApprovalTotal ?? 0
 
   return (
     <div className="space-y-4">
@@ -75,7 +95,7 @@ function ShiftDashboard({ dashboard, onRetry }) {
           label="In progress"
           icon={Radio}
           value={show(totals?.inProgress)}
-          caption={totals ? `of ${totals.shifts} shifts today` : 'Shifts running now'}
+          caption={totals ? `of ${totals.shifts} shifts ${when}` : 'Shifts running now'}
           loading={isLoading}
           accent="text-secondary"
         >
@@ -89,20 +109,22 @@ function ShiftDashboard({ dashboard, onRetry }) {
             </ul>
           )}
         </StatCard>
-        <StatCard label="Scheduled" icon={CalendarClock} value={show(totals?.scheduled)} caption="Not started yet" loading={isLoading} />
+        <StatCard label="Scheduled" icon={CalendarClock} value={show(totals?.scheduled)} caption={`Not started yet, ${when}`} loading={isLoading} />
         <StatCard
           label="Awaiting approval"
           icon={ClipboardCheck}
-          value={show(totals?.completed)}
-          caption="Finished, not yet approved"
+          value={show(data?.awaitingApprovalTotal)}
+          caption={totals ? `All dates · ${totals.completed} ${when}` : 'Finished, not yet approved'}
           loading={isLoading}
-          accent={totals?.completed > 0 ? 'text-primary' : 'text-on-surface'}
+          accent={awaitingTotal > 0 ? 'text-primary' : 'text-on-surface'}
+          onClick={awaitingTotal > 0 && onReviewAwaiting ? onReviewAwaiting : undefined}
+          actionLabel={awaitingTotal > 0 && onReviewAwaiting ? 'Review all →' : undefined}
         />
         <StatCard
           label="Approved"
           icon={BadgeCheck}
           value={show(totals?.approved)}
-          caption={totals ? `${totals.cancelled} cancelled today` : 'Signed off by a manager'}
+          caption={totals ? `${totals.cancelled} cancelled ${when}` : 'Signed off by a manager'}
           loading={isLoading}
         />
       </div>
@@ -118,11 +140,17 @@ function ShiftDashboard({ dashboard, onRetry }) {
               ))}
             </ul>
           ) : (
-            <PanelMessage>{error ? 'Not available right now.' : 'No shift is running right now.'}</PanelMessage>
+            <PanelMessage>
+              {error
+                ? 'Not available right now.'
+                : data?.isToday === false
+                  ? 'Running shifts are shown when you view today.'
+                  : 'No shift is running right now.'}
+            </PanelMessage>
           )}
         </Panel>
 
-        <Panel title="Up next" caption="The next scheduled shifts today">
+        <Panel title="Up next" caption={`The next scheduled shifts ${when}`}>
           {isLoading ? (
             <PanelMessage>Loading…</PanelMessage>
           ) : data?.upcoming?.length ? (
@@ -132,7 +160,7 @@ function ShiftDashboard({ dashboard, onRetry }) {
               ))}
             </ul>
           ) : (
-            <PanelMessage>{error ? 'Not available right now.' : 'No more shifts are scheduled today.'}</PanelMessage>
+            <PanelMessage>{error ? 'Not available right now.' : `No more shifts are scheduled ${when}.`}</PanelMessage>
           )}
         </Panel>
       </div>

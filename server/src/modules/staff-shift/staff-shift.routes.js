@@ -16,6 +16,7 @@ import { STAFF_SHIFT_ERROR, STAFF_SHIFT_PERMISSION } from "./staff-shift.constan
 import {
   approveShiftSchema,
   createShiftSchema,
+  dashboardQuerySchema,
   listEmployeesQuerySchema,
   listShiftsQuerySchema,
   noQuerySchema,
@@ -39,7 +40,7 @@ const validateBody = (schema) => validate(schema, { code: STAFF_SHIFT_ERROR.VALI
 
 router.use(requireAuth);
 
-router.get("/dashboard", ...canView, validateQuery(noQuerySchema), getDashboard);
+router.get("/dashboard", ...canView, validateQuery(dashboardQuerySchema), getDashboard);
 router.get("/stations", ...canView, validateQuery(noQuerySchema), listStations);
 router.get("/employees", ...canManage, validateQuery(listEmployeesQuerySchema), listEmployees);
 router.get("/", ...canView, validateQuery(listShiftsQuerySchema), listShifts);

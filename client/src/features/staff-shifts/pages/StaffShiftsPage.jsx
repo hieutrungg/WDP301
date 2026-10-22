@@ -37,12 +37,21 @@ function readFilters(searchParams, today) {
     date: isValidLocalDate(date) ? date : today,
     status: STATUS_VALUES.has(status) ? status : '',
     station: (searchParams.get('station') ?? '').slice(0, 100),
+    // Every shift awaiting approval across dates (the dashboard's "Review all").
+    pending: searchParams.get('pending') === 'true',
     page: Number.isInteger(page) && page > 0 ? page : 1,
   }
 }
 
 function toParams(filters, today) {
   const params = {}
+  if (filters.pending) {
+    // A date or status cannot be combined with the pending list, so neither is kept.
+    params.pending = 'true'
+    if (filters.page > 1) params.page = String(filters.page)
+    return params
+  }
+
   if (filters.q) params.q = filters.q
   if (filters.date !== today) params.date = filters.date
   if (filters.status) params.status = filters.status
@@ -76,6 +85,23 @@ function ListMessage({ icon: Icon, title, body, action }) {
       <p className="mt-4 font-heading text-lg font-bold text-on-surface">{title}</p>
       <p className="mt-1 max-w-md text-sm text-on-surface-variant">{body}</p>
       {action && <div className="mt-5">{action}</div>}
+    </div>
+  )
+}
+
+// Shown instead of the date toolbar while the pending list is open.
+function PendingBanner({ total, onBack }) {
+  return (
+    <div role="status" className="flex flex-col gap-3 rounded-2xl border border-primary/30 bg-primary-container/10 p-4 sm:flex-row sm:items-center sm:justify-between">
+      <div>
+        <p className="font-heading text-sm font-bold text-on-surface">All shifts awaiting approval</p>
+        <p className="text-xs text-on-surface-variant">
+          Finished shifts nobody approved yet, from every date, oldest first{typeof total === 'number' ? ` (${total})` : ''}.
+        </p>
+      </div>
+      <button type="button" onClick={onBack} className={secondaryButton}>
+        Back to the date view
+      </button>
     </div>
   )
 }
@@ -125,7 +151,8 @@ function StaffShiftsPage() {
   const canManage = account?.permissions?.some(({ name }) => name === 'shift.manage')
 
   const list = useShiftList({ ...filters, limit: PAGE_SIZE, refreshToken })
-  const dashboard = useShiftDashboard(dashboardToken)
+  // The cards follow the date being viewed; approving a shift of that date moves them.
+  const dashboard = useShiftDashboard(filters.date, dashboardToken)
   const stations = useStations(refreshToken)
   const items = list.data?.items ?? []
   const meta = list.data?.meta
@@ -202,6 +229,19 @@ function StaffShiftsPage() {
         }
       />
     )
+  } else if (items.length === 0 && filters.pending) {
+    content = (
+      <ListMessage
+        icon={CalendarX2}
+        title="Nothing is waiting for approval"
+        body="Every finished shift has been approved or cancelled."
+        action={
+          <button type="button" onClick={() => updateFilters({ pending: false })} className={secondaryButton}>
+            Back to the date view
+          </button>
+        }
+      />
+    )
   } else if (items.length === 0) {
     content = hasFilters ? (
       <ListMessage
@@ -258,15 +298,23 @@ function StaffShiftsPage() {
         }
       />
 
-      <ShiftDashboard dashboard={dashboard} onRetry={() => setDashboardToken((token) => token + 1)} />
-
-      <ShiftToolbar
-        filters={filters}
-        today={today}
-        stations={stations.data}
-        onChange={updateFilters}
-        onReset={() => updateFilters({ q: '', date: today, status: '', station: '' })}
+      <ShiftDashboard
+        dashboard={dashboard}
+        onRetry={() => setDashboardToken((token) => token + 1)}
+        onReviewAwaiting={() => updateFilters({ pending: true, q: '', status: '', station: '' })}
       />
+
+      {filters.pending ? (
+        <PendingBanner total={meta?.total} onBack={() => updateFilters({ pending: false })} />
+      ) : (
+        <ShiftToolbar
+          filters={filters}
+          today={today}
+          stations={stations.data}
+          onChange={updateFilters}
+          onReset={() => updateFilters({ q: '', date: today, status: '', station: '' })}
+        />
+      )}
 
       <section
         aria-label="Shifts"

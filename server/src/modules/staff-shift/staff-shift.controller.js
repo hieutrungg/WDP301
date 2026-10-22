@@ -4,7 +4,7 @@ import * as staffShiftService from "./staff-shift.service.js";
 // the employee profile (the branch) are always current.
 export const getDashboard = async (req, res, next) => {
   try {
-    res.json({ success: true, data: await staffShiftService.getDashboard(req.auth.account) });
+    res.json({ success: true, data: await staffShiftService.getDashboard(req.auth.account, req.validated.query) });
   } catch (error) {
     next(error);
   }

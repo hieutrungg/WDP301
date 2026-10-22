@@ -35,14 +35,14 @@ Màn hình **không** ghi nhận chấm công (giờ vào, giờ ra, nghỉ gi�
 - Tài khoản Manager **chưa được gán chi nhánh** sẽ thấy thông báo "Your account is not assigned to a branch" (API trả `403 BRANCH_NOT_ASSIGNED`); cần quản trị viên gán chi nhánh.
 
 ### 2.2. Bảng điều khiển trực tiếp (dashboard)
-Dữ liệu của **hôm nay** (theo giờ Việt Nam) của chi nhánh đang chọn, tự làm mới mỗi 30 giây, có nút **Refresh** và giờ cập nhật gần nhất.
+Các thẻ mô tả **ngày đang xem** (mặc định là hôm nay, theo giờ Việt Nam) của chi nhánh. Dashboard tự làm mới mỗi 30 giây, có nút **Refresh** và giờ cập nhật gần nhất. Khi Manager chọn ngày khác ở bộ lọc, các thẻ chuyển theo ngày đó, nên duyệt một ca của ngày đó sẽ làm các thẻ đổi ngay.
 
 | Thẻ / khối | Ý nghĩa |
 | --- | --- |
-| **In progress** | Số ca đang trong khung giờ làm việc, kèm số ca theo từng vị trí làm việc |
-| **Scheduled** | Số ca chưa bắt đầu |
-| **Awaiting approval** | Số ca đã hết giờ nhưng chưa được duyệt |
-| **Approved** | Số ca đã duyệt (ghi chú kèm số ca đã hủy hôm nay) |
+| **In progress** | Số ca đang trong khung giờ làm việc của ngày đang xem, kèm số ca theo từng vị trí làm việc |
+| **Scheduled** | Số ca chưa bắt đầu của ngày đang xem |
+| **Awaiting approval** | Tổng số ca đã hết giờ nhưng chưa được duyệt hoặc hủy của chi nhánh, **tính mọi ngày** (dòng chú thích cho biết có bao nhiêu ca thuộc ngày đang xem). Bấm vào thẻ (**Review all**) để xem toàn bộ danh sách, ca cũ nhất trước |
+| **Approved** | Số ca đã duyệt của ngày đang xem (ghi chú kèm số ca đã hủy của ngày đó) |
 | **On shift now** | Danh sách người đang trong ca: tên, vị trí, giờ kết thúc |
 | **Up next** | Tối đa 5 ca sắp bắt đầu hôm nay |
 
@@ -53,6 +53,7 @@ Dữ liệu của **hôm nay** (theo giờ Việt Nam) của chi nhánh đang ch
 - Nút **Reset** đưa tất cả về mặc định (hôm nay, không lọc).
 - Bộ lọc được lưu trên URL nên có thể gửi đường dẫn cho người khác hoặc tải lại trang mà không mất bộ lọc.
 - Ca qua đêm (ví dụ 22:00 – 06:00) được tính vào **ngày bắt đầu**.
+- **Review all** (thẻ *Awaiting approval*) mở danh sách mọi ca đang chờ duyệt, không phụ thuộc ngày, ca cũ nhất trước; mỗi dòng hiển thị cả ngày của ca. Trong chế độ này bộ lọc ngày và trạng thái được thay bằng một thanh thông báo và nút **Back to the date view**. Ca đã duyệt biến mất khỏi danh sách.
 
 ### 2.4. Bảng danh sách ca
 Mỗi dòng là một ca, sắp xếp ca mới nhất lên trước, 10 ca mỗi trang.
@@ -127,8 +128,8 @@ Tất cả bắt đầu bằng `/api/staff-shifts`, yêu cầu đăng nhập, ro
 
 | Phương thức | Đường dẫn | Quyền | Việc |
 | --- | --- | --- | --- |
-| GET | `/dashboard` | `shift.view` | Số liệu dashboard của chi nhánh hôm nay |
-| GET | `/` | `shift.view` | Danh sách ca của chi nhánh. Tham số: `date` hoặc `dateFrom`/`dateTo` (tối đa 31 ngày), `q`, `status`, `station`, `page`, `limit` (tối đa 50) |
+| GET | `/dashboard?date=` | `shift.view` | Số liệu dashboard của chi nhánh cho ngày `date` (mặc định hôm nay) và `awaitingApprovalTotal` (mọi ngày). Ca qua đêm đang chạy chỉ được tính khi xem hôm nay |
+| GET | `/` | `shift.view` | Danh sách ca của chi nhánh. Tham số: `date` hoặc `dateFrom`/`dateTo` (tối đa 31 ngày), `q`, `status`, `station`, `page`, `limit` (tối đa 50); hoặc `pending=true` để lấy mọi ca đang chờ duyệt (không kết hợp được với `date`, `dateFrom`, `dateTo`, `status`) |
 | GET | `/:shiftId` | `shift.view` | Chi tiết ca và lịch sử |
 | GET | `/stations` | `shift.view` | Gợi ý vị trí làm việc đã dùng ở chi nhánh |
 | GET | `/employees?q=` | `shift.manage` | Nhân viên của chi nhánh có thể phân ca (kèm chức danh) |
