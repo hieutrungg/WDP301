@@ -32,10 +32,10 @@ import CounterCompletePage from '../../features/counter-pos/pages/CounterComplet
 import SeatSelectionPage from '../../features/seat-selection/pages/SeatSelectionPage'
 import CheckoutPage from '../../features/booking/pages/CheckoutPage'
 import BookingConfirmationPage from '../../features/booking/pages/BookingConfirmationPage'
+import CustomerBookingsPage from '../../features/booking/pages/CustomerBookingsPage'
 import StockInPage from '../../features/inventory/pages/StockInPage'
 import StockLevelsPage from '../../features/inventory/pages/StockLevelsPage'
 import StaffShiftsPage from '../../features/staff-shifts/pages/StaffShiftsPage'
-import ConcessionCatalogPage from '../../features/concessions/pages/ConcessionCatalogPage'
 
 function ScrollToTop() {
   const { pathname } = useLocation()
@@ -63,9 +63,16 @@ function AppRouter() {
           <Route path="showtimes" element={<ShowtimesPage />} />
           <Route path="movies" element={<MoviesPage />} />
           <Route path="movies/:movieId" element={<MovieDetailPage />} />
-          <Route path="concessions" element={<ConcessionCatalogPage />} />
           <Route element={<ProtectedRoute />}>
             <Route path="profile" element={<ProfilePage />} />
+            <Route
+              path="my-tickets"
+              element={<CustomerBookingsPage key="my-tickets" initialMode="tickets" />}
+            />
+            <Route
+              path="booking-history"
+              element={<CustomerBookingsPage key="booking-history" initialMode="history" />}
+            />
             <Route path="booking/:showtimeId/seats" element={<SeatSelectionPage />} />
             <Route path="booking/:showtimeId/checkout" element={<CheckoutPage />} />
             <Route
@@ -90,7 +97,6 @@ function AppRouter() {
               <Route path="pos" element={<CounterPosPage />} />
               <Route path="pos/payment" element={<CounterPaymentPage />} />
               <Route path="pos/complete" element={<CounterCompletePage />} />
-              <Route path="concessions" element={<ConcessionCatalogPage staff />} />
               <Route element={<PermissionRoute permission="inventory.view" />}>
                 <Route path="inventory" element={<StockLevelsPage stockInPath="/staff/inventory/stock-in" />} />
               </Route>

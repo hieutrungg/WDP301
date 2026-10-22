@@ -17,6 +17,11 @@ export async function initiatePayment({
   return response.data.data
 }
 
+export async function listMyBookingPayments() {
+  const response = await httpClient.get('/payments/me/bookings')
+  return response.data.data
+}
+
 export async function getBookingPaymentDetails(bookingId) {
   const response = await httpClient.get(`/payments/bookings/${bookingId}`)
   return response.data.data

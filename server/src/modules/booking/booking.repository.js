@@ -14,6 +14,16 @@ export const createBookingRepository = ({
       .exec();
   },
 
+  findByCustomerAccountId(customerAccountId, { limit = 50 } = {}, session) {
+    return bookingModel
+      .find({ customerAccountId })
+      .sort({ bookingTime: -1, createdAt: -1 })
+      .limit(limit)
+      .session(session ?? null)
+      .lean()
+      .exec();
+  },
+
   findByPayableReference(payableReference, session) {
     return bookingModel
       .findOne({ payableReference })

@@ -36,6 +36,8 @@ export const createPaymentRouter = (
 
   router.use(requireAuth);
 
+  router.get("/me/bookings", controller.listMyBookings);
+
   router.post(
     "/",
     validate(initiatePaymentSchema, { code: PAYMENT_ERROR_CODE.INVALID_PAYMENT }),
