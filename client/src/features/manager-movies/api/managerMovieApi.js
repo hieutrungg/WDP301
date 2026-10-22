@@ -1,5 +1,10 @@
 import httpClient from '../../../lib/api/httpClient'
 
+export async function archiveMovie(movieId) {
+  const response = await httpClient.post(`/movies/${encodeURIComponent(movieId)}/archive`, {})
+  return response.data.data
+}
+
 export async function createMovie(input) {
   const response = await httpClient.post('/movies', input)
   return response.data.data

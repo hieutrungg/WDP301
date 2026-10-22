@@ -12,6 +12,7 @@ import { useSelectedBranchStore } from "../../lib/store/selectedBranchStore";
 const navItems = [
   { label: "Home", to: "/" },
   { label: "Movies", to: "/movies" },
+  { label: "Food & Drink", to: "/concessions" },
   { label: "Theatres & Tickets", href: "/#theatres-&-tickets" },
   { label: "Offers", href: "/#offers" },
 ];
@@ -106,7 +107,7 @@ function Header() {
       <div className="mx-auto flex h-20 max-w-[1440px] items-center justify-between gap-3 px-4 sm:px-6 lg:px-8">
         <div className="flex min-w-0 items-center gap-6">
           <AppLogo />
-          <div className="relative hidden xl:block" ref={branchPickerRef}>
+          <div className="relative hidden min-[1400px]:block" ref={branchPickerRef}>
             <button
               type="button"
               onClick={() => setBranchMenuOpen((open) => !open)}
@@ -151,7 +152,7 @@ function Header() {
         </div>
 
         <nav
-          className="hidden items-center lg:flex"
+          className="hidden items-center whitespace-nowrap lg:flex"
           aria-label="Main navigation"
         >
           {navItems.map((item) =>

@@ -23,7 +23,7 @@ const navItems = [
   { label: 'Dashboard', icon: LayoutDashboard },
   { label: 'Sell Tickets', icon: Ticket, to: '/staff/pos', title: 'Sell tickets at counter', section: 'Counter' },
   { label: 'Scan Ticket', icon: ScanLine },
-  { label: 'Sell Concessions', icon: Popcorn },
+  { label: 'Concession Menu', icon: Popcorn, to: '/staff/concessions', title: 'Concession menu', section: 'Concession & inventory' },
   {
     label: 'Inventory',
     icon: Boxes,

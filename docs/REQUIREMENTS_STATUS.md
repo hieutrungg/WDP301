@@ -136,6 +136,20 @@ Effective union và global enforcement policy đã `APPROVED`; `/auth/me` union 
 
 ## Approval queue
 
+### CON-101 catalog contract — owner approval 2026-10-22
+
+Subsequent owner instruction authorizes the read-only catalog UI for Hiếu: public `/concessions` and Staff `/staff/concessions`, consuming the approved catalog contract, plus a dry-run-first data import script/Atlas guide. This is the menu subset of CON-102; cart/order creation, reservation and payment implementation remain outside this approval. See `docs/CONCESSION-UI-IMPLEMENTATION.md` and `docs/CONCESSION-DATA-GUIDE.md`. No development Atlas write was performed, and task-board status remains unchanged.
+
+CON-101's read-only catalog subset is now `APPROVED_READY` by explicit subsequent answers in this chat. The owner chose existing ACTIVE/INACTIVE visibility for both Customer and Staff, no `isPublic` or Concession description addition, shared stored price, hide missing/invalid price, mark zero price as a special offer, require an ACTIVE branch, keep out-of-stock products visible but unavailable, and derive combo availability from component quantities with a separate stored combo price. The owner accepted the proposed five public HTTP routes, pagination/validation/errors and read integration. `available` and `isSpecialOffer` are derived API booleans; future C13/POS must display the corresponding unavailable/special-offer labels. No development data is changed automatically, including ACTIVE packaging.
+
+This narrows the broader blocked UC24/28/29 sales rows: only catalog reads are approved here. UI/cart/order, reservations/deductions, payment lifecycle and admin CRUD remain outside CON-101; the earlier Guest/cart/checkout decisions remain in force. Current tracking still records the older blocker and was not edited or marked Done. See the current-approval section of `docs/CON-101-CONTRACT-REVIEW.md` (superseding its historical proposal) and `docs/CON-101-IMPLEMENTATION.md` for actual API/service contracts, provider Nam/consumer Hiếu/shared reviewer Cường, migration impact and verification. Cross-module integration review remains required before merge. No schema migration, Atlas backfill, seed or production data change is authorized by these decisions.
+
+### MOV-103 archive matrix — owner approval 2026-10-22
+
+The owner explicitly approved the explained matrix in this conversation: DRAFT and PUBLISHED Showtimes block Movie archival until their stored end time, including cleanup; endAt equal to the check time is ended. CANCELLED Showtimes do not block, including future cancelled sessions. Completed history remains intact. Valid legacy startTime/endTime fields may be read as fallback for missing startAt/endAt; unknown statuses or missing/invalid/reversed intervals block archival for data review. No legacy data repair/deletion is authorized. This resolves the MOV-103 lifecycle/time clarification without changing the SRS.
+
+MOV-103 implements an additive archive command under the user's explicit request. Business matrix: owner-approved. Exact endpoint/error-detail/service integration: NEEDS_REVIEW by Movie (Hiếu/MEMBER_1), Showtime (Đạt/MEMBER_3) and affected RBAC reviewers before merge. Existing management reads still require movie.update; movie.archive alone does not broaden read access. See docs/MOV-103-IMPLEMENTATION.md for the contract, transaction requirement, actual verification and blackbox checklist. Task board status is unchanged.
+
 ### MOV-102 duration policy and integration — 2026-10-21
 
 The original duration-policy blocker is resolved by explicit owner answers in this conversation on 2026-10-21. Duration changes are `APPROVED_READY` only when no Showtime references the Movie, regardless of Showtime lifecycle/time. This includes editing an unreferenced DRAFT before publication. A DRAFT with a legacy/import Showtime reference still has duration locked; other metadata remains editable. The owner will handle old data themselves; no cleanup/deletion is authorized or performed by this task.
