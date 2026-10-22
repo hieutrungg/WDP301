@@ -1,69 +1,140 @@
-import { useMemo, useState } from 'react'
-import { useNavigate } from 'react-router'
-import { Clock3, Search, Ticket } from 'lucide-react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
+import { Clock3, LoaderCircle, RefreshCw, Search, Ticket, TimerReset, UnlockKeyhole } from 'lucide-react'
+import { toast } from 'sonner'
+import EmptyState from '../../../components/common/EmptyState'
+import ErrorState from '../../../components/common/ErrorState'
+import { getApiErrorMessage } from '../../../lib/api/apiError'
+import { useMovies } from '../../movie-showtime/hooks/useMovies'
+import { useShowtimes } from '../../movie-showtime/hooks/useShowtimes'
+import SeatButton from '../../seat-selection/components/SeatButton'
+import SeatLegend from '../../seat-selection/components/SeatLegend'
+import { useAcquireSeatHold, useReleaseSeatHold, useSeatAvailability } from '../../seat-selection/hooks/useSeatAvailability'
+import { formatSeatMoney, hasValidSeatPrice, sumSeatPrices } from '../../seat-selection/utils/seatPricing'
 
-const films = [
-  { id: 'dune', title: 'Dune Part Two', genre: 'Sci-Fi', duration: '166 min', shows: ['13:30', '16:45', '19:30'], age: 'T16' },
-  { id: 'kungfu', title: 'Kung Fu Panda 4', genre: 'Animation', duration: '94 min', shows: ['12:15', '15:00', '18:15'], age: 'P' },
-  { id: 'godzilla', title: 'Godzilla x Kong', genre: 'Action', duration: '115 min', shows: ['14:00', '17:10', '20:20'], age: 'T13' },
-]
+const dateFmt = new Intl.DateTimeFormat('vi-VN', { dateStyle: 'medium', timeZone: 'Asia/Ho_Chi_Minh' })
+const timeFmt = new Intl.DateTimeFormat('vi-VN', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Ho_Chi_Minh' })
 
-const seatLabels = ['A1', 'A2', 'A3', 'A4', 'A5', 'A6', 'B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'C1', 'C2', 'C3', 'C4', 'C5', 'C6']
-const unavailableSeats = new Set(['A1', 'B4', 'C5'])
+function vietnamDateKey(date = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-CA', { day: '2-digit', month: '2-digit', timeZone: 'Asia/Ho_Chi_Minh', year: 'numeric' }).formatToParts(date)
+  const values = Object.fromEntries(parts.map(({ type, value }) => [type, value]))
+  return `${values.year}-${values.month}-${values.day}`
+}
 
-const formatVnd = (amount) => new Intl.NumberFormat('vi-VN').format(amount) + ' ₫'
+function HoldCountdown({ hold, onExpire }) {
+  const [remaining, setRemaining] = useState(0)
+  useEffect(() => {
+    const expires = new Date(hold.expiresAt).getTime()
+    const serverStart = new Date(hold.serverNow).getTime()
+    const clientStart = Date.now()
+    let notified = false
+    const update = () => {
+      const value = Math.max(0, expires - (serverStart + Date.now() - clientStart))
+      setRemaining(value)
+      if (value === 0 && !notified) { notified = true; onExpire() }
+    }
+    update()
+    const interval = window.setInterval(update, 1000)
+    return () => window.clearInterval(interval)
+  }, [hold, onExpire])
+  const seconds = Math.ceil(remaining / 1000)
+  return `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`
+}
+
+function SeatMatrix({ rows, selected, locked, onToggle }) {
+  return <div className="rounded-xl bg-surface-container-low p-5">
+    <div className="mb-6 text-center"><p className="text-[10px] font-bold uppercase tracking-[0.22em] text-on-surface-variant">Cinema screen</p><div className="mx-auto mt-2 h-1.5 max-w-lg rounded-full bg-gradient-to-r from-transparent via-primary to-transparent opacity-70" /></div>
+    <div className="overflow-x-auto pb-2"><div className="mx-auto flex min-w-max flex-col gap-2.5">{rows.map(([row, seats]) => <div key={row} className="flex items-center gap-3"><span className="w-6 text-center font-mono text-xs font-bold text-on-surface-variant">{row}</span><div className="flex gap-1.5">{seats.map((seat, index) => <Fragment key={seat.seatId}>{index === Math.ceil(seats.length / 2) && <span className="w-4" />}<SeatButton seat={seat} selected={selected.includes(seat.seatId)} disabled={locked || !hasValidSeatPrice(seat.price)} onToggle={onToggle} /></Fragment>)}</div><span className="w-6 text-center font-mono text-xs font-bold text-on-surface-variant">{row}</span></div>)}</div></div>
+  </div>
+}
 
 function CounterPosPage() {
-  const navigate = useNavigate()
   const [query, setQuery] = useState('')
-  const [filmId, setFilmId] = useState('dune')
-  const [showtime, setShowtime] = useState('19:30')
-  const [selectedSeats, setSelectedSeats] = useState([])
-  const [notice, setNotice] = useState('')
-  const film = films.find((item) => item.id === filmId)
-  const visibleFilms = useMemo(() => films.filter((item) => item.title.toLowerCase().includes(query.toLowerCase())), [query])
-  const subtotal = selectedSeats.length * 190000
+  const [date, setDate] = useState(vietnamDateKey)
+  const [movieId, setMovieId] = useState('')
+  const [showtimeId, setShowtimeId] = useState('')
+  const [selectedIds, setSelectedIds] = useState([])
+  const [hold, setHold] = useState(null)
+  const [refresh, setRefresh] = useState(0)
 
-  function switchFilm(id) {
-    setFilmId(id)
-    setShowtime(films.find((film) => film.id === id).shows[0])
-    setSelectedSeats([])
-    setNotice('')
+  const movieQuery = useMemo(() => new URLSearchParams({ limit: '50', ...(query.trim() ? { q: query.trim() } : {}) }).toString(), [query])
+  const movies = useMovies(movieQuery)
+  const schedule = useShowtimes({ movieId: movieId || undefined, date, refreshToken: refresh })
+  const availability = useSeatAvailability(showtimeId)
+  const acquire = useAcquireSeatHold(showtimeId)
+  const release = useReleaseSeatHold(showtimeId)
+  const selectedMovie = movies.movies.find((movie) => movie.id === movieId)
+  const showtimes = useMemo(() => movieId ? (schedule.data?.showtimes ?? []).filter((item) => item.movieId === movieId) : [], [movieId, schedule.data?.showtimes])
+  const selectedShowtime = showtimes.find((item) => item.id === showtimeId) ?? availability.data?.showtime
+  const seats = useMemo(() => availability.data?.seats ?? [], [availability.data?.seats])
+  const seatMap = useMemo(() => new Map(seats.map((seat) => [seat.seatId, seat])), [seats])
+  const selectedSeats = selectedIds.map((id) => seatMap.get(id)).filter(Boolean)
+  const selectedTotal = sumSeatPrices(selectedSeats)
+  const total = hold?.priceQuote?.totalAmount ?? selectedTotal ?? 0
+  const rows = useMemo(() => {
+    const groups = new Map()
+    seats.forEach((seat) => { if (!groups.has(seat.row)) groups.set(seat.row, []); groups.get(seat.row).push(seat) })
+    return [...groups.entries()].map(([row, values]) => [row, values.sort((a, b) => Number(a.number) - Number(b.number))])
+  }, [seats])
+  const seatTypes = useMemo(() => {
+    const values = new Map()
+    seats.forEach((seat) => { if (hasValidSeatPrice(seat.price)) values.set(`${seat.type}:${seat.price}`, { ...seat, formattedPrice: formatSeatMoney(seat.price) }) })
+    return [...values.values()]
+  }, [seats])
+
+  const chooseMovie = (id) => { if (!hold) { setMovieId(id); setShowtimeId(''); setSelectedIds([]) } }
+  const chooseShowtime = (id) => { if (!hold) { setShowtimeId(id); setSelectedIds([]) } }
+  const toggleSeat = (id) => {
+    const seat = seatMap.get(id)
+    if (hold || seat?.availability !== 'AVAILABLE' || !hasValidSeatPrice(seat?.price)) return
+    setSelectedIds((current) => current.includes(id) ? current.filter((value) => value !== id) : [...current, id])
+  }
+  const holdSeats = async () => {
+    try {
+      const result = await acquire.mutateAsync({ showtimeId, seatIds: selectedIds, checkoutKey: `counter-${crypto.randomUUID()}` })
+      setHold(result)
+      toast.success('Seats are held with the server-confirmed price.')
+    } catch (error) { toast.error(getApiErrorMessage(error)); availability.refetch() }
+  }
+  const expireHold = () => { setHold(null); setSelectedIds([]); availability.refetch(); toast.error('The seat hold expired. Availability was refreshed.') }
+  const releaseSeats = async () => {
+    try { await release.mutateAsync(hold.holdId); setHold(null); setSelectedIds([]); toast.success('Seat hold released.') }
+    catch (error) { toast.error(getApiErrorMessage(error)) }
   }
 
-  function toggleSeat(seat) {
-    if (unavailableSeats.has(seat)) return
-    setNotice('')
-    setSelectedSeats((current) => current.includes(seat) ? current.filter((item) => item !== seat) : [...current, seat])
-  }
+  return <div className="space-y-4">
+    <header className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-surface-container-low p-4 shadow-lg"><div><p className="text-xs font-bold uppercase tracking-wider text-primary">Box office POS</p><h1 className="font-heading text-2xl font-bold">Sell tickets</h1><p className="mt-1 text-xs text-on-surface-variant">Live movie, showtime, availability and SeatHold data</p></div><div className="flex items-center gap-2 text-sm text-tertiary"><Clock3 className="size-4 text-secondary" /> Staff counter</div></header>
+    <div className="grid gap-4 xl:grid-cols-12">
+      <section className="space-y-3 xl:col-span-3">
+        <div className="rounded-xl bg-surface-container-low p-4"><label className="relative block"><span className="sr-only">Search movie title</span><Search className="absolute left-3 top-3 size-4 text-tertiary" /><input value={query} disabled={Boolean(hold)} onChange={(event) => setQuery(event.target.value)} className="w-full rounded-lg bg-surface-container-high py-2.5 pl-9 pr-3 text-sm outline-none ring-primary focus:ring-2 disabled:opacity-50" placeholder="Search title..." /></label></div>
+        {movies.loading && <div className="rounded-xl bg-surface-container-low p-6 text-center text-sm text-tertiary"><LoaderCircle className="mx-auto mb-2 size-5 animate-spin" />Loading movies…</div>}
+        {!movies.loading && movies.error && <ErrorState message={movies.error} onRetry={movies.retry} />}
+        {!movies.loading && !movies.error && movies.movies.length === 0 && <EmptyState title="No movies found" description="No published movie matches this search." />}
+        <div className="space-y-2">{movies.movies.map((movie) => <button key={movie.id} type="button" disabled={Boolean(hold)} onClick={() => chooseMovie(movie.id)} className={`w-full rounded-xl border p-3 text-left transition disabled:opacity-60 ${movie.id === movieId ? 'border-primary-container bg-surface-container shadow-crimson' : 'border-transparent bg-surface-container-low hover:bg-surface-container'}`}><div className="flex items-start gap-3">{movie.posterUrl && <img src={movie.posterUrl} alt="" className="h-16 w-11 rounded object-cover" />}<div className="min-w-0"><strong className="line-clamp-2">{movie.title}</strong><p className="mt-1 text-xs text-tertiary">{movie.genres?.join(', ') || 'Movie'} · {movie.duration} min</p><p className="mt-2 text-xs font-bold text-secondary">{movie.ageRating}</p></div></div></button>)}</div>
+      </section>
 
-  function continueToPayment() {
-    if (!selectedSeats.length) {
-      setNotice('Chọn ít nhất một ghế trước khi chuyển sang thanh toán.')
-      return
-    }
-    navigate('/staff/pos/payment', { state: { film, showtime, seats: selectedSeats, total: subtotal } })
-  }
+      <section className="space-y-4 xl:col-span-5">
+        <div className="rounded-xl bg-surface-container-low p-5"><div className="flex flex-wrap items-end justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-wider text-primary">Showtime</p><h2 className="font-heading text-xl font-bold">{selectedMovie?.title ?? 'Select a movie'}</h2></div><label className="text-xs text-on-surface-variant">Show date<input type="date" min={vietnamDateKey()} value={date} disabled={Boolean(hold)} onChange={(event) => { setDate(event.target.value); setShowtimeId(''); setSelectedIds([]) }} className="ml-2 rounded-lg bg-surface-container-high px-3 py-2 text-sm text-on-surface disabled:opacity-50" /></label></div>
+          {movieId && schedule.loading && <p className="mt-5 flex items-center gap-2 text-sm text-tertiary"><LoaderCircle className="size-4 animate-spin" />Loading showtimes…</p>}
+          {movieId && !schedule.loading && schedule.error && <div className="mt-4"><ErrorState message={schedule.error} onRetry={() => setRefresh((value) => value + 1)} /></div>}
+          {movieId && !schedule.loading && !schedule.error && showtimes.length === 0 && <p className="mt-5 rounded-lg border border-dashed border-white/10 p-4 text-sm text-tertiary">No published future showtimes for this movie and date.</p>}
+          <div className="mt-5 flex flex-wrap gap-2">{showtimes.map((item) => <button key={item.id} type="button" disabled={Boolean(hold)} onClick={() => chooseShowtime(item.id)} className={`rounded-lg px-4 py-2 text-left text-sm font-semibold disabled:opacity-60 ${showtimeId === item.id ? 'bg-primary-container text-white shadow-crimson' : 'bg-surface-container-high text-tertiary hover:text-on-surface'}`}><span className="block">{timeFmt.format(new Date(item.startAt))}</span><span className="mt-1 block text-[10px] font-normal">{item.room.roomName} · {item.cinema.branchName}</span></button>)}</div>
+        </div>
+        {showtimeId && availability.isPending && <div className="rounded-xl bg-surface-container-low p-10 text-center text-sm text-tertiary"><LoaderCircle className="mx-auto mb-3 size-7 animate-spin" />Loading live seat availability…</div>}
+        {showtimeId && availability.isError && <ErrorState message={getApiErrorMessage(availability.error)} onRetry={availability.refetch} />}
+        {showtimeId && availability.isSuccess && seats.length === 0 && <EmptyState title="No seats available" description="This showtime has no initialized seat layout." />}
+        {showtimeId && availability.isSuccess && seats.length > 0 && <><div className="rounded-xl bg-surface-container-low p-4"><SeatLegend seatTypes={seatTypes} selectedCount={selectedIds.length} /></div><SeatMatrix rows={rows} selected={selectedIds} locked={Boolean(hold)} onToggle={toggleSeat} /></>}
+      </section>
 
-  return (
-    <div className="space-y-4">
-      <header className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-surface-container-low p-4 shadow-lg">
-        <div><p className="text-xs font-bold uppercase tracking-wider text-primary">Box office POS</p><h1 className="font-heading text-2xl font-bold">Sell tickets</h1></div>
-        <div className="flex items-center gap-2 text-sm text-tertiary"><Clock3 className="size-4 text-secondary" /> Shift #04 · Counter #02</div>
-      </header>
-      <div className="grid gap-4 xl:grid-cols-12">
-        <section className="space-y-3 xl:col-span-3">
-          <div className="rounded-xl bg-surface-container-low p-4"><label className="relative block"><Search className="absolute left-3 top-3 size-4 text-tertiary" /><input value={query} onChange={(event) => setQuery(event.target.value)} className="w-full rounded-lg bg-surface-container-high py-2.5 pl-9 pr-3 text-sm outline-none ring-primary focus:ring-2" placeholder="Search title..." /></label></div>
-          <div className="space-y-2">{visibleFilms.map((item) => <button key={item.id} onClick={() => switchFilm(item.id)} className={`w-full rounded-xl border p-3 text-left transition ${item.id === filmId ? 'border-primary-container bg-surface-container shadow-crimson' : 'border-transparent bg-surface-container-low hover:bg-surface-container'}`}><div className="flex items-start justify-between gap-2"><strong>{item.title}</strong><span className="rounded bg-primary-container px-1.5 py-0.5 text-xs font-bold text-white">{item.age}</span></div><p className="mt-1 text-xs text-tertiary">{item.genre} · {item.duration}</p><p className="mt-2 text-xs font-bold text-secondary">{item.shows.length} showtimes today</p></button>)}</div>
-        </section>
-        <section className="space-y-4 xl:col-span-5">
-          <div className="rounded-xl bg-surface-container-low p-5"><div className="flex flex-wrap items-center justify-between gap-2"><div><p className="text-xs font-bold uppercase tracking-wider text-primary">Selected movie</p><h2 className="font-heading text-xl font-bold">{film.title}</h2></div><span className="rounded-full bg-surface-container-high px-3 py-1 text-sm text-secondary">Hall 01 · IMAX 2D</span></div><div className="mt-5 flex flex-wrap gap-2">{film.shows.map((time) => <button key={time} onClick={() => setShowtime(time)} className={`rounded-lg px-4 py-2 text-sm font-semibold ${showtime === time ? 'bg-primary-container text-white shadow-crimson' : 'bg-surface-container-high text-tertiary hover:text-on-surface'}`}>{time}</button>)}</div></div>
-          <div className="rounded-xl bg-surface-container-low p-5"><div className="mb-5 flex items-center justify-between"><h2 className="font-heading text-lg font-bold">Choose seats</h2><span className="text-xs text-tertiary">Screen</span></div><div className="mx-auto mb-8 h-2 max-w-sm rounded-full bg-gradient-to-r from-transparent via-on-surface to-transparent opacity-50" /><div className="mx-auto grid max-w-md grid-cols-6 gap-2">{seatLabels.map((seat) => { const unavailable = unavailableSeats.has(seat); const active = selectedSeats.includes(seat); return <button key={seat} disabled={unavailable} onClick={() => toggleSeat(seat)} className={`aspect-square rounded-md text-xs font-bold transition ${unavailable ? 'cursor-not-allowed bg-surface-container-highest text-tertiary-container' : active ? 'bg-primary-container text-white shadow-crimson' : 'bg-secondary-container/20 text-secondary hover:bg-secondary-container/40'}`}>{seat}</button> })}</div><div className="mt-6 flex flex-wrap justify-center gap-4 text-xs text-tertiary"><span>■ Available</span><span className="text-primary">■ Selected</span><span className="text-tertiary-container">■ Unavailable</span></div></div>
-        </section>
-        <aside className="xl:col-span-4"><div className="sticky top-20 rounded-xl bg-surface-container-low p-5 shadow-xl"><p className="text-xs font-bold uppercase tracking-wider text-primary">Active ticket order</p><h2 className="mt-1 font-heading text-lg font-bold">{film.title}</h2><p className="mt-1 text-sm text-tertiary">Today · {showtime} · Hall 01</p><div className="my-5 space-y-2 border-y border-surface-container-high py-4">{selectedSeats.length ? selectedSeats.map((seat) => <div key={seat} className="flex justify-between text-sm"><span>VIP seat {seat}</span><span>{formatVnd(190000)}</span></div>) : <p className="text-sm text-tertiary">No seats selected.</p>}</div><div className="flex justify-between font-heading text-xl font-bold"><span>Total</span><span>{formatVnd(subtotal)}</span></div>{notice && <p role="alert" className="mt-4 rounded-lg bg-error-container/30 p-3 text-sm text-error">{notice}</p>}<button onClick={continueToPayment} className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-primary-container px-4 py-3 font-bold text-white shadow-crimson transition hover:brightness-110"><Ticket className="size-5" /> Continue to payment</button><p className="mt-3 text-center text-xs text-tertiary">Seat availability will be confirmed by Booking service.</p></div></aside>
-      </div>
+      <aside className="xl:col-span-4"><div className="sticky top-20 rounded-xl bg-surface-container-low p-5 shadow-xl">
+        <div className="flex items-start justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-wider text-primary">Counter order</p><h2 className="mt-1 font-heading text-lg font-bold">{selectedMovie?.title ?? 'No movie selected'}</h2></div>{hold && <span className="rounded bg-secondary/15 px-2 py-1 text-[10px] font-bold uppercase text-secondary">Held</span>}</div>
+        {selectedShowtime && <p className="mt-1 text-sm text-tertiary">{dateFmt.format(new Date(selectedShowtime.startAt))} · {timeFmt.format(new Date(selectedShowtime.startAt))}<br />{selectedShowtime.room?.roomName} · {selectedShowtime.cinema?.branchName}</p>}
+        <div className="my-5 space-y-2 border-y border-surface-container-high py-4">{selectedSeats.length ? selectedSeats.map((seat) => <div key={seat.seatId} className="flex justify-between gap-3 text-sm"><span>{seat.type.replaceAll('_', ' ')} · {seat.row}{seat.number}</span><span>{formatSeatMoney(seat.price)}</span></div>) : <p className="text-sm text-tertiary">Select a movie, showtime and at least one available seat.</p>}</div>
+        <div className="flex justify-between font-heading text-xl font-bold"><span>Total</span><span>{formatSeatMoney(total)}</span></div><p className="mt-1 text-right text-[10px] text-on-surface-variant">{hold ? 'Confirmed by SeatHold price snapshot' : 'Calculated from current showtime seat prices'}</p>
+        {hold ? <div className="mt-5 space-y-3"><div className="rounded-xl border border-secondary/30 bg-secondary/10 p-4"><p className="text-xs font-bold uppercase tracking-wider text-secondary">SeatHold active</p><p className="mt-2 flex items-center gap-2 font-heading text-2xl font-bold text-secondary"><TimerReset className="size-5" /><HoldCountdown hold={hold} onExpire={expireHold} /></p><p className="mt-2 break-all font-mono text-[10px] text-on-surface-variant">Hold ID: {hold.holdId}</p></div><button type="button" disabled={release.isPending} onClick={releaseSeats} className="flex w-full items-center justify-center gap-2 rounded-xl bg-surface-container-high px-4 py-3 font-bold disabled:opacity-50"><UnlockKeyhole className="size-5" />{release.isPending ? 'Releasing…' : 'Release seats'}</button><button type="button" disabled className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary-container px-4 py-3 font-bold text-white opacity-45"><Ticket className="size-5" /> Continue to payment</button><p className="text-center text-xs text-tertiary">Payment stays disabled until the Counter Booking/Payment/Ticket contract is approved.</p></div> : <button type="button" disabled={!showtimeId || !selectedIds.length || selectedTotal === null || acquire.isPending} onClick={holdSeats} className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-primary-container px-4 py-3 font-bold text-white shadow-crimson disabled:opacity-45"><Ticket className="size-5" />{acquire.isPending ? 'Holding seats…' : 'Hold selected seats'}</button>}
+        {showtimeId && !hold && <button type="button" onClick={() => availability.refetch()} className="mt-3 flex w-full items-center justify-center gap-2 text-xs font-semibold text-tertiary hover:text-on-surface"><RefreshCw className="size-3.5" />Refresh availability</button>}
+      </div></aside>
     </div>
-  )
+  </div>
 }
 
 export default CounterPosPage
