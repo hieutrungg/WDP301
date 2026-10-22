@@ -16,6 +16,7 @@ import {
   seatAvailabilityRoutes,
   seatHoldRoutes,
 } from "./modules/booking/booking.module.js";
+import { paymentRoutes } from "./modules/payment/payment.module.js";
 import { notFound } from "./middlewares/notFoundMiddleware.js";
 import { errorHandler } from "./middlewares/errorMiddleware.js";
 import { env } from "./config/env.js";
@@ -51,6 +52,7 @@ app.use("/api/seat-holds", seatHoldRoutes);
 app.use("/api/inventory", inventoryRoutes);
 app.use("/api/staff-shifts", staffShiftRoutes);
 app.use("/api/bookings", bookingRoutes);
+app.use("/api/payments", paymentRoutes);
 
 app.use(notFound);
 app.use(errorHandler);

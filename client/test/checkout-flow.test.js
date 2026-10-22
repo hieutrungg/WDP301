@@ -2,6 +2,13 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { newCheckout, writeCheckout, readCheckout, clearCheckout, remainingHoldMs, validHoldQuote, paymentHandoff } from '../src/features/booking/utils/checkoutSession.js'
 import { restoreCheckout, submitBooking } from '../src/features/booking/utils/checkoutFlow.js'
+import {
+  PAYMENT_METHODS,
+  PAYMENT_METHOD_OPTIONS,
+  getPaymentMethodOption,
+  buildPaymentAttemptKey,
+  generateDeterministicQrMatrix,
+} from '../src/features/booking/utils/mockQrCode.js'
 
 const storageFixture = () => {
   const values = new Map()
@@ -74,12 +81,45 @@ test('wrong owner, seat set, currency and invalid server prices fail closed', as
   }
 })
 
-test('Booking replay reads server status without locally confirming payment; mismatched amounts fail', async () => {
-  const attempt = { ...attemptFixture(), bookingRequested: true }, hold = holdFixture()
-  const pending = await restoreCheckout({ attempt, acquire: async () => hold, createBooking: async () => bookingFixture() })
-  assert.equal(pending.booking.status, 'PENDING_PAYMENT')
-  const expired = await restoreCheckout({ attempt, acquire: async () => ({ ...hold, status: 'EXPIRED' }), createBooking: async () => ({ ...bookingFixture(), status: 'EXPIRED' }) })
-  assert.equal(expired.booking.status, 'EXPIRED')
-  await assert.rejects(submitBooking({ attempt, hold, createBooking: async () => ({ ...bookingFixture(), amount: 0 }) }), /could not be verified/)
-  assert.deepEqual(paymentHandoff(pending.booking), { bookingId: 'booking-a', payableReference: 'pay-a', amount: 110500, currency: 'VND', expiresAt: '2026-10-20T14:10:00Z' })
+test('Booking replay reads server status without locally confirming payment; mismatched amounts fail', () => {
+  return (async () => {
+    const attempt = { ...attemptFixture(), bookingRequested: true }, hold = holdFixture()
+    const pending = await restoreCheckout({ attempt, acquire: async () => hold, createBooking: async () => bookingFixture() })
+    assert.equal(pending.booking.status, 'PENDING_PAYMENT')
+    const expired = await restoreCheckout({ attempt, acquire: async () => ({ ...hold, status: 'EXPIRED' }), createBooking: async () => ({ ...bookingFixture(), status: 'EXPIRED' }) })
+    assert.equal(expired.booking.status, 'EXPIRED')
+    await assert.rejects(submitBooking({ attempt, hold, createBooking: async () => ({ ...bookingFixture(), amount: 0 }) }), /could not be verified/)
+    assert.deepEqual(paymentHandoff(pending.booking), { bookingId: 'booking-a', payableReference: 'pay-a', amount: 110500, currency: 'VND', expiresAt: '2026-10-20T14:10:00Z' })
+  })()
+})
+
+test('PAY-001 preserves all 4 C14 payment methods and generates deterministic mock QR matrices', () => {
+  assert.equal(PAYMENT_METHOD_OPTIONS.length, 4)
+  assert.deepEqual(
+    PAYMENT_METHOD_OPTIONS.map((item) => item.id),
+    [
+      PAYMENT_METHODS.MOMO_WALLET,
+      PAYMENT_METHODS.VNPAY_QR,
+      PAYMENT_METHODS.CREDIT_DEBIT_CARD,
+      PAYMENT_METHODS.ZALOPAY_APPLE_PAY,
+    ],
+  )
+  assert.equal(getPaymentMethodOption('VNPAY_QR').label, 'VNPAY-QR / VietQR')
+  assert.equal(
+    buildPaymentAttemptKey({
+      bookingId: 'booking-123',
+      method: 'MOMO_WALLET',
+      attemptSequence: 2,
+    }),
+    'pay-attempt:booking-123:MOMO_WALLET:2',
+  )
+
+  const matrixA = generateDeterministicQrMatrix('FCINEMA-MOCK://payment/ATT-1', 25)
+  const matrixB = generateDeterministicQrMatrix('FCINEMA-MOCK://payment/ATT-1', 25)
+  const matrixC = generateDeterministicQrMatrix('ETKT-PREVIEW-PAY-1', 25)
+
+  assert.equal(matrixA.length, 25)
+  assert.equal(matrixA[0].length, 25)
+  assert.deepEqual(matrixA, matrixB)
+  assert.notDeepEqual(matrixA, matrixC)
 })

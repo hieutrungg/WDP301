@@ -71,6 +71,12 @@ const bookingSchema = new mongoose.Schema(
     },
     bookingTime: { type: Date, required: true },
     expiresAt: { type: Date, required: true },
+    confirmedAt: { type: Date },
+    expiredAt: { type: Date },
+    paymentId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Payment",
+    },
   },
   {
     collection: "bookings",
