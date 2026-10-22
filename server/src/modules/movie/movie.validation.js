@@ -58,6 +58,14 @@ const toFieldErrors = (issues) =>
     message: issue.message,
   }));
 
+export const parseMovieArchiveRequest = (body, query) => {
+  const emptyObject = z.object({}).strict();
+  const result = emptyObject.safeParse(body === undefined ? {} : body);
+  if (!result.success || !emptyObject.safeParse(query).success) {
+    throw new AppError(400, "Archive accepts no movie fields or query parameters", [], "INVALID_MOVIE_INPUT");
+  }
+};
+
 export const parseMovieListQuery = (query) => {
   const result = movieListQuerySchema.safeParse(query);
 

@@ -5,6 +5,7 @@ import {
     CalendarDays,
     ChartLine,
     ChevronRight,
+    DoorOpen,
     Film,
     History,
     House,
@@ -44,6 +45,12 @@ const navItems = [
                 view: "history",
             },
         ],
+    },
+    {
+        label: "Rooms",
+        icon: DoorOpen,
+        to: "/manager/rooms",
+        permission: "room.manage",
     },
     {
         label: "Seat Maps",
@@ -181,6 +188,10 @@ function ManagerLayout() {
 
     if (staffShiftPage) {
         breadcrumb = ["Human resources & operations", "Staff shift monitoring"];
+    }
+
+    if (location.pathname.startsWith("/manager/rooms")) {
+        breadcrumb = ["Facilities & rooms", "Room management"];
     }
 
     const handleLogout = async () => {

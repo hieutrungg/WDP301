@@ -1,5 +1,13 @@
 import { movieService } from "./movie.service.js";
-import { parseManagerMovieListQuery, parseMovieCreateBody, parseMovieListQuery, parseMovieUpdateBody } from "./movie.validation.js";
+import { parseManagerMovieListQuery, parseMovieArchiveRequest, parseMovieCreateBody, parseMovieListQuery, parseMovieUpdateBody } from "./movie.validation.js";
+
+export const archiveMovie = async (req, res, next) => {
+  try {
+    parseMovieArchiveRequest(req.body, req.query);
+    const data = await movieService.archiveMovie(req.params.id);
+    res.json({ success: true, data });
+  } catch (error) { next(error); }
+};
 
 export const createMovie = async (req, res, next) => {
   try {

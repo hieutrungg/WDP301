@@ -42,6 +42,13 @@ const listMoviesByFilter = async (movieModel, filter, query) => {
 };
 
 export const createMovieRepository = (movieModel = Movie) => ({
+  archive(movieId, session) {
+    return movieModel.findOneAndUpdate(
+      { _id: movieId, status: { $ne: "ARCHIVED" } },
+      { $set: { status: "ARCHIVED" } },
+      { session, returnDocument: "after", runValidators: true },
+    ).lean();
+  },
   async withSchedulingLock(movieId, work) {
     const session = await movieModel.db.startSession();
     try {

@@ -35,6 +35,7 @@ import BookingConfirmationPage from '../../features/booking/pages/BookingConfirm
 import StockInPage from '../../features/inventory/pages/StockInPage'
 import StockLevelsPage from '../../features/inventory/pages/StockLevelsPage'
 import StaffShiftsPage from '../../features/staff-shifts/pages/StaffShiftsPage'
+import ConcessionCatalogPage from '../../features/concessions/pages/ConcessionCatalogPage'
 
 function ScrollToTop() {
   const { pathname } = useLocation()
@@ -62,6 +63,7 @@ function AppRouter() {
           <Route path="showtimes" element={<ShowtimesPage />} />
           <Route path="movies" element={<MoviesPage />} />
           <Route path="movies/:movieId" element={<MovieDetailPage />} />
+          <Route path="concessions" element={<ConcessionCatalogPage />} />
           <Route element={<ProtectedRoute />}>
             <Route path="profile" element={<ProfilePage />} />
             <Route path="booking/:showtimeId/seats" element={<SeatSelectionPage />} />
@@ -88,6 +90,7 @@ function AppRouter() {
               <Route path="pos" element={<CounterPosPage />} />
               <Route path="pos/payment" element={<CounterPaymentPage />} />
               <Route path="pos/complete" element={<CounterCompletePage />} />
+              <Route path="concessions" element={<ConcessionCatalogPage staff />} />
               <Route element={<PermissionRoute permission="inventory.view" />}>
                 <Route path="inventory" element={<StockLevelsPage stockInPath="/staff/inventory/stock-in" />} />
               </Route>

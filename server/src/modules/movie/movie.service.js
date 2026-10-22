@@ -42,6 +42,25 @@ const validateMovieId = (movieId) => {
 const movieNotFoundError = () => new AppError(404, "Movie not found", [], "MOVIE_NOT_FOUND");
 
 export const createMovieService = (repository = movieRepository, references = showtimeReferenceService) => ({
+  async archiveMovie(movieId) {
+    validateMovieId(movieId);
+    // Read-only fast path keeps retries from changing timestamps or the internal version.
+    const current = await repository.findById(movieId);
+    if (!current) throw movieNotFoundError();
+    if (current.status === "ARCHIVED") return toManagerMovieDto(current);
+    return repository.withSchedulingLock(movieId, async (movie, session) => {
+      if (!movie) throw movieNotFoundError();
+      if (movie.status === "ARCHIVED") return toManagerMovieDto(movie);
+      const dependencies = await references.getMovieArchiveBlockers(movieId, new Date(), session);
+      if (dependencies.length) {
+        throw new AppError(409, "Movie cannot be archived until its showtime dependencies are resolved",
+          dependencies.map((dependency) => ({ field: "showtimes", ...dependency })), "INVALID_MOVIE_INPUT");
+      }
+      const archived = await repository.archive(movieId, session);
+      if (!archived) throw movieNotFoundError();
+      return toManagerMovieDto(archived);
+    });
+  },
   async createMovie(input) {
     const releaseDate = new Date(`${input.releaseDate}T00:00:00.000Z`);
     const releaseYear = releaseDate.getUTCFullYear();
