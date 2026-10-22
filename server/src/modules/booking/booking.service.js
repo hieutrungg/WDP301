@@ -1,7 +1,11 @@
 import { randomBytes } from "node:crypto";
 import mongoose from "mongoose";
 import { AppError } from "../../utils/AppError.js";
-import { BOOKING_ERROR, BOOKING_STATUS } from "./booking.constants.js";
+import {
+  BOOKING_CONFIRMATION_OUTCOME,
+  BOOKING_ERROR,
+  BOOKING_STATUS,
+} from "./booking.constants.js";
 import { bookingRepository } from "./booking.repository.js";
 
 const error = (status, message, code) => new AppError(status, message, [], code);
@@ -47,9 +51,36 @@ const serializeBooking = (booking, idempotent = false) => ({
   idempotent,
 });
 
+const serializeDetailedBooking = (booking, { seatDetails = [] } = {}) => ({
+  bookingId: objectIdString(booking._id),
+  bookingCode: booking.bookingCode,
+  payableReference: booking.payableReference,
+  customerAccountId: objectIdString(booking.customerAccountId),
+  holdId: objectIdString(booking.holdId),
+  showtimeId: objectIdString(booking.showtimeId),
+  seatIds: (booking.seatIds ?? []).map(objectIdString),
+  seatLines: (booking.seatLines ?? []).map((line) => ({
+    seatId: objectIdString(line.seatId),
+    unitPrice: line.unitPrice,
+  })),
+  seats: seatDetails,
+  currency: booking.currency,
+  subtotal: booking.subtotal,
+  discountAmount: booking.discountAmount ?? 0,
+  amount: booking.totalAmount,
+  totalAmount: booking.totalAmount,
+  status: booking.status,
+  bookingTime: booking.bookingTime ? new Date(booking.bookingTime).toISOString() : null,
+  expiresAt: new Date(booking.expiresAt).toISOString(),
+  confirmedAt: booking.confirmedAt ? new Date(booking.confirmedAt).toISOString() : null,
+  expiredAt: booking.expiredAt ? new Date(booking.expiredAt).toISOString() : null,
+});
+
 export const createBookingService = ({
   repository = bookingRepository,
   seatHoldPort,
+  showtimeReader,
+  roomLayoutReader,
   clock = () => new Date(),
   idFactory = () => new mongoose.Types.ObjectId(),
   bookingCodeFactory = () => generateReference("FC"),
@@ -141,7 +172,220 @@ export const createBookingService = ({
     }
   };
 
-  return { createPendingBookingFromHold };
+  const getBookingForPayment = async ({ bookingId, payableReference, ownerId, session } = {}) => {
+    const booking = bookingId
+      ? await repository.findById?.(bookingId, session)
+      : await repository.findByPayableReference?.(payableReference, session);
+
+    if (!booking) {
+      throw error(404, "Booking not found", BOOKING_ERROR.BOOKING_NOT_FOUND);
+    }
+
+    if (ownerId && objectIdString(booking.customerAccountId) !== objectIdString(ownerId)) {
+      throw error(403, "You do not have access to this booking", BOOKING_ERROR.BOOKING_FORBIDDEN);
+    }
+
+    return booking;
+  };
+
+  const confirmBookingAfterVerifiedPayment = async ({
+    bookingId,
+    payableReference,
+    paymentId,
+    verifiedAt = clock(),
+    session: externalSession,
+  }) => {
+    const run = async (session) => {
+      const booking = bookingId
+        ? await repository.findById(bookingId, session)
+        : await repository.findByPayableReference(payableReference, session);
+
+      if (!booking) {
+        throw error(404, "Booking not found", BOOKING_ERROR.BOOKING_NOT_FOUND);
+      }
+
+      if (booking.status === BOOKING_STATUS.CONFIRMED) {
+        return {
+          outcome: BOOKING_CONFIRMATION_OUTCOME.ALREADY_CONFIRMED,
+          booking: serializeDetailedBooking(booking),
+        };
+      }
+
+      const isExpiredByTime =
+        new Date(booking.expiresAt).getTime() <= new Date(verifiedAt).getTime();
+
+      if (booking.status === BOOKING_STATUS.EXPIRED || isExpiredByTime) {
+        if (seatHoldPort.expireHoldForBooking && booking.holdId) {
+          await seatHoldPort.expireHoldForBooking({
+            holdId: booking.holdId,
+            now: verifiedAt,
+            session,
+          });
+        }
+        const expiredBooking =
+          booking.status === BOOKING_STATUS.PENDING_PAYMENT && repository.markExpired
+            ? (await repository.markExpired(
+                { bookingId: booking._id, expiredAt: verifiedAt },
+                session,
+              )) ?? { ...booking, status: BOOKING_STATUS.EXPIRED, expiredAt: verifiedAt }
+            : booking;
+
+        return {
+          outcome: BOOKING_CONFIRMATION_OUTCOME.EXPIRED_REVIEW_REQUIRED,
+          booking: serializeDetailedBooking(expiredBooking),
+        };
+      }
+
+      if (seatHoldPort.consumeHoldForBooking && booking.holdId) {
+        const holdResult = await seatHoldPort.consumeHoldForBooking({
+          holdId: booking.holdId,
+          bookingId: booking._id,
+          ownerId: booking.customerAccountId,
+          seatIds: booking.seatIds,
+          verifiedAt,
+          session,
+        });
+
+        if (holdResult?.outcome === "EXPIRED") {
+          const expiredBooking = repository.markExpired
+            ? (await repository.markExpired(
+                { bookingId: booking._id, expiredAt: verifiedAt },
+                session,
+              )) ?? { ...booking, status: BOOKING_STATUS.EXPIRED, expiredAt: verifiedAt }
+            : { ...booking, status: BOOKING_STATUS.EXPIRED, expiredAt: verifiedAt };
+
+          return {
+            outcome: BOOKING_CONFIRMATION_OUTCOME.EXPIRED_REVIEW_REQUIRED,
+            booking: serializeDetailedBooking(expiredBooking),
+          };
+        }
+      }
+
+      const confirmedBooking = repository.markConfirmed
+        ? (await repository.markConfirmed(
+            { bookingId: booking._id, paymentId, confirmedAt: verifiedAt },
+            session,
+          )) ?? {
+            ...booking,
+            status: BOOKING_STATUS.CONFIRMED,
+            confirmedAt: verifiedAt,
+            paymentId,
+          }
+        : {
+            ...booking,
+            status: BOOKING_STATUS.CONFIRMED,
+            confirmedAt: verifiedAt,
+            paymentId,
+          };
+
+      return {
+        outcome: BOOKING_CONFIRMATION_OUTCOME.CONFIRMED,
+        booking: serializeDetailedBooking(confirmedBooking),
+      };
+    };
+
+    if (externalSession !== undefined) {
+      return run(externalSession);
+    }
+
+    const runInTransaction = repository.withTransaction?.bind(repository) ?? ((work) => work());
+    return runInTransaction(run);
+  };
+
+  const getCustomerBookingDetails = async ({ bookingId, ownerId }) => {
+    const now = clock();
+    let booking = await getBookingForPayment({ bookingId, ownerId });
+
+    if (
+      booking.status === BOOKING_STATUS.PENDING_PAYMENT &&
+      new Date(booking.expiresAt).getTime() <= now.getTime()
+    ) {
+      if (seatHoldPort.expireHoldForBooking && booking.holdId) {
+        await seatHoldPort.expireHoldForBooking({ holdId: booking.holdId, now });
+      }
+      booking =
+        (await repository.markExpired?.({ bookingId: booking._id, expiredAt: now })) ?? {
+          ...booking,
+          status: BOOKING_STATUS.EXPIRED,
+          expiredAt: now,
+        };
+    }
+
+    let showtime = null;
+    let seatDetails = [];
+
+    if (showtimeReader?.getBookableShowtime) {
+      try {
+        showtime = await showtimeReader.getBookableShowtime(
+          booking.showtimeId,
+          new Date(0),
+        );
+      } catch {
+        showtime = null;
+      }
+    }
+
+    if (showtime && roomLayoutReader?.getLayoutVersion) {
+      try {
+        const layout = await roomLayoutReader.getLayoutVersion(
+          showtime.roomId,
+          showtime.roomLayoutVersion,
+        );
+        const seatsById = new Map(
+          (layout?.seats ?? []).map((seat) => [
+            objectIdString(seat.seatId ?? seat._id),
+            seat,
+          ]),
+        );
+        const priceBySeat = new Map(
+          (booking.seatLines ?? []).map((line) => [
+            objectIdString(line.seatId),
+            line.unitPrice,
+          ]),
+        );
+
+        seatDetails = (booking.seatIds ?? []).map((seatId) => {
+          const id = objectIdString(seatId);
+          const physicalSeat = seatsById.get(id);
+          return {
+            seatId: id,
+            row: physicalSeat?.row ?? "",
+            number: physicalSeat?.number ?? "",
+            label: physicalSeat
+              ? `${physicalSeat.row}${physicalSeat.number}`
+              : id.slice(-4).toUpperCase(),
+            type: physicalSeat?.type ?? "STANDARD",
+            unitPrice: priceBySeat.get(id) ?? 0,
+          };
+        });
+      } catch {
+        seatDetails = [];
+      }
+    }
+
+    if (seatDetails.length === 0) {
+      seatDetails = (booking.seatLines ?? []).map((line, index) => ({
+        seatId: objectIdString(line.seatId),
+        row: "",
+        number: index + 1,
+        label: `Seat ${index + 1}`,
+        type: "STANDARD",
+        unitPrice: line.unitPrice,
+      }));
+    }
+
+    return {
+      booking: serializeDetailedBooking(booking, { seatDetails }),
+      showtime,
+    };
+  };
+
+  return {
+    confirmBookingAfterVerifiedPayment,
+    createPendingBookingFromHold,
+    getBookingForPayment,
+    getCustomerBookingDetails,
+  };
 };
 
-export { serializeBooking, validatePriceSnapshot };
+export { serializeBooking, serializeDetailedBooking, validatePriceSnapshot };

@@ -31,6 +31,7 @@ import CounterPaymentPage from '../../features/counter-pos/pages/CounterPaymentP
 import CounterCompletePage from '../../features/counter-pos/pages/CounterCompletePage'
 import SeatSelectionPage from '../../features/seat-selection/pages/SeatSelectionPage'
 import CheckoutPage from '../../features/booking/pages/CheckoutPage'
+import BookingConfirmationPage from '../../features/booking/pages/BookingConfirmationPage'
 import StockInPage from '../../features/inventory/pages/StockInPage'
 import StockLevelsPage from '../../features/inventory/pages/StockLevelsPage'
 import StaffShiftsPage from '../../features/staff-shifts/pages/StaffShiftsPage'
@@ -65,6 +66,14 @@ function AppRouter() {
             <Route path="profile" element={<ProfilePage />} />
             <Route path="booking/:showtimeId/seats" element={<SeatSelectionPage />} />
             <Route path="booking/:showtimeId/checkout" element={<CheckoutPage />} />
+            <Route
+              path="booking/:showtimeId/confirmation/:bookingId"
+              element={<BookingConfirmationPage />}
+            />
+            <Route
+              path="bookings/:bookingId/confirmation"
+              element={<BookingConfirmationPage />}
+            />
             <Route path="profile/edit" element={<EditProfilePage />} />
             <Route path="profile/change-password" element={<ChangePasswordPage />} />
           </Route>

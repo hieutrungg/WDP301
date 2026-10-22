@@ -34,7 +34,11 @@ export const seatHoldService = createSeatHoldService({
 export const bookingService = createBookingService({
   seatHoldPort: {
     getLiveHoldForBooking: (command) => seatHoldService.getLiveHoldForBooking(command),
+    consumeHoldForBooking: (command) => seatHoldService.consumeHoldForBooking(command),
+    expireHoldForBooking: (command) => seatHoldService.expireHoldForBooking(command),
   },
+  showtimeReader,
+  roomLayoutReader,
 });
 
 export const seatAvailabilityRoutes = createSeatAvailabilityRouter(
@@ -44,4 +48,3 @@ export const seatAvailabilityRoutes = createSeatAvailabilityRouter(
 export const seatHoldRoutes = createSeatHoldRouter(createSeatHoldController(seatHoldService));
 
 export const bookingRoutes = createBookingRouter(createBookingController(bookingService));
-

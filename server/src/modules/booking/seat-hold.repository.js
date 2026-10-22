@@ -488,9 +488,122 @@ export const createSeatHoldRepository = ({
     }
   };
 
+  const expireForBooking = async ({ holdId, now = new Date(), session }) => {
+    const hold = await seatHoldModel
+      .findById(holdId)
+      .session(session ?? null)
+      .lean()
+      .exec();
+    if (!hold || hold.status !== SEAT_HOLD_STATUS.ACTIVE) {
+      return hold;
+    }
+
+    await showtimeSeatModel.updateMany(
+      { holdId: hold._id, state: SHOWTIME_SEAT_STATE.HELD },
+      {
+        $set: { state: SHOWTIME_SEAT_STATE.AVAILABLE },
+        $unset: { holdId: "", holdOwnerId: "", holdExpiresAt: "" },
+      },
+      session ? { session } : {},
+    );
+
+    return seatHoldModel
+      .findOneAndUpdate(
+        { _id: hold._id, status: SEAT_HOLD_STATUS.ACTIVE },
+        { $set: { status: SEAT_HOLD_STATUS.EXPIRED, updatedAt: now } },
+        { new: true, ...(session ? { session } : {}) },
+      )
+      .lean()
+      .exec();
+  };
+
+  const consumeForBooking = async ({
+    holdId,
+    bookingId,
+    ownerId,
+    seatIds,
+    verifiedAt = new Date(),
+    session,
+  }) => {
+    const hold = await seatHoldModel
+      .findOne({ _id: holdId, ownerId })
+      .session(session ?? null)
+      .lean()
+      .exec();
+
+    if (!hold) {
+      return { outcome: "EXPIRED" };
+    }
+
+    if (hold.status === SEAT_HOLD_STATUS.CONSUMED) {
+      return { outcome: "ALREADY_CONSUMED", hold };
+    }
+
+    if (
+      hold.status !== SEAT_HOLD_STATUS.ACTIVE ||
+      new Date(hold.expiresAt).getTime() <= new Date(verifiedAt).getTime()
+    ) {
+      await expireForBooking({ holdId: hold._id, now: verifiedAt, session });
+      return { outcome: "EXPIRED" };
+    }
+
+    const expectedSeatIds = (seatIds ?? hold.seatIds ?? []).map(
+      (id) => new mongoose.Types.ObjectId(id),
+    );
+    const seatUpdate = await showtimeSeatModel.updateMany(
+      {
+        holdId: hold._id,
+        holdOwnerId: hold.ownerId,
+        seatId: { $in: expectedSeatIds },
+        state: SHOWTIME_SEAT_STATE.HELD,
+        holdExpiresAt: { $gt: verifiedAt },
+      },
+      {
+        $set: {
+          state: SHOWTIME_SEAT_STATE.SOLD,
+          bookingId: new mongoose.Types.ObjectId(bookingId),
+          updatedAt: verifiedAt,
+        },
+        $unset: { holdExpiresAt: "" },
+      },
+      session ? { session } : {},
+    );
+
+    if ((seatUpdate?.modifiedCount ?? seatUpdate?.matchedCount ?? 0) !== expectedSeatIds.length) {
+      return { outcome: "EXPIRED" };
+    }
+
+    const consumedHold = await seatHoldModel
+      .findOneAndUpdate(
+        {
+          _id: hold._id,
+          ownerId: hold.ownerId,
+          status: SEAT_HOLD_STATUS.ACTIVE,
+        },
+        {
+          $set: {
+            status: SEAT_HOLD_STATUS.CONSUMED,
+            consumedAt: verifiedAt,
+            updatedAt: verifiedAt,
+          },
+        },
+        { new: true, ...(session ? { session } : {}) },
+      )
+      .lean()
+      .exec();
+
+    if (!consumedHold) {
+      return { outcome: "EXPIRED" };
+    }
+
+    return { outcome: "CONSUMED", hold: consumedHold };
+  };
+
   return {
     acquire,
+    consumeForBooking,
     deleteUnpublishedShowtimeSeats,
+    expireForBooking,
     findByOwnerAndCheckoutKey,
     findLiveForBooking,
     hasActiveShowtimeClaims,

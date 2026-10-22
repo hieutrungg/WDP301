@@ -149,8 +149,33 @@ export const createSeatHoldService = ({
   const getLiveHoldForBooking = ({ holdId, ownerId, now = clock(), session } = {}) =>
     repository.findLiveForBooking({ holdId, ownerId, now, session });
 
-  return { acquireSeatHold, getLiveHoldForBooking, releaseSeatHold };
+  const consumeHoldForBooking = ({
+    holdId,
+    bookingId,
+    ownerId,
+    seatIds,
+    verifiedAt = clock(),
+    session,
+  } = {}) =>
+    repository.consumeForBooking({
+      holdId,
+      bookingId,
+      ownerId,
+      seatIds,
+      verifiedAt,
+      session,
+    });
+
+  const expireHoldForBooking = ({ holdId, now = clock(), session } = {}) =>
+    repository.expireForBooking({ holdId, now, session });
+
+  return {
+    acquireSeatHold,
+    consumeHoldForBooking,
+    expireHoldForBooking,
+    getLiveHoldForBooking,
+    releaseSeatHold,
+  };
 };
 
 export { commandHash, normalizeSeatIds, serializeHold, validatePriceQuote };
-
