@@ -11,6 +11,17 @@ export const createPaymentController = (service) => ({
     }
   },
 
+  listMyBookings: async (req, res, next) => {
+    try {
+      const data = await service.listCustomerBookingPayments({
+        ownerId: req.auth.accountId,
+      });
+      res.status(200).json({ success: true, data });
+    } catch (error) {
+      next(error);
+    }
+  },
+
   getByBooking: async (req, res, next) => {
     try {
       const { bookingId } = req.validated?.params ?? req.params;

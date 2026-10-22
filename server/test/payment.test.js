@@ -88,6 +88,11 @@ const createInMemoryHarness = ({
     async findById(targetBookingId) {
       return bookings.get(String(targetBookingId)) ?? null;
     },
+    async findByCustomerAccountId(customerAccountId) {
+      return [...bookings.values()].filter(
+        (b) => String(b.customerAccountId) === String(customerAccountId),
+      );
+    },
     async findByPayableReference(payableReference) {
       for (const booking of bookings.values()) {
         if (booking.payableReference === payableReference) {
@@ -613,7 +618,7 @@ test("11 & 12. Forged payment amount is rejected with 400 and unauthorized booki
   );
 });
 
-test("13, 14 & 15. HTTP routes support all 4 C14 payment methods, reloadable confirmation state, and disable mock simulation when NODE_ENV=production", async (t) => {
+test("13, 14, 15 & 16. HTTP routes support all 4 C14 payment methods, reloadable confirmation state, My Tickets history, and disable mock simulation when NODE_ENV=production", async (t) => {
   const previousSecret = process.env.JWT_ACCESS_SECRET;
   process.env.JWT_ACCESS_SECRET = "payment-route-test-secret";
   t.after(() => {
@@ -725,4 +730,16 @@ test("13, 14 & 15. HTTP routes support all 4 C14 payment methods, reloadable con
   );
   assert.equal(reloadRes.body.data.seats.length, 2);
   assert.equal(reloadRes.body.data.seats[0].label, "G12");
+
+  // List My Tickets & Booking History
+  const myBookingsRes = await request("/me/bookings");
+  assert.equal(myBookingsRes.status, 200);
+  assert.equal(myBookingsRes.body.data.summary.totalBookings, 1);
+  assert.equal(myBookingsRes.body.data.summary.confirmedTicketsCount, 1);
+  assert.equal(myBookingsRes.body.data.items.length, 1);
+  assert.equal(myBookingsRes.body.data.items[0].seats[0].label, "G12");
+  assert.equal(
+    myBookingsRes.body.data.items[0].ticketIssuance.isDemoPreview,
+    true,
+  );
 });

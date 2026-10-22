@@ -879,5 +879,97 @@ export const createPaymentService = ({
         ticketIssuance: buildTicketIssuancePreview(effectiveBooking, payment),
       };
     },
+
+    listCustomerBookingPayments: async ({ ownerId, limit = 50 }) => {
+      if (!bookingService.listCustomerBookings) {
+        return {
+          items: [],
+          summary: {
+            totalBookings: 0,
+            confirmedTicketsCount: 0,
+            pendingCount: 0,
+            expiredOrReviewCount: 0,
+          },
+        };
+      }
+
+      const currentNow = now();
+      const bookingDetailsList = await bookingService.listCustomerBookings({
+        ownerId,
+        limit,
+      });
+
+      const items = [];
+      for (const detail of bookingDetailsList) {
+        let payment = await paymentRepository.findByBookingId(
+          detail.booking.bookingId,
+        );
+
+        const isBookingExpired =
+          detail.booking.status === BOOKING_STATUS.EXPIRED ||
+          (detail.booking.status === BOOKING_STATUS.PENDING_PAYMENT &&
+            new Date(detail.booking.expiresAt).getTime() <=
+              currentNow.getTime());
+
+        if (
+          isBookingExpired &&
+          payment &&
+          payment.status !== PAYMENT_STATUS.PAID &&
+          payment.status !== PAYMENT_STATUS.REVIEW_REQUIRED &&
+          payment.status !== PAYMENT_STATUS.EXPIRED
+        ) {
+          const updatedAttempts = (payment.attempts || []).map((item) =>
+            item.status === PAYMENT_ATTEMPT_STATUS.PENDING
+              ? {
+                  ...item,
+                  status: PAYMENT_ATTEMPT_STATUS.EXPIRED,
+                  completedAt: currentNow,
+                  failureReason: "BOOKING_EXPIRED",
+                }
+              : item,
+          );
+          payment = await paymentRepository.saveState(payment._id, {
+            status: PAYMENT_STATUS.EXPIRED,
+            attempts: updatedAttempts,
+          });
+        }
+
+        const latestAttempt = pickLatestAttempt(payment);
+        items.push({
+          ...detail,
+          booking: detail.booking,
+          seats: detail.booking.seats || [],
+          payment: toPaymentDto(payment),
+          activeAttempt: toAttemptDto(latestAttempt),
+          ticketIssuance: buildTicketIssuancePreview(detail.booking, payment),
+        });
+      }
+
+      const confirmedTicketsCount = items.filter(
+        (item) =>
+          item.booking.status === BOOKING_STATUS.CONFIRMED &&
+          item.payment?.status === PAYMENT_STATUS.PAID,
+      ).length;
+
+      const pendingCount = items.filter(
+        (item) => item.booking.status === BOOKING_STATUS.PENDING_PAYMENT,
+      ).length;
+
+      const expiredOrReviewCount = items.filter(
+        (item) =>
+          item.booking.status === BOOKING_STATUS.EXPIRED ||
+          item.payment?.status === PAYMENT_STATUS.REVIEW_REQUIRED,
+      ).length;
+
+      return {
+        items,
+        summary: {
+          totalBookings: items.length,
+          confirmedTicketsCount,
+          pendingCount,
+          expiredOrReviewCount,
+        },
+      };
+    },
   };
 };

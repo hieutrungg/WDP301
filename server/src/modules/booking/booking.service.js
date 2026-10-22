@@ -380,11 +380,31 @@ export const createBookingService = ({
     };
   };
 
+  const listCustomerBookings = async ({ ownerId, limit = 50 }) => {
+    if (!repository.findByCustomerAccountId) {
+      return [];
+    }
+
+    const rawBookings = await repository.findByCustomerAccountId(ownerId, {
+      limit,
+    });
+    const results = [];
+    for (const raw of rawBookings) {
+      const detail = await getCustomerBookingDetails({
+        bookingId: raw._id,
+        ownerId,
+      });
+      results.push(detail);
+    }
+    return results;
+  };
+
   return {
     confirmBookingAfterVerifiedPayment,
     createPendingBookingFromHold,
     getBookingForPayment,
     getCustomerBookingDetails,
+    listCustomerBookings,
   };
 };
 
