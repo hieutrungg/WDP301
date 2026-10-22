@@ -1,16 +1,14 @@
 import mongoose from "mongoose";
 import { AppError } from "../../utils/AppError.js";
-import {
-  SEAT_HOLD_ERROR,
-  SHOWTIME_SEAT_STATE,
-} from "./seat-hold.constants.js";
+import { SEAT_HOLD_ERROR, SHOWTIME_SEAT_STATE } from "./seat-hold.constants.js";
 import {
   seatHoldRepository,
   SeatClaimConflictError,
   ShowtimeSeatInitializationConflictError,
 } from "./seat-hold.repository.js";
 
-const error = (status, message, code) => new AppError(status, message, [], code);
+const error = (status, message, code) =>
+  new AppError(status, message, [], code);
 
 const seatIdentity = (seat) => String(seat.seatId ?? seat._id);
 
@@ -18,7 +16,10 @@ const projectAvailability = ({ seat, state, ownerId, now, unitPrice }) => {
   let availability = state.state;
   let holdExpiresAt;
 
-  if (seat.status !== "ENABLED" || state.state === SHOWTIME_SEAT_STATE.UNAVAILABLE) {
+  if (
+    seat.status !== "ENABLED" ||
+    state.state === SHOWTIME_SEAT_STATE.UNAVAILABLE
+  ) {
     availability = SHOWTIME_SEAT_STATE.UNAVAILABLE;
   } else if (state.state === SHOWTIME_SEAT_STATE.HELD) {
     if (state.holdExpiresAt instanceof Date && state.holdExpiresAt <= now) {
@@ -52,8 +53,16 @@ export const createSeatAvailabilityService = ({
   priceQuoter,
   clock = () => new Date(),
 } = {}) => {
-  const initializeForPublishedShowtime = async ({ showtimeId, roomId, roomLayoutVersion, pricesBySeatType }) => {
-    const layout = await roomLayoutReader.getLayoutVersion(roomId, roomLayoutVersion);
+  const initializeForPublishedShowtime = async ({
+    showtimeId,
+    roomId,
+    roomLayoutVersion,
+    pricesBySeatType,
+  }) => {
+    const layout = await roomLayoutReader.getLayoutVersion(
+      roomId,
+      roomLayoutVersion,
+    );
     if (!layout || !Array.isArray(layout.seats) || layout.seats.length === 0) {
       throw error(
         409,
@@ -65,7 +74,11 @@ export const createSeatAvailabilityService = ({
     const seats = layout.seats.map((seat) => {
       const price = pricesBySeatType?.[seat.type];
       if (pricesBySeatType && (!Number.isSafeInteger(price) || price < 0)) {
-        throw error(409, "The price plan must cover every physical seat type", SEAT_HOLD_ERROR.PRICE_QUOTE_FAILED);
+        throw error(
+          409,
+          "The price plan must cover every physical seat type",
+          SEAT_HOLD_ERROR.PRICE_QUOTE_FAILED,
+        );
       }
       return {
         seatId: new mongoose.Types.ObjectId(seatIdentity(seat)),
@@ -97,10 +110,15 @@ export const createSeatAvailabilityService = ({
   };
 
   const discardForUnpublishedShowtime = (showtimeId) =>
-    repository.deleteUnpublishedShowtimeSeats(new mongoose.Types.ObjectId(showtimeId));
+    repository.deleteUnpublishedShowtimeSeats(
+      new mongoose.Types.ObjectId(showtimeId),
+    );
 
   const hasActiveClaims = (showtimeId, now = clock()) =>
-    repository.hasActiveShowtimeClaims(new mongoose.Types.ObjectId(showtimeId), now);
+    repository.hasActiveShowtimeClaims(
+      new mongoose.Types.ObjectId(showtimeId),
+      now,
+    );
 
   const getAvailabilitySummary = async (showtimeIds, now = clock()) => {
     if (!showtimeIds.length) return new Map();
@@ -109,30 +127,104 @@ export const createSeatAvailabilityService = ({
       now,
     );
     return new Map(
-      rows.map((row) => [row._id.toString(), {
-        totalSeatCount: row.totalSeatCount,
-        availableSeatCount: row.availableSeatCount,
-      }]),
+      rows.map((row) => [
+        row._id.toString(),
+        {
+          totalSeatCount: row.totalSeatCount,
+          availableSeatCount: row.availableSeatCount,
+        },
+      ]),
     );
   };
 
-  const repriceUnclaimedShowtime = async ({ showtimeId, roomId, roomLayoutVersion, seatTypePrices, now, commit }) => {
-    const layout = await roomLayoutReader.getLayoutVersion(roomId, roomLayoutVersion);
+  // Read the immutable prices for the exact layout version published with a Showtime.
+  // Return null when the snapshot is incomplete or inconsistent so discovery fails closed.
+  const getPriceSnapshot = async ({
+    showtimeId,
+    roomId,
+    roomLayoutVersion,
+  }) => {
+    const [layout, states] = await Promise.all([
+      roomLayoutReader.getLayoutVersion(roomId, roomLayoutVersion),
+      repository.listByShowtime(new mongoose.Types.ObjectId(showtimeId)),
+    ]);
+    if (!layout?.seats?.length || !states.length) return null;
+
+    const stateBySeat = new Map(
+      states.map((state) => [state.seatId.toString(), state]),
+    );
+    const bySeatType = {};
+    for (const seat of layout.seats.filter(
+      ({ status }) => status === "ENABLED",
+    )) {
+      const state = stateBySeat.get(seatIdentity(seat));
+      if (
+        !state ||
+        state.roomLayoutVersion !== roomLayoutVersion ||
+        !Number.isSafeInteger(state.priceSnapshot) ||
+        state.priceSnapshot < 0
+      )
+        return null;
+      if (
+        bySeatType[seat.type] !== undefined &&
+        bySeatType[seat.type] !== state.priceSnapshot
+      )
+        return null;
+      bySeatType[seat.type] = state.priceSnapshot;
+    }
+    return Object.keys(bySeatType).length
+      ? { currency: "VND", bySeatType }
+      : null;
+  };
+
+  const repriceUnclaimedShowtime = async ({
+    showtimeId,
+    roomId,
+    roomLayoutVersion,
+    seatTypePrices,
+    now,
+    commit,
+  }) => {
+    const layout = await roomLayoutReader.getLayoutVersion(
+      roomId,
+      roomLayoutVersion,
+    );
     if (!layout?.seats?.length) {
-      throw error(409, "The published room layout snapshot is unavailable", SEAT_HOLD_ERROR.SHOWTIME_SEATS_NOT_INITIALIZED);
+      throw error(
+        409,
+        "The published room layout snapshot is unavailable",
+        SEAT_HOLD_ERROR.SHOWTIME_SEATS_NOT_INITIALIZED,
+      );
     }
     const seats = layout.seats.map((seat) => {
       const priceSnapshot = seatTypePrices?.[seat.type];
       if (!Number.isSafeInteger(priceSnapshot) || priceSnapshot < 0) {
-        throw error(409, "The price plan must cover every physical seat type", SEAT_HOLD_ERROR.PRICE_QUOTE_FAILED);
+        throw error(
+          409,
+          "The price plan must cover every physical seat type",
+          SEAT_HOLD_ERROR.PRICE_QUOTE_FAILED,
+        );
       }
-      return { seatId: new mongoose.Types.ObjectId(seatIdentity(seat)), priceSnapshot };
+      return {
+        seatId: new mongoose.Types.ObjectId(seatIdentity(seat)),
+        priceSnapshot,
+      };
     });
     try {
-      return await repository.repriceUnclaimedShowtime({ showtimeId, roomLayoutVersion, seats, now, commit });
+      return await repository.repriceUnclaimedShowtime({
+        showtimeId,
+        roomLayoutVersion,
+        seats,
+        now,
+        commit,
+      });
     } catch (cause) {
       if (cause instanceof SeatClaimConflictError) {
-        throw error(409, "This showtime has booking activity and cannot be repriced", SEAT_HOLD_ERROR.SEAT_UNAVAILABLE);
+        throw error(
+          409,
+          "This showtime has booking activity and cannot be repriced",
+          SEAT_HOLD_ERROR.SEAT_UNAVAILABLE,
+        );
       }
       throw cause;
     }
@@ -142,11 +234,18 @@ export const createSeatAvailabilityService = ({
     const now = clock();
     const showtime = await showtimeReader.getBookableShowtime(showtimeId, now);
     if (!showtime) {
-      throw error(409, "Showtime is not available for booking", SEAT_HOLD_ERROR.SHOWTIME_NOT_BOOKABLE);
+      throw error(
+        409,
+        "Showtime is not available for booking",
+        SEAT_HOLD_ERROR.SHOWTIME_NOT_BOOKABLE,
+      );
     }
 
     const [layout, states] = await Promise.all([
-      roomLayoutReader.getLayoutVersion(showtime.roomId, showtime.roomLayoutVersion),
+      roomLayoutReader.getLayoutVersion(
+        showtime.roomId,
+        showtime.roomLayoutVersion,
+      ),
       repository.listByShowtime(showtimeId),
     ]);
     if (!layout || states.length !== layout.seats.length) {
@@ -157,7 +256,9 @@ export const createSeatAvailabilityService = ({
       );
     }
 
-    const stateBySeat = new Map(states.map((state) => [state.seatId.toString(), state]));
+    const stateBySeat = new Map(
+      states.map((state) => [state.seatId.toString(), state]),
+    );
     if (layout.seats.some((seat) => !stateBySeat.has(seatIdentity(seat)))) {
       throw error(
         409,
@@ -169,9 +270,17 @@ export const createSeatAvailabilityService = ({
     const enabledSeatIds = layout.seats
       .filter(({ status }) => status === "ENABLED")
       .map(seatIdentity);
-    const quote = await priceQuoter.quote(showtimeId, enabledSeatIds, ownerId, now);
+    const quote = await priceQuoter.quote(
+      showtimeId,
+      enabledSeatIds,
+      ownerId,
+      now,
+    );
     const priceBySeat = new Map(
-      quote?.lines?.map(({ seatId, unitPrice }) => [String(seatId), unitPrice]) ?? [],
+      quote?.lines?.map(({ seatId, unitPrice }) => [
+        String(seatId),
+        unitPrice,
+      ]) ?? [],
     );
 
     return {
@@ -200,8 +309,15 @@ export const createSeatAvailabilityService = ({
     };
   };
 
-  return { discardForUnpublishedShowtime, getAvailabilitySummary, getSeatAvailability, hasActiveClaims, initializeForPublishedShowtime, repriceUnclaimedShowtime };
+  return {
+    discardForUnpublishedShowtime,
+    getAvailabilitySummary,
+    getPriceSnapshot,
+    getSeatAvailability,
+    hasActiveClaims,
+    initializeForPublishedShowtime,
+    repriceUnclaimedShowtime,
+  };
 };
 
 export { projectAvailability, seatIdentity };
-

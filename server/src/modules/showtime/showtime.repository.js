@@ -20,6 +20,26 @@ export const findPublicShowtimes = async ({ movieId, cinemaId, roomId, dateRange
       },
     },
     { $match: { startAt: { $gt: now, ...(dateRange ? { $gte: dateRange.start, $lt: dateRange.end } : {}) } } },
+    {
+      $lookup: {
+        from: "showtime_seats",
+        let: { showtimeId: "$_id" },
+        pipeline: [
+          { $match: { $expr: { $and: [
+            { $eq: ["$showtimeId", "$$showtimeId"] },
+            { $ne: ["$state", "UNAVAILABLE"] },
+            { $isNumber: "$priceSnapshot" },
+            { $or: [
+              { $eq: ["$state", "AVAILABLE"] },
+              { $and: [ { $eq: ["$state", "HELD"] }, { $lte: ["$holdExpiresAt", now] } ] },
+            ] },
+          ] } } },
+          { $limit: 1 },
+        ],
+        as: "bookableSeat",
+      },
+    },
+    { $match: { "bookableSeat.0": { $exists: true } } },
     { $lookup: { from: "rooms", localField: "roomId", foreignField: "_id", as: "room" } },
     { $unwind: "$room" },
     { $match: { "room.status": { $in: ["ACTIVE", "AVAILABLE"] } } },
@@ -44,6 +64,7 @@ export const findPublicShowtimes = async ({ movieId, cinemaId, roomId, dateRange
               startAt: 1,
               endAt: 1,
               status: 1,
+              roomLayoutVersion: 1,
               cinema: { id: "$cinema._id", branchName: "$cinema.branchName", address: "$cinema.address" },
               room: { id: "$room._id", roomName: "$room.roomName", roomType: "$room.roomType" },
               movie: {
@@ -61,14 +82,14 @@ export const findPublicShowtimes = async ({ movieId, cinemaId, roomId, dateRange
     },
   ];
 
-  const [result] = await collection("showtimes").aggregate(pipeline).toArray();
-  return { items: result?.items ?? [], total: result?.total?.[0]?.count ?? 0 };
+  const [pageResult] = await collection("showtimes").aggregate(pipeline).toArray();
+  return { items: pageResult?.items ?? [], total: pageResult?.total?.[0]?.count ?? 0 };
 };
 
 export const findManagerShowtimes = async ({ view, cinemaId, query, dateRange, page, limit, now }) => {
   const match = view === "history"
     ? { $or: [{ status: SHOWTIME_STATUS.CANCELLED }, { endAt: { $lte: now } }] }
-    : { status: SHOWTIME_STATUS.PUBLISHED, startAt: { $gt: now } };
+    : { status: { $in: [SHOWTIME_STATUS.PUBLISHED, SHOWTIME_STATUS.CANCELLED] } };
   const pipeline = [
     { $addFields: { startAt: { $ifNull: ["$startAt", "$startTime"] }, endAt: { $ifNull: ["$endAt", "$endTime"] } } },
     ...(dateRange ? [{ $match: { startAt: { $gte: dateRange.start, $lt: dateRange.end } } }] : []),
@@ -115,6 +136,26 @@ export const findPublicShowtimeById = async (showtimeId, now) => {
     { $match: { _id: toObjectId(showtimeId), status: SHOWTIME_STATUS.PUBLISHED } },
     { $addFields: { startAt: { $ifNull: ["$startAt", "$startTime"] }, endAt: { $ifNull: ["$endAt", "$endTime"] } } },
     { $match: { startAt: { $gt: now } } },
+    {
+      $lookup: {
+        from: "showtime_seats",
+        let: { showtimeId: "$_id" },
+        pipeline: [
+          { $match: { $expr: { $and: [
+            { $eq: ["$showtimeId", "$$showtimeId"] },
+            { $ne: ["$state", "UNAVAILABLE"] },
+            { $isNumber: "$priceSnapshot" },
+            { $or: [
+              { $eq: ["$state", "AVAILABLE"] },
+              { $and: [ { $eq: ["$state", "HELD"] }, { $lte: ["$holdExpiresAt", now] } ] },
+            ] },
+          ] } } },
+          { $limit: 1 },
+        ],
+        as: "bookableSeat",
+      },
+    },
+    { $match: { "bookableSeat.0": { $exists: true } } },
     { $lookup: { from: "rooms", localField: "roomId", foreignField: "_id", as: "room" } },
     { $unwind: "$room" },
     { $match: { "room.status": { $in: ["ACTIVE", "AVAILABLE"] } } },
@@ -129,6 +170,7 @@ export const findPublicShowtimeById = async (showtimeId, now) => {
         _id: 1,
         movieId: 1,
         roomId: 1,
+        roomLayoutVersion: 1,
         startAt: 1,
         endAt: 1,
         status: 1,

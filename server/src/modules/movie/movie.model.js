@@ -22,6 +22,7 @@ const movieSchema = new mongoose.Schema(
     director: { type: String, required: true, trim: true },
     ageRating: { type: String, required: true, trim: true },
     posterUrl: { type: String, required: true, trim: true },
+    landscapePosterUrl: { type: String, trim: true, default: "" },
     trailerUrl: { type: String, trim: true, default: "" },
     status: {
       type: String,
