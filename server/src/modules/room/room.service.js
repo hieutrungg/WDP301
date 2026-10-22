@@ -1,8 +1,16 @@
 import mongoose from "mongoose";
 import { AppError } from "../../utils/AppError.js";
 import { getBranchSummariesByIds } from "../branch/branch.service.js";
-import { countFuturePublishedShowtimesForLayout } from "./room-dependency.repository.js";
-import { ROOM_ERROR } from "./room.constants.js";
+import {
+  countFuturePublishedShowtimesByRoomIds,
+  countFuturePublishedShowtimesForLayout,
+} from "./room-dependency.repository.js";
+import {
+  LEGACY_ROOM_ACTIVE_STATUS,
+  ROOM_ACTIVE_STATUS_VALUES,
+  ROOM_ERROR,
+  ROOM_STATUS,
+} from "./room.constants.js";
 import {
   countRooms,
   findLayoutSnapshot,
@@ -22,7 +30,11 @@ import {
 
 const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-const roomNotFoundError = () => new AppError(404, "Room not found", [], ROOM_ERROR.NOT_FOUND);
+export const roomNotFoundError = () => new AppError(404, "Room not found", [], ROOM_ERROR.NOT_FOUND);
+
+// `AVAILABLE` is the pre-ROOM-001 spelling of ACTIVE; clients only ever see ACTIVE.
+export const normalizeRoomStatus = (status) =>
+  status === LEGACY_ROOM_ACTIVE_STATUS ? ROOM_STATUS.ACTIVE : (status ?? null);
 
 const versionConflictError = () =>
   new AppError(
@@ -38,12 +50,12 @@ const requireRoom = async (roomId) => {
   return room;
 };
 
-const serializeRoom = (room, branch) => ({
+export const serializeRoom = (room, branch) => ({
   id: room._id.toString(),
   branch: branch ?? { id: room.branchId?.toString() ?? null, branchName: null, status: null },
   roomName: room.roomName,
   roomType: room.roomType ?? null,
-  status: room.status ?? null,
+  status: normalizeRoomStatus(room.status),
   capacity: room.capacity ?? 0,
   layoutVersion: room.layoutVersion ?? 0,
 });
@@ -94,24 +106,59 @@ const buildLayoutUpdate = ({ rowLabels, columnCount, seats }, layoutVersion, act
   seatLayout: { rowLabels, columnCount, updatedBy: actorId, updatedAt: new Date() },
 });
 
-export const listRooms = async ({ branchId, q, page, limit }) => {
+export const buildRoomFilter = ({ branchId, q, status, roomType }) => {
   const filter = {};
   if (branchId) filter.branchId = new mongoose.Types.ObjectId(branchId);
   if (q) filter.roomName = new RegExp(escapeRegex(q), "i");
+  if (status === ROOM_STATUS.ACTIVE) filter.status = { $in: ROOM_ACTIVE_STATUS_VALUES };
+  else if (status) filter.status = status;
+  if (roomType) filter.roomType = new RegExp(`^${escapeRegex(roomType)}$`, "i");
+  return filter;
+};
+
+// Without an explicit sort the list keeps the order the seat map room picker relies on.
+const buildRoomSort = (sort, order) => {
+  if (!sort) return { branchId: 1, roomName: 1, _id: 1 };
+  const direction = order === "desc" ? -1 : 1;
+  return { [sort]: direction, ...(sort === "roomName" ? { branchId: 1 } : {}), _id: direction };
+};
+
+// Seat counts a room card needs. Counts only include ENABLED seats, like the layout summary.
+export const serializeSeatCounts = (room) => {
+  const enabledTotal = room.standardCount + room.vipCount + room.doubleLuxuryCount;
+
+  return {
+    standardCount: room.standardCount,
+    vipCount: room.vipCount,
+    doubleLuxuryCount: room.doubleLuxuryCount,
+    accessibleCount: room.accessibleCount,
+    disabledCount: Math.max(room.seatCount - enabledTotal, 0),
+  };
+};
+
+export const listRooms = async ({ branchId, q, status, roomType, sort, order, page, limit }) => {
+  const filter = buildRoomFilter({ branchId, q, status, roomType });
 
   const [rooms, total] = await Promise.all([
-    findRooms({ filter, skip: (page - 1) * limit, limit }),
+    findRooms({ filter, sort: buildRoomSort(sort, order), skip: (page - 1) * limit, limit }),
     countRooms(filter),
   ]);
 
   const branchIds = [...new Set(rooms.map(({ branchId: id }) => id?.toString()).filter(Boolean))];
-  const branches = await getBranchSummariesByIds(branchIds);
+  const [branches, upcomingCounts] = await Promise.all([
+    getBranchSummariesByIds(branchIds),
+    countFuturePublishedShowtimesByRoomIds(rooms.map(({ _id }) => _id)),
+  ]);
 
   return {
     items: rooms.map((room) => ({
       ...serializeRoom(room, branches.get(room.branchId?.toString())),
       hasLayout: room.seatCount > 0,
       layoutUpdatedAt: room.seatLayout?.updatedAt ?? null,
+      seatCounts: serializeSeatCounts(room),
+      upcomingShowtimeCount: upcomingCounts.get(room._id.toString()) ?? 0,
+      createdAt: room.createdAt ?? null,
+      updatedAt: room.updatedAt ?? null,
     })),
     meta: { page, limit, total, totalPages: Math.ceil(total / limit) },
   };

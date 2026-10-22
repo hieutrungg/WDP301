@@ -1,4 +1,5 @@
 import {
+<<<<<<< Updated upstream
     Armchair,
     Boxes,
     CalendarClock,
@@ -20,10 +21,35 @@ import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router";
 import { toast } from "sonner";
 import AppLogo from "../components/common/AppLogo";
 import { useAuth } from "../features/auth/hooks/useAuth";
+=======
+  Armchair,
+  Boxes,
+  CalendarClock,
+  CalendarDays,
+  ChartLine,
+  ChevronRight,
+  DoorOpen,
+  Film,
+  History,
+  House,
+  LayoutDashboard,
+  LogOut,
+  Menu,
+  TicketPercent,
+  UsersRound,
+  X,
+} from 'lucide-react'
+import { useState } from 'react'
+import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router'
+import { toast } from 'sonner'
+import AppLogo from '../components/common/AppLogo'
+import { useAuth } from '../features/auth/hooks/useAuth'
+>>>>>>> Stashed changes
 
 // Items without `to` are planned manager screens from SCREEN_FLOW §4 that have no route yet.
 // `permission` only hides navigation; the API still enforces access.
 const navItems = [
+<<<<<<< Updated upstream
     { label: "Dashboard", icon: LayoutDashboard },
     {
         label: "Movies",
@@ -66,6 +92,26 @@ const navItems = [
     },
     { label: "Reports", icon: ChartLine },
 ];
+=======
+  { label: 'Dashboard', icon: LayoutDashboard },
+  { label: 'Movies', icon: Film, to: '/manager/movies/new', permission: 'movie.create' },
+  {
+    label: 'Showtimes',
+    icon: CalendarClock,
+    to: '/manager/showtimes',
+    children: [
+      { label: 'Schedule', to: '/manager/showtimes', icon: CalendarDays },
+      { label: 'History', to: '/manager/showtimes?view=history', icon: History, view: 'history' },
+    ],
+  },
+  { label: 'Rooms', icon: DoorOpen, to: '/manager/rooms', permission: 'room.manage' },
+  { label: 'Seat Maps', icon: Armchair, to: '/manager/seat-maps', permission: 'room.manage' },
+  { label: 'Concession Stock', icon: Boxes, to: '/manager/inventory', permission: 'inventory.view' },
+  { label: 'Promotions', icon: TicketPercent },
+  { label: 'Staff Shifts', icon: UsersRound, to: '/manager/staff-shifts', permission: 'shift.view' },
+  { label: 'Reports', icon: ChartLine },
+]
+>>>>>>> Stashed changes
 
 function SidebarNav({ permissions, onNavigate }) {
     const location = useLocation();
@@ -152,6 +198,7 @@ function SidebarNav({ permissions, onNavigate }) {
 }
 
 function ManagerLayout() {
+<<<<<<< Updated upstream
     const [menuOpen, setMenuOpen] = useState(false);
     const [isLoggingOut, setIsLoggingOut] = useState(false);
     const { account, logout } = useAuth();
@@ -177,6 +224,37 @@ function ManagerLayout() {
               ? "Update movie"
               : "Movie management";
         breadcrumb = ["Movie catalog & distribution", movieScreen];
+=======
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [isLoggingOut, setIsLoggingOut] = useState(false)
+  const { account, logout } = useAuth()
+  const location = useLocation()
+  const navigate = useNavigate()
+  const displayName = account?.profile?.fullName || account?.username || ''
+  const roleLabel = account?.roles?.map(({ name }) => name).join(', ')
+  const permissions = new Set(account?.permissions?.map(({ name }) => name))
+  const showtimePage = location.pathname.startsWith('/manager/showtimes')
+  const inventoryPage = location.pathname.startsWith('/manager/inventory')
+  const staffShiftPage = location.pathname.startsWith('/manager/staff-shifts')
+  let breadcrumb = ['Auditorium settings', 'Configure room seat maps']
+  if (showtimePage) breadcrumb = ['Schedule & programming', 'Showtime management']
+  if (inventoryPage) breadcrumb = ['Concession & inventory', 'Concession stock levels']
+  if (location.pathname.startsWith('/manager/movies')) breadcrumb = ['Movie catalog & distribution', 'Add new movie']
+  if (staffShiftPage) breadcrumb = ['Human resources & operations', 'Staff shift monitoring']
+  if (location.pathname.startsWith('/manager/rooms')) breadcrumb = ['Facilities & rooms', 'Room management']
+
+  const handleLogout = async () => {
+    setIsLoggingOut(true)
+
+    try {
+      await logout()
+      toast.success('Signed out successfully')
+      navigate('/', { replace: true })
+    } catch {
+      toast.error('Unable to sign out. Please try again.')
+    } finally {
+      setIsLoggingOut(false)
+>>>>>>> Stashed changes
     }
 
     if (staffShiftPage) {

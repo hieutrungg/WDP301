@@ -3,6 +3,9 @@ import {
   POSITION_TYPES,
   ROOM_PAGE_LIMIT_DEFAULT,
   ROOM_PAGE_LIMIT_MAX,
+  ROOM_SORT_FIELDS,
+  ROOM_STATUSES,
+  ROOM_TYPE_PATTERN,
   SEAT_LAYOUT_LIMITS,
   SEAT_STATUSES,
   SEAT_TYPES,
@@ -18,16 +21,71 @@ export const roomIdParamsSchema = z.object({
   roomId: objectIdField("Room id"),
 });
 
+const collapseSpaces = (value) => value.replace(/\s+/g, " ");
+
+const searchTextField = z
+  .string()
+  .trim()
+  .max(100, "Search text is too long")
+  .optional()
+  .transform((value) => value || undefined);
+
+const roomNameField = z
+  .string({ error: "Room name is required" })
+  .trim()
+  .min(1, "Room name is required")
+  .max(60, "Room name is too long")
+  .transform(collapseSpaces);
+
+// Room type is a free label (the schema doc only gives examples: 2D, 3D, IMAX), stored upper-case.
+const roomTypeField = z
+  .string({ error: "Room type is required" })
+  .trim()
+  .transform((value) => collapseSpaces(value).toUpperCase())
+  .refine((value) => ROOM_TYPE_PATTERN.test(value), "Room type must be 1-30 letters, digits or spaces");
+
+const statusField = z.enum(ROOM_STATUSES, { error: "Status must be ACTIVE, MAINTENANCE or INACTIVE" });
+
 export const listRoomsQuerySchema = z.strictObject({
   branchId: objectIdField("Branch id").optional(),
-  q: z
+  q: searchTextField,
+  status: statusField.optional(),
+  roomType: z
     .string()
     .trim()
-    .max(100, "Search text is too long")
+    .max(30, "Room type is too long")
     .optional()
-    .transform((value) => value || undefined),
+    .transform((value) => (value ? collapseSpaces(value).toUpperCase() : undefined)),
+  sort: z.enum(ROOM_SORT_FIELDS).optional(),
+  order: z.enum(["asc", "desc"]).default("asc"),
   page: z.coerce.number().int().min(1).max(10000).default(1),
   limit: z.coerce.number().int().min(1).max(ROOM_PAGE_LIMIT_MAX).default(ROOM_PAGE_LIMIT_DEFAULT),
+});
+
+export const roomSummaryQuerySchema = z.strictObject({
+  branchId: objectIdField("Branch id").optional(),
+});
+
+export const createRoomSchema = z.object({
+  branchId: objectIdField("Branch id"),
+  roomName: roomNameField,
+  roomType: roomTypeField,
+  status: statusField.optional().default("ACTIVE"),
+});
+
+// The branch is fixed at creation and capacity comes from the seat map, so neither can be sent.
+// Status changes go through PATCH /:roomId/status so the showtime guard always runs.
+export const updateRoomSchema = z
+  .strictObject({
+    roomName: roomNameField.optional(),
+    roomType: roomTypeField.optional(),
+  })
+  .refine((data) => Object.values(data).some((value) => value !== undefined), {
+    message: "Provide at least one field to update",
+  });
+
+export const changeRoomStatusSchema = z.strictObject({
+  status: statusField,
 });
 
 const rowLabelField = z

@@ -45,3 +45,36 @@ export const ROOM_ERROR = Object.freeze({
   SEAT_LAYOUT_IN_USE: "SEAT_LAYOUT_IN_USE",
   SEAT_LAYOUT_VERSION_CONFLICT: "SEAT_LAYOUT_VERSION_CONFLICT",
 });
+
+// ROOM-001 (PROPOSED): Room lifecycle. `AVAILABLE` is the pre-ROOM-001 spelling of ACTIVE that the
+// schema doc and Showtime still accept; it is read as ACTIVE and never written. MAINTENANCE and
+// INACTIVE are not schedulable: Showtime only accepts ACTIVE/AVAILABLE rooms, so adding them is
+// additive for that consumer.
+export const ROOM_STATUS = Object.freeze({
+  ACTIVE: "ACTIVE",
+  MAINTENANCE: "MAINTENANCE",
+  INACTIVE: "INACTIVE",
+});
+
+export const ROOM_STATUSES = Object.values(ROOM_STATUS);
+export const LEGACY_ROOM_ACTIVE_STATUS = "AVAILABLE";
+export const ROOM_ACTIVE_STATUS_VALUES = [ROOM_STATUS.ACTIVE, LEGACY_ROOM_ACTIVE_STATUS];
+
+// Room names are unique per branch after normalization (trimmed, collapsed spaces, case-insensitive).
+export const ROOM_NAME_COLLATION = Object.freeze({ locale: "en", strength: 2 });
+
+// List ordering only: "Room 2" sorts before "Room 10". Not used by the unique index.
+export const ROOM_SORT_COLLATION = Object.freeze({ locale: "en", strength: 2, numericOrdering: true });
+
+export const ROOM_SORT_FIELDS = ["roomName", "capacity", "status", "updatedAt"];
+export const ROOM_TYPE_PATTERN = /^[A-Z0-9][A-Z0-9 _.+-]{0,29}$/;
+
+export const ROOM_MANAGEMENT_ERROR = Object.freeze({
+  VALIDATION_FAILED: "VALIDATION_FAILED",
+  NAME_TAKEN: "ROOM_NAME_TAKEN",
+  BRANCH_INVALID: "ROOM_BRANCH_INVALID",
+  BRANCH_INACTIVE: "ROOM_BRANCH_INACTIVE",
+  HAS_FUTURE_SHOWTIMES: "ROOM_HAS_FUTURE_SHOWTIMES",
+  HAS_SHOWTIME_HISTORY: "ROOM_HAS_SHOWTIME_HISTORY",
+  STATUS_CONFLICT: "ROOM_STATUS_CONFLICT",
+});

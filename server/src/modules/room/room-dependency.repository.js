@@ -21,3 +21,30 @@ export const countFuturePublishedShowtimesForLayout = (roomId, layoutVersion, no
       { $or: [{ roomLayoutVersion: layoutVersion }, { roomLayoutVersion: { $exists: false } }] },
     ],
   });
+
+// ROOM-001 reads. Same temporary port as above: counts are over every layout version, because a
+// room's identity (type, availability) matters to a showtime regardless of the layout it uses.
+const futurePublishedFilter = (now) => ({
+  status: "PUBLISHED",
+  // See countFuturePublishedShowtimesForLayout: both spellings are matched so the guard fails closed.
+  $or: [{ startAt: { $gt: now } }, { startTime: { $gt: now } }],
+});
+
+export const countFuturePublishedShowtimesForRoom = (roomId, now = new Date()) =>
+  collection("showtimes").countDocuments({ roomId, ...futurePublishedFilter(now) });
+
+/** Every showtime that ever referenced the room, whatever its status or date. */
+export const countShowtimesForRoom = (roomId) => collection("showtimes").countDocuments({ roomId });
+
+export const countFuturePublishedShowtimesByRoomIds = async (roomIds, now = new Date()) => {
+  if (roomIds.length === 0) return new Map();
+
+  const rows = await collection("showtimes")
+    .aggregate([
+      { $match: { roomId: { $in: roomIds }, ...futurePublishedFilter(now) } },
+      { $group: { _id: "$roomId", count: { $sum: 1 } } },
+    ])
+    .toArray();
+
+  return new Map(rows.map(({ _id, count }) => [_id.toString(), count]));
+};

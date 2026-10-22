@@ -187,10 +187,10 @@ Phòng chiếu tại từng chi nhánh. Danh sách ghế được **nhúng trự
 | `_id` | `ObjectId` | Khóa chính (Primary Key) |
 | `branchId` | `ObjectId` | Tham chiếu đến `branches._id` |
 | `roomName` | `string` | Tên hoặc số phòng (ví dụ: `Screen 1`, `IMAX Hall`) |
-| `roomType` | `string` | Định dạng phòng chiếu (ví dụ: `2D`, `3D`, `IMAX`) |
-| `capacity` | `number` | Sức chứa tối đa (phải khớp với sơ đồ ghế) |
-| `layoutVersion` | `number` | Phiên bản sơ đồ bố trí ghế *(có trong DB, chưa có trong tài liệu thiết kế)* |
-| `status` | `string` | Trạng thái phòng (ví dụ: `AVAILABLE`, `MAINTENANCE`) |
+| `roomType` | `string` | Định dạng phòng chiếu (ví dụ: `2D`, `3D`, `IMAX`). Nhãn tự do, lưu chữ hoa (`STANDARD`, `2D`, ...). Chính sách giá vé đã duyệt hiện chỉ áp dụng cho `STANDARD`/`2D` |
+| `capacity` | `number` | Sức chứa tối đa (phải khớp với sơ đồ ghế). **Luôn do backend tính từ sơ đồ ghế** (UC41); màn hình quản lý phòng không cho ghi trực tiếp. Phòng mới có `capacity = 0` |
+| `layoutVersion` | `number` | Phiên bản sơ đồ bố trí ghế *(có trong DB, chưa có trong tài liệu thiết kế)*. Phòng mới tạo có `0` (chưa có sơ đồ ghế) |
+| `status` | `string` | Trạng thái phòng **(PROPOSED, ROOM-001)**: `ACTIVE`, `MAINTENANCE`, `INACTIVE`. `AVAILABLE` là cách ghi cũ của `ACTIVE`: vẫn được đọc như `ACTIVE`, không còn được ghi. Chỉ phòng `ACTIVE` (hoặc `AVAILABLE`) được xếp suất chiếu |
 | `seats` | `Array<Object>` (embedded) | Danh sách ghế nhúng, mô tả sơ đồ phòng |
 | `seats._id` | `ObjectId` | Định danh ghế, **unique trong phòng**. Được tham chiếu bởi `showtime_seats.seatId`, `bookings.seatIds`, `tickets.seatId` |
 | `seats.row` | `string` | Ký hiệu hàng ghế |
@@ -785,6 +785,7 @@ erDiagram
 | `showtime_seats` | `{ showtimeId: 1, seatId: 1 }` | Compound Unique | Mỗi ghế chỉ có một bản ghi trạng thái trong một suất chiếu |
 | `inventories` | `{ branchId: 1, concessionId: 1 }` | Compound Unique | Mỗi chi nhánh chỉ có một bản ghi tồn kho cho mỗi sản phẩm |
 | `movie_reviews` | `{ movieId: 1, customerAccountId: 1 }` | Compound Unique | Mỗi khách hàng chỉ đánh giá một lần cho mỗi phim |
+| `rooms` | `{ branchId: 1, roomName: 1 }` (collation `en`, strength 2) | Compound Unique | Tên phòng không trùng trong cùng chi nhánh, không phân biệt hoa/thường và khoảng trắng thừa *(PROPOSED, ROOM-001)* |
 
 ### 4.1.1. Index thường (không unique)
 
@@ -854,5 +855,6 @@ Collection sau có trong database nhưng chưa được mô tả trong tài li�
 | 2026-10-17 | `stock_transactions` | Thêm `receiptCode`; thêm index `{ branchId, type, transactionDate: -1 }` | CMS_UC40 gom nhiều dòng của một lần nhập và liệt kê phiếu nhập gần đây | Không cần backfill: giao dịch cũ không có `receiptCode` (hiển thị `—`) |
 | 2026-10-17 | `permissions`, `roles` *(dữ liệu, không đổi cấu trúc)* | Thêm quyền `inventory.stock_in`, gán cho role `STAFF`; đảm bảo `inventory.view` gán cho `STAFF` và `MANAGER` | CMS_UC40 chỉ dành cho Staff; Manager chỉ xem tồn kho (CMS_UC39) | `server/src/seeds/seed-inventory.js` (idempotent, `$addToSet`) |
 | 2026-10-20 | `staff_shifts` *(PROPOSED, chờ team review)* | CMS_UC38 (ca làm việc tối thiểu): thêm field tùy chọn `createdBy`, `cancelledBy`, `cancelledAt`, `approvedBy`, `approvedAt`, `approvalNote`; chốt `status` lưu `SCHEDULED`/`APPROVED`/`CANCELLED`; thêm index `{ branchId, startTime: -1 }` và `{ employeeAccountId, startTime: 1 }`. Không thêm collection mới, không thêm chấm công. Dùng quyền có sẵn `shift.view` / `shift.manage`; chi nhánh và nhân viên xác định qua `accounts.employeeProfile.branchId` | Không cần backfill: field mới tùy chọn; document cũ đọc là `SCHEDULED`. `server/src/migrations/20261020-staff-shift-monitoring.js` (chỉ tạo index); không có seed dữ liệu mẫu |
+| 2026-10-21 | `rooms` *(PROPOSED, chờ team review)* | ROOM-001 (quản lý phòng): chốt `status` = `ACTIVE`/`MAINTENANCE`/`INACTIVE` (đọc `AVAILABLE` như `ACTIVE`); thêm unique index `uniq_room_branch_name_normalized` `{ branchId, roomName }` với collation `en` strength 2. Không đổi cấu trúc field. Quyền dùng sẵn `room.view` (đọc: STAFF/MANAGER/ADMIN) và `room.manage` + role `MANAGER` (ghi); ADMIN chỉ đọc | Không cần backfill dữ liệu: `AVAILABLE` cũ vẫn hợp lệ. Cần chạy `server/src/migrations/20261021-room-management-indexes.js` để tạo index; script liệt kê và dừng nếu đã có tên phòng trùng trong cùng chi nhánh. Showtime chỉ nhận phòng `ACTIVE`/`AVAILABLE` nên hai trạng thái mới bị loại khỏi lịch chiếu mà không cần sửa Showtime |
 
 **Chưa thay đổi (cố ý):** `combos` chưa có tồn kho riêng; tồn kho combo bị hoãn đến khi có quyết định về công thức/thành phần (xem `docs/REQUIREMENTS_STATUS.md`, UC39/40).

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { getSeatLayoutRequest, listRoomsRequest } from '../api/roomApi'
+import { getPublicCinemas } from '../../../lib/api/publicCinemaApi'
+import { getRoomRequest, getRoomSummaryRequest, getSeatLayoutRequest, listRoomsRequest } from '../api/roomApi'
 
 // Same request-keyed loader as the branch feature (React Query's convention is not finalized).
 // `loading` is true until the settled result matches the current key, so the previous data stays
@@ -44,4 +45,34 @@ export function useSeatLayout(roomId, refreshToken) {
   return useRemoteResource(roomId ? `${roomId}:${refreshToken}` : null, (signal) =>
     getSeatLayoutRequest(roomId, signal),
   )
+}
+
+// Room management screen. The request key is the serialized filter set, so changing a filter or
+// bumping `refreshToken` refetches while the previous page stays on screen.
+export function useManagedRoomList({ refreshToken, ...filters }) {
+  const params = Object.fromEntries(Object.entries(filters).filter(([, value]) => value !== '' && value != null))
+
+  return useRemoteResource(`managed:${JSON.stringify({ params, refreshToken })}`, (signal) =>
+    listRoomsRequest(params, signal),
+  )
+}
+
+export function useRoomSummary(branchId, refreshToken) {
+  return useRemoteResource(`summary:${branchId ?? ''}:${refreshToken}`, (signal) =>
+    getRoomSummaryRequest(branchId ? { branchId } : {}, signal),
+  )
+}
+
+export function useRoomDetail(roomId, refreshToken = 0) {
+  return useRemoteResource(roomId ? `detail:${roomId}:${refreshToken}` : null, (signal) =>
+    getRoomRequest(roomId, signal),
+  )
+}
+
+// Only ACTIVE branches can receive rooms (A-24); the public cinema list is exactly that set and
+// is readable by every role that opens this screen.
+const BRANCH_OPTIONS_LIMIT = 50
+
+export function useActiveBranches() {
+  return useRemoteResource('active-branches', (signal) => getPublicCinemas({ limit: BRANCH_OPTIONS_LIMIT }, signal))
 }

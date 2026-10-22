@@ -4,6 +4,7 @@ import ChangePasswordPage from '../../features/account/pages/ChangePasswordPage'
 import EditProfilePage from '../../features/account/pages/EditProfilePage'
 import ProfilePage from '../../features/account/pages/ProfilePage'
 import BranchManagementPage from '../../features/branch/pages/BranchManagementPage'
+import RoomManagementPage from '../../features/room/pages/RoomManagementPage'
 import SeatMapConfigPage from '../../features/room/pages/SeatMapConfigPage'
 import ManagerShowtimesPage from '../../features/manager-showtimes/pages/ManagerShowtimesPage'
 import AddMoviePage from '../../features/manager-movies/pages/AddMoviePage'
@@ -94,6 +95,10 @@ function AppRouter() {
             <Route element={<AdminLayout />}>
               <Route index element={<Navigate to="branches" replace />} />
               <Route path="branches" element={<BranchManagementPage />} />
+              {/* Read-only for Admin: room writes need the MANAGER role on the API. */}
+              <Route element={<PermissionRoute permission="room.view" />}>
+                <Route path="rooms" element={<RoomManagementPage readOnly />} />
+              </Route>
             </Route>
           </Route>
         </Route>
@@ -115,6 +120,7 @@ function AppRouter() {
                 <Route path="inventory" element={<StockLevelsPage />} />
               </Route>
               <Route element={<PermissionRoute permission="room.manage" />}>
+                <Route path="rooms" element={<RoomManagementPage />} />
                 <Route path="seat-maps" element={<SeatMapConfigPage />} />
               </Route>
               {/* UX guard only; the API enforces shift.view / shift.manage + the MANAGER role. */}

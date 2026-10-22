@@ -1,4 +1,4 @@
-import { Building2, ChevronRight, House, KeyRound, LayoutDashboard, LogOut, Menu, Users, X } from 'lucide-react'
+import { Building2, ChevronRight, DoorOpen, House, KeyRound, LayoutDashboard, LogOut, Menu, Users, X } from 'lucide-react'
 import { useState } from 'react'
 import { Link, NavLink, Outlet, useNavigate } from 'react-router'
 import { toast } from 'sonner'
@@ -11,6 +11,7 @@ const navItems = [
   { label: 'Accounts', icon: Users },
   { label: 'Roles & Permissions', icon: KeyRound },
   { label: 'Branches', icon: Building2, to: '/admin/branches' },
+  { label: 'Rooms', icon: DoorOpen, to: '/admin/rooms' },
 ]
 
 function SidebarNav({ onNavigate }) {
