@@ -167,3 +167,10 @@ Thứ tự đề nghị owner review:
 3. P0/P1: Cancellation/Refund + Showtime cancellation policy.
 4. P1: Branch-scoped RBAC, Voucher, Inventory và Cart/Order boundary.
 5. P2: Staff shift, loyalty và advanced administration.
+
+
+### CON-102 scoped approval — 2026-10-25
+
+Hiếu approved the concrete additive contract in docs/CON-102-INTEGRATION-CONTRACT.md in this chat ("được nhớ sửa cả các file liên quan nữa nhé"). The current Iter3 business scope supersedes standalone F&D checkout: optional food within ticket booking, one combined Payment, same original SeatHold expiry, stock reservation at checkout, consume-on-confirmation and release-on-checkout-cancel/expiry. This unblocks sale-time Inventory mutation only for that online combined flow. Ingredient accounting, standalone POS, pickup completion, adjustment/waste, refunds and vouchers remain under their existing blockers/out-of-scope status; earlier broad rows are historical and do not grant approval for those features.
+
+Implementation and exact changed files/API/DB rollout are recorded in docs/CON-102-IMPLEMENTATION.md. Cross-owner review remains required: Nam (Inventory counters/reservations and actual-Customer SALE audit), Hà (SeatHold integration), Cường (Payment amount/retry/cancel distinction), Hiếu (Concession/Booking UI). No development Atlas migration or seed was run, no SRS was changed, and no sheet task was marked Done. New food checkout fails closed until the explicit index migration is applied; Skip/ticket-only remains supported.

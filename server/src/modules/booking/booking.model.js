@@ -61,6 +61,8 @@ const bookingSchema = new mongoose.Schema(
     priceQuoteReference: { type: String, trim: true },
     currency: { type: String, required: true, enum: ["VND"] },
     subtotal: integerMoney,
+    concessionAmount: { type: Number, min: 0, validate: Number.isSafeInteger },
+    concessionFingerprint: String,
     discountAmount: { ...integerMoney, default: 0 },
     totalAmount: integerMoney,
     status: {

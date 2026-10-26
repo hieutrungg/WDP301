@@ -9,6 +9,7 @@ const inventorySchema = new mongoose.Schema(
     branchId: { type: mongoose.Schema.Types.ObjectId, ref: "Branch", required: true },
     concessionId: { type: mongoose.Schema.Types.ObjectId, ref: "Concession", required: true },
     quantity: { type: Number, required: true, min: 0, default: 0, validate: Number.isInteger },
+    reservedQuantity: { type: Number, min: 0, validate: Number.isSafeInteger },
     minThreshold: {
       type: Number,
       required: true,

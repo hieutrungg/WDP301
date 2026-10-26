@@ -12,11 +12,19 @@ export async function restoreCheckout({ attempt, acquire, createBooking, clock =
 }
 
 export async function submitBooking({ attempt, hold, createBooking, storage }) {
+  if (attempt.concessionSelection && !attempt.concessionQuote) throw new Error("Review your food prices again before checkout.")
   if (storage) writeCheckout(storage, { ...attempt, bookingRequested: true })
-  const booking = await createBooking({
+  let booking
+  try { booking = await createBooking({
     holdId: hold.holdId, requestKey: attempt.requestKey,
     priceQuoteReference: hold.priceQuote.quoteId,
-  })
-  if (!bookingMatchesHold(booking, hold)) throw new Error('Booking details could not be verified. Please retry using this checkout.')
+    ...(attempt.concessionSelection ? { concessionSelection: attempt.concessionSelection } : {}),
+  }) } catch (error) {
+    if (storage && ['CONCESSION_QUOTE_CHANGED', 'INSUFFICIENT_CONCESSION_STOCK', 'INVALID_CONCESSION_SELECTION'].includes(error?.response?.data?.code)) {
+      writeCheckout(storage, { ...attempt, bookingRequested: false })
+    }
+    throw error
+  }
+  if (!bookingMatchesHold(booking, hold, attempt.concessionSelection ? attempt.concessionQuote : undefined)) throw new Error('Booking details could not be verified. Please retry using this checkout.')
   return booking
 }

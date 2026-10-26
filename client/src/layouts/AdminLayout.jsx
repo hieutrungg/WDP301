@@ -1,6 +1,6 @@
 import { Building2, ChevronRight, DoorOpen, House, KeyRound, LayoutDashboard, LogOut, Menu, Users, X } from 'lucide-react'
 import { useState } from 'react'
-import { Link, NavLink, Outlet, useNavigate } from 'react-router'
+import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router'
 import { toast } from 'sonner'
 import AppLogo from '../components/common/AppLogo'
 import { useAuth } from '../features/auth/hooks/useAuth'
@@ -52,6 +52,7 @@ function SidebarNav({ onNavigate }) {
 }
 
 function AdminLayout() {
+  const { pathname } = useLocation()
   const [menuOpen, setMenuOpen] = useState(false)
   const [isLoggingOut, setIsLoggingOut] = useState(false)
   const { account, logout } = useAuth()
@@ -122,7 +123,7 @@ function AdminLayout() {
             <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-1.5 text-xs text-on-surface-variant">
               <span className="hidden sm:inline">System administration</span>
               <ChevronRight className="hidden size-3.5 sm:block" />
-              <span className="truncate font-semibold text-on-surface">Cinema branch management</span>
+              <span className="truncate font-semibold text-on-surface">{pathname.startsWith('/admin/rooms') ? 'Room management' : 'Cinema branch management'}</span>
             </nav>
           </div>
 

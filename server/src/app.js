@@ -14,6 +14,7 @@ import concessionRoutes from "./modules/concession/concession.routes.js";
 import staffShiftRoutes from "./modules/staff-shift/staff-shift.routes.js";
 import {
   bookingRoutes,
+  concessionCheckoutRoutes,
   seatAvailabilityRoutes,
   seatHoldRoutes,
 } from "./modules/booking/booking.module.js";
@@ -54,6 +55,7 @@ app.use("/api/inventory", inventoryRoutes);
 app.use("/api", concessionRoutes);
 app.use("/api/staff-shifts", staffShiftRoutes);
 app.use("/api/bookings", bookingRoutes);
+app.use("/api/concession-checkout", concessionCheckoutRoutes);
 app.use("/api/payments", paymentRoutes);
 
 app.use(notFound);

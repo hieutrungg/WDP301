@@ -40,7 +40,7 @@ function LoginForm() {
     try {
       const account = await login(values)
       toast.success('Welcome back to F-Cinema!')
-      navigate(getLoginDestination(account, location.state?.from?.pathname), { replace: true })
+      navigate(getLoginDestination(account, location.state?.from), { replace: true })
     } catch (error) {
       setServerError(getApiErrorMessage(error))
     }

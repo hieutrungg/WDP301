@@ -64,6 +64,7 @@ const serializeDetailedBooking = (booking, { seatDetails = [] } = {}) => ({
     unitPrice: line.unitPrice,
   })),
   seats: seatDetails,
+  ...(booking.concessionFingerprint ? { ticketAmount: booking.subtotal, concessionAmount: booking.concessionAmount } : {}),
   currency: booking.currency,
   subtotal: booking.subtotal,
   discountAmount: booking.discountAmount ?? 0,
@@ -79,6 +80,7 @@ const serializeDetailedBooking = (booking, { seatDetails = [] } = {}) => ({
 export const createBookingService = ({
   repository = bookingRepository,
   seatHoldPort,
+  concessionPort,
   showtimeReader,
   roomLayoutReader,
   clock = () => new Date(),
@@ -90,12 +92,32 @@ export const createBookingService = ({
     throw new TypeError("seatHoldPort.getLiveHoldForBooking is required");
   }
 
+  const describeBooking = async (booking, idempotent, session) => {
+    const data = serializeBooking(booking, idempotent);
+    if (booking.concessionFingerprint) {
+      if (!concessionPort) throw new TypeError("Concession lifecycle port is required");
+      data.ticketAmount = booking.subtotal;
+      data.concessionAmount = booking.concessionAmount;
+      data.concessionOrder = await concessionPort.read(booking._id, session);
+    }
+    return data;
+  };
+
   const createPendingBookingFromHold = async ({
     holdId,
     ownerId,
     priceQuoteReference,
     requestKey,
+    concessionSelection,
   }) => {
+    if (concessionSelection && !concessionPort) throw new TypeError("Concession checkout port is required");
+    const fingerprint = concessionSelection ? concessionPort.fingerprint(concessionSelection) : undefined;
+    if (concessionSelection) {
+      await concessionPort.assertReady();
+      if (concessionPort.prepare && !await repository.findByCustomerRequestKey(ownerId, requestKey)) {
+        await concessionPort.prepare({ ownerId, holdId });
+      }
+    }
     const now = clock();
     const runInTransaction = repository.withTransaction?.bind(repository) ?? ((work) => work());
 
@@ -110,7 +132,8 @@ export const createBookingService = ({
               BOOKING_ERROR.REQUEST_KEY_REUSED,
             );
           }
-          return serializeBooking(existing, true);
+          if (existing.concessionFingerprint !== fingerprint) throw error(409, "This checkout key already has a different food selection", "CONCESSION_REQUEST_KEY_REUSED");
+          return describeBooking(existing, true, session);
         }
 
         const hold = await seatHoldPort.getLiveHoldForBooking({ holdId, ownerId, now, session });
@@ -150,8 +173,15 @@ export const createBookingService = ({
           expiresAt: new Date(hold.expiresAt),
         };
 
+        if (concessionSelection) {
+          const food = await concessionPort.createPending({ bookingId: input._id, ownerId, hold, selection: concessionSelection, session });
+          input.concessionAmount = food.amount;
+          input.concessionFingerprint = fingerprint;
+          input.totalAmount = input.subtotal + food.amount;
+          if (!Number.isSafeInteger(input.totalAmount)) throw error(409, "Invalid checkout total", BOOKING_ERROR.INVALID_PRICE_SNAPSHOT);
+        }
         const booking = await repository.createPending(input, session);
-        return serializeBooking(booking);
+        return describeBooking(booking, false, session);
       });
     } catch (cause) {
       if (cause?.code !== 11000) throw cause;
@@ -166,7 +196,8 @@ export const createBookingService = ({
         );
       }
       if (concurrent && objectIdString(concurrent.holdId) === objectIdString(holdId)) {
-        return serializeBooking(concurrent, true);
+        if (concurrent.concessionFingerprint !== fingerprint) throw error(409, "This checkout key already has a different food selection", "CONCESSION_REQUEST_KEY_REUSED");
+        return describeBooking(concurrent, true);
       }
       throw cause;
     }
@@ -188,6 +219,52 @@ export const createBookingService = ({
     return booking;
   };
 
+  // Payment calls this internal port only after verifying its result. No HTTP route confirms a Booking.
+  const transitionConflict = () =>
+    error(
+      409,
+      "Booking or seat hold changed; reload the current payment state",
+      BOOKING_ERROR.HOLD_NOT_AVAILABLE,
+    );
+
+  const requireTransitionPorts = () => {
+    for (const name of ["withTransaction", "findById", "markConfirmed", "markExpired"]) {
+      if (typeof repository[name] !== "function") {
+        throw new TypeError(`Booking repository.${name} is required for lifecycle transitions`);
+      }
+    }
+    for (const name of ["consumeHoldForBooking", "expireHoldForBooking"]) {
+      if (typeof seatHoldPort[name] !== "function") {
+        throw new TypeError(`seatHoldPort.${name} is required for lifecycle transitions`);
+      }
+    }
+  };
+
+  const expireInTransaction = async (booking, now, session) => {
+    if (booking.status !== BOOKING_STATUS.PENDING_PAYMENT) throw transitionConflict();
+    const hold = await seatHoldPort.expireHoldForBooking({ holdId: booking.holdId, now, session });
+    if (hold?.status === "CONSUMED") throw transitionConflict();
+    if (booking.concessionFingerprint) {
+      if (!concessionPort) throw new TypeError("Concession lifecycle port is required");
+      await concessionPort.release({ bookingId: booking._id, now, session });
+    }
+    const expired = await repository.markExpired(
+      { bookingId: booking._id, expiredAt: now },
+      session,
+    );
+    if (!expired || expired.status !== BOOKING_STATUS.EXPIRED) throw transitionConflict();
+    return expired;
+  };
+
+  // A rejected multi-seat consumption may already have touched some claims. Abort that entire
+  // transaction before expiring/releasing the hold in a fresh transaction through its owner port.
+  class HoldConsumptionRejected extends Error {
+    constructor() {
+      super("Seat consumption was rejected; abort the transaction before releasing the hold");
+      this.name = "HoldConsumptionRejected";
+    }
+  }
+
   const confirmBookingAfterVerifiedPayment = async ({
     bookingId,
     payableReference,
@@ -195,120 +272,84 @@ export const createBookingService = ({
     verifiedAt = clock(),
     session: externalSession,
   }) => {
-    const run = async (session) => {
-      const booking = bookingId
-        ? await repository.findById(bookingId, session)
-        : await repository.findByPayableReference(payableReference, session);
-
-      if (!booking) {
-        throw error(404, "Booking not found", BOOKING_ERROR.BOOKING_NOT_FOUND);
-      }
-
-      if (booking.status === BOOKING_STATUS.CONFIRMED) {
-        return {
-          outcome: BOOKING_CONFIRMATION_OUTCOME.ALREADY_CONFIRMED,
-          booking: serializeDetailedBooking(booking),
-        };
-      }
-
-      const isExpiredByTime =
-        new Date(booking.expiresAt).getTime() <= new Date(verifiedAt).getTime();
-
-      if (booking.status === BOOKING_STATUS.EXPIRED || isExpiredByTime) {
-        if (seatHoldPort.expireHoldForBooking && booking.holdId) {
-          await seatHoldPort.expireHoldForBooking({
-            holdId: booking.holdId,
-            now: verifiedAt,
-            session,
-          });
-        }
-        const expiredBooking =
-          booking.status === BOOKING_STATUS.PENDING_PAYMENT && repository.markExpired
-            ? (await repository.markExpired(
-                { bookingId: booking._id, expiredAt: verifiedAt },
-                session,
-              )) ?? { ...booking, status: BOOKING_STATUS.EXPIRED, expiredAt: verifiedAt }
-            : booking;
-
-        return {
-          outcome: BOOKING_CONFIRMATION_OUTCOME.EXPIRED_REVIEW_REQUIRED,
-          booking: serializeDetailedBooking(expiredBooking),
-        };
-      }
-
-      if (seatHoldPort.consumeHoldForBooking && booking.holdId) {
-        const holdResult = await seatHoldPort.consumeHoldForBooking({
-          holdId: booking.holdId,
-          bookingId: booking._id,
-          ownerId: booking.customerAccountId,
-          seatIds: booking.seatIds,
-          verifiedAt,
-          session,
-        });
-
-        if (holdResult?.outcome === "EXPIRED") {
-          const expiredBooking = repository.markExpired
-            ? (await repository.markExpired(
-                { bookingId: booking._id, expiredAt: verifiedAt },
-                session,
-              )) ?? { ...booking, status: BOOKING_STATUS.EXPIRED, expiredAt: verifiedAt }
-            : { ...booking, status: BOOKING_STATUS.EXPIRED, expiredAt: verifiedAt };
-
-          return {
-            outcome: BOOKING_CONFIRMATION_OUTCOME.EXPIRED_REVIEW_REQUIRED,
-            booking: serializeDetailedBooking(expiredBooking),
-          };
-        }
-      }
-
-      const confirmedBooking = repository.markConfirmed
-        ? (await repository.markConfirmed(
-            { bookingId: booking._id, paymentId, confirmedAt: verifiedAt },
-            session,
-          )) ?? {
-            ...booking,
-            status: BOOKING_STATUS.CONFIRMED,
-            confirmedAt: verifiedAt,
-            paymentId,
-          }
-        : {
-            ...booking,
-            status: BOOKING_STATUS.CONFIRMED,
-            confirmedAt: verifiedAt,
-            paymentId,
-          };
-
-      return {
-        outcome: BOOKING_CONFIRMATION_OUTCOME.CONFIRMED,
-        booking: serializeDetailedBooking(confirmedBooking),
-      };
+    requireTransitionPorts();
+    if (!mongoose.isValidObjectId(paymentId) || !Number.isFinite(new Date(verifiedAt).getTime())) {
+      throw new TypeError("A verified payment ID and valid verification time are required");
+    }
+    const result = (outcome, booking) => ({ outcome, booking: serializeDetailedBooking(booking) });
+    const load = (session) => getBookingForPayment({ bookingId, payableReference, session });
+    const alreadyConfirmed = (booking) => {
+      if (objectIdString(booking.paymentId) !== objectIdString(paymentId)) throw transitionConflict();
+      return result(BOOKING_CONFIRMATION_OUTCOME.ALREADY_CONFIRMED, booking);
     };
-
-    if (externalSession !== undefined) {
+    const expiredResult = (booking) =>
+      result(BOOKING_CONFIRMATION_OUTCOME.EXPIRED_REVIEW_REQUIRED, booking);
+    const run = async (session) => {
+      const booking = await load(session);
+      if (booking.status === BOOKING_STATUS.CONFIRMED) return alreadyConfirmed(booking);
+      if (booking.status === BOOKING_STATUS.EXPIRED) return expiredResult(booking);
+      if (
+        booking.status !== BOOKING_STATUS.PENDING_PAYMENT ||
+        !Number.isFinite(new Date(booking.expiresAt).getTime())
+      ) throw transitionConflict();
+      if (new Date(booking.expiresAt).getTime() <= new Date(verifiedAt).getTime()) {
+        return expiredResult(await expireInTransaction(booking, verifiedAt, session));
+      }
+      const holdResult = await seatHoldPort.consumeHoldForBooking({
+        holdId: booking.holdId,
+        bookingId: booking._id,
+        ownerId: booking.customerAccountId,
+        seatIds: booking.seatIds,
+        verifiedAt,
+        session,
+      });
+      if (holdResult?.outcome === "EXPIRED") throw new HoldConsumptionRejected();
+      if (holdResult?.outcome !== "CONSUMED") throw transitionConflict();
+      if (booking.concessionFingerprint) {
+        if (!concessionPort) throw new TypeError("Concession lifecycle port is required");
+        if (!await concessionPort.consume({ bookingId: booking._id, now: verifiedAt, session })) throw new HoldConsumptionRejected();
+      }
+      const confirmed = await repository.markConfirmed(
+        { bookingId: booking._id, paymentId, confirmedAt: verifiedAt },
+        session,
+      );
+      if (!confirmed || confirmed.status !== BOOKING_STATUS.CONFIRMED) throw transitionConflict();
+      return result(BOOKING_CONFIRMATION_OUTCOME.CONFIRMED, confirmed);
+    };
+    if (externalSession != null) {
+      // The caller owns commit/rollback. A failed consumption must escape so it cannot commit
+      // partial claims; it can retry this port without an external session after rollback.
       return run(externalSession);
     }
-
-    const runInTransaction = repository.withTransaction?.bind(repository) ?? ((work) => work());
-    return runInTransaction(run);
+    try {
+      return await repository.withTransaction(run);
+    } catch (cause) {
+      if (!(cause instanceof HoldConsumptionRejected)) throw cause;
+      return repository.withTransaction(async (session) => {
+        const booking = await load(session);
+        if (booking.status === BOOKING_STATUS.CONFIRMED) return alreadyConfirmed(booking);
+        if (booking.status === BOOKING_STATUS.EXPIRED) return expiredResult(booking);
+        return expiredResult(await expireInTransaction(booking, verifiedAt, session));
+      });
+    }
   };
 
   const getCustomerBookingDetails = async ({ bookingId, ownerId }) => {
     const now = clock();
     let booking = await getBookingForPayment({ bookingId, ownerId });
-
     if (
       booking.status === BOOKING_STATUS.PENDING_PAYMENT &&
       new Date(booking.expiresAt).getTime() <= now.getTime()
     ) {
-      if (seatHoldPort.expireHoldForBooking && booking.holdId) {
-        await seatHoldPort.expireHoldForBooking({ holdId: booking.holdId, now });
-      }
-      booking =
-        (await repository.markExpired?.({ bookingId: booking._id, expiredAt: now })) ?? {
-          ...booking,
-          status: BOOKING_STATUS.EXPIRED,
-          expiredAt: now,
-        };
+      requireTransitionPorts();
+      booking = await repository.withTransaction(async (session) => {
+        const current = await getBookingForPayment({ bookingId, ownerId, session });
+        if (
+          current.status !== BOOKING_STATUS.PENDING_PAYMENT ||
+          new Date(current.expiresAt).getTime() > now.getTime()
+        ) return current;
+        return expireInTransaction(current, now, session);
+      });
     }
 
     let showtime = null;
@@ -374,10 +415,22 @@ export const createBookingService = ({
       }));
     }
 
-    return {
-      booking: serializeDetailedBooking(booking, { seatDetails }),
-      showtime,
-    };
+    const details = serializeDetailedBooking(booking, { seatDetails });
+    if (booking.concessionFingerprint) {
+      if (!concessionPort) throw new TypeError("Concession lifecycle port is required");
+      details.concessionOrder = await concessionPort.read(booking._id);
+    }
+    return { booking: details, showtime };
+  };
+
+  const cancelPendingCheckout = async ({ bookingId, ownerId }) => {
+    requireTransitionPorts();
+    return repository.withTransaction(async session => {
+      const booking = await getBookingForPayment({ bookingId, ownerId, session });
+      if (booking.status === BOOKING_STATUS.CONFIRMED) throw transitionConflict();
+      if (booking.status === BOOKING_STATUS.EXPIRED) return serializeDetailedBooking(booking);
+      return serializeDetailedBooking(await expireInTransaction(booking, clock(), session));
+    });
   };
 
   const listCustomerBookings = async ({ ownerId, limit = 50 }) => {
@@ -405,6 +458,7 @@ export const createBookingService = ({
     getBookingForPayment,
     getCustomerBookingDetails,
     listCustomerBookings,
+    cancelPendingCheckout,
   };
 };
 

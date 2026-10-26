@@ -52,7 +52,7 @@ export const createBookingRepository = ({
   markConfirmed({ bookingId, paymentId, confirmedAt }, session) {
     return bookingModel
       .findOneAndUpdate(
-        { _id: bookingId, status: BOOKING_STATUS.PENDING_PAYMENT },
+        { _id: bookingId, status: BOOKING_STATUS.PENDING_PAYMENT, expiresAt: { $gt: confirmedAt } },
         {
           $set: {
             status: BOOKING_STATUS.CONFIRMED,

@@ -147,10 +147,10 @@ function MockPaymentModal({
               <ShieldAlert className="mt-0.5 size-5 shrink-0 text-error" />
               <div>
                 <p className="text-sm font-bold text-white">
-                  Giao dịch giả lập thất bại ({activeAttempt.failureReason || 'MOCK_PAYMENT_DECLINED'})
+                  Mock payment declined ({activeAttempt.failureReason || 'MOCK_PAYMENT_DECLINED'})
                 </p>
                 <p className="mt-0.5 text-xs text-on-surface-variant">
-                  Booking của bạn vẫn đang giữ ghế. Bạn có thể tạo lượt thanh toán mới hoặc đổi phương thức.
+                  Your live checkout still holds seats and food. Retry before the original deadline.
                 </p>
               </div>
             </div>
@@ -161,7 +161,7 @@ function MockPaymentModal({
               className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-xs font-bold text-white hover:bg-primary/90 disabled:opacity-45"
             >
               <RefreshCcw className="size-3.5" />
-              Thử lại lượt mới
+              Retry payment
             </button>
           </div>
         )}
@@ -177,9 +177,8 @@ function MockPaymentModal({
               {activeAttempt.gatewayTransactionRef}
             </span>
             <p className="mt-2 text-[11px] leading-relaxed text-on-surface-variant">
-              Quét mã giả lập hoặc nhấn{' '}
-              <strong className="text-white">&ldquo;Tôi đã thanh toán&rdquo;</strong> bên dưới
-              để xác nhận với Backend.
+              Use the mock action{' '}
+              <strong className="text-white">&ldquo;Simulate successful payment&rdquo;</strong> below to request payment verification.
             </p>
           </div>
 
@@ -187,7 +186,7 @@ function MockPaymentModal({
             <div className="rounded-xl border border-white/10 bg-[#131315] p-4">
               <div className="flex items-center justify-between border-b border-white/10 pb-3">
                 <span className="text-xs uppercase tracking-wider text-on-surface-variant">
-                  Phương thức
+                  Payment method
                 </span>
                 <span className="inline-flex items-center gap-2 text-sm font-bold text-white">
                   <span
@@ -213,14 +212,14 @@ function MockPaymentModal({
                   </span>
                 </div>
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-on-surface-variant">Trạng thái Attempt</span>
+                  <span className="text-on-surface-variant">Attempt status</span>
                   <span className="rounded bg-secondary/15 px-2 py-0.5 font-mono text-[11px] font-bold text-secondary">
                     {activeAttempt.status}
                   </span>
                 </div>
                 <div className="flex items-center justify-between border-t border-white/10 pt-3">
                   <span className="text-xs font-bold uppercase tracking-wider text-on-surface-variant">
-                    Số tiền thanh toán
+                    Payment amount
                   </span>
                   <span className="font-heading text-2xl font-black text-secondary">
                     {formatSeatMoney(activeAttempt.amount)}
@@ -231,7 +230,7 @@ function MockPaymentModal({
 
             <div className="rounded-xl border border-white/5 bg-white/[0.02] p-4">
               <p className="text-[11px] font-bold uppercase tracking-widest text-secondary">
-                Hướng dẫn thanh toán mô phỏng (Internal Mock Gateway)
+                Mock payment instructions
               </p>
               <ol className="mt-2 list-inside list-decimal space-y-1 text-xs text-on-surface-variant">
                 {methodOption.instructions.map((step) => (
@@ -250,7 +249,7 @@ function MockPaymentModal({
               disabled={busy}
               className="rounded-xl border border-white/15 bg-surface-container px-4 py-3 text-xs font-bold text-on-surface transition hover:border-white/30 hover:text-white disabled:opacity-45"
             >
-              Đổi phương thức / Quay lại
+              Cancel attempt & return
             </button>
             {activeAttempt.status === 'PENDING' && (
               <button
@@ -259,7 +258,7 @@ function MockPaymentModal({
                 disabled={busy}
                 className="rounded-xl border border-error/40 bg-error/10 px-4 py-3 text-xs font-bold text-error transition hover:bg-error/20 disabled:opacity-45"
               >
-                Giả lập thất bại
+                Simulate failure
               </button>
             )}
           </div>
@@ -274,12 +273,12 @@ function MockPaymentModal({
               {busy ? (
                 <>
                   <LoaderCircle className="size-4 animate-spin" />
-                  Đang xác minh thanh toán…
+                  Verifying payment…
                 </>
               ) : (
                 <>
                   <CheckCircle2 className="size-4" />
-                  Tôi đã thanh toán
+                  Simulate successful payment
                 </>
               )}
             </button>

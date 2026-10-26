@@ -149,6 +149,15 @@ function ManagerLayout() {
     breadcrumb = ["Schedule & programming", "Showtime management"];
   if (inventoryPage)
     breadcrumb = ["Concession & inventory", "Concession stock levels"];
+  if (location.pathname.startsWith("/manager/rooms"))
+    breadcrumb = ["Facilities & rooms", "Room management"];
+  if (location.pathname.startsWith("/manager/staff-shifts"))
+    breadcrumb = ["Human resources & operations", "Staff shift monitoring"];
+  if (location.pathname.startsWith("/manager/movies")) {
+    const screen = location.pathname.endsWith("/new") ? "Add new movie"
+      : location.pathname.endsWith("/edit") ? "Update movie" : "Movie management";
+    breadcrumb = ["Movie catalog & distribution", screen];
+  }
 
   const handleLogout = async () => {
     setIsLoggingOut(true);

@@ -859,3 +859,18 @@ Collection sau có trong database nhưng chưa được mô tả trong tài li�
 | 2026-10-21 | `rooms` *(PROPOSED, chờ team review)* | ROOM-001 (quản lý phòng): chốt `status` = `ACTIVE`/`MAINTENANCE`/`INACTIVE` (đọc `AVAILABLE` như `ACTIVE`); thêm unique index `uniq_room_branch_name_normalized` `{ branchId, roomName }` với collation `en` strength 2. Không đổi cấu trúc field. Quyền dùng sẵn `room.view` (đọc: STAFF/MANAGER/ADMIN) và `room.manage` + role `MANAGER` (ghi); ADMIN chỉ đọc | Không cần backfill dữ liệu: `AVAILABLE` cũ vẫn hợp lệ. Cần chạy `server/src/migrations/20261021-room-management-indexes.js` để tạo index; script liệt kê và dừng nếu đã có tên phòng trùng trong cùng chi nhánh. Showtime chỉ nhận phòng `ACTIVE`/`AVAILABLE` nên hai trạng thái mới bị loại khỏi lịch chiếu mà không cần sửa Showtime |
 
 **Chưa thay đổi (cố ý):** `combos` chưa có tồn kho riêng; tồn kho combo bị hoãn đến khi có quyết định về công thức/thành phần (xem `docs/REQUIREMENTS_STATUS.md`, UC39/40).
+
+
+## CON-102 additive online-checkout schema — approved 2026-10-25
+
+The scoped approval/owner-review record is in CON-102-INTEGRATION-CONTRACT.md and REQUIREMENTS_STATUS.md. Existing design tables above remain historical references; this section specifies the implemented combined-online extension, not standalone POS or pickup completion.
+
+| Collection | Additive fields / invariant |
+| --- | --- |
+| bookings | Optional concessionAmount (safe integer VND), concessionFingerprint (signed-selection identity); subtotal remains tickets; totalAmount = subtotal - discountAmount + concessionAmount. Missing concessionAmount means zero. |
+| orders | New online records require bookingId, at most one per Booking, original SeatHold expiresAt, item size and immutable expanded components [{concessionId,quantity}]. Status PENDING_PAYMENT/CONFIRMED/EXPIRED; paymentStatus PENDING/PAID/REVIEW_REQUIRED; pickupStatus NOT_READY/AWAITING_PICKUP. Existing Order fields retained. |
+| inventory_reservations | New durable records: bookingId, orderId, branchId, ownerId, aggregated items [{concessionId,quantity}], expiresAt, status ACTIVE/CONSUMED/RELEASED, timestamps. No TTL deletion. |
+| inventories | Optional reservedQuantity (safe nonnegative integer), missing = 0. quantity remains physical on-hand stock. Conditional reserve uses quantity - reservedQuantity. |
+| stock_transactions | Optional source ONLINE_CHECKOUT, orderId, bookingId. Online SALE recordedBy is the actual Customer; IMPORT retains the Staff actor. Immutable SALE rows are unique per online Order + concession. |
+
+Explicit migration: server/src/migrations/20261025-concession-checkout.js; dry-run by default, --db required, remote --apply requires --allow-remote. It adds unique Order/Booking, Order code, reservation/Order, online SALE/Order+concession and branch+concession stock indexes plus the reservation expiry lookup index. No seed, stock rewrite, counter backfill or validator replacement. See CON-102-IMPLEMENTATION.md for rollout and reviewer ownership.
