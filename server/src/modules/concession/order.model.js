@@ -2,11 +2,13 @@ import mongoose from "mongoose";
 
 const schema = new mongoose.Schema(
   {
-    bookingId: { type: mongoose.Schema.Types.ObjectId, required: true },
+    bookingId: { type: mongoose.Schema.Types.ObjectId },
     orderCode: { type: String, required: true },
-    customerAccountId: { type: mongoose.Schema.Types.ObjectId, required: true },
+    customerAccountId: { type: mongoose.Schema.Types.ObjectId },
     branchId: { type: mongoose.Schema.Types.ObjectId, required: true },
-    type: { type: String, enum: ["ONLINE"], required: true },
+    type: { type: String, enum: ["ONLINE", "COUNTER"], required: true },
+    createdByStaffId: { type: mongoose.Schema.Types.ObjectId, ref: "Account" },
+    paymentId: { type: mongoose.Schema.Types.ObjectId, ref: "Payment" },
     items: [
       {
         _id: false,
@@ -33,19 +35,20 @@ const schema = new mongoose.Schema(
       required: true,
     },
     expiresAt: { type: Date, required: true },
+    paidAt: { type: Date, default: null },
     status: {
       type: String,
-      enum: ["PENDING_PAYMENT", "CONFIRMED", "EXPIRED"],
+      enum: ["PENDING_PAYMENT", "CONFIRMED", "EXPIRED", "CANCELLED"],
       required: true,
     },
     paymentStatus: {
       type: String,
-      enum: ["PENDING", "PAID", "REVIEW_REQUIRED"],
+      enum: ["PENDING", "PAID", "REVIEW_REQUIRED", "REFUNDED"],
       required: true,
     },
     pickupStatus: {
       type: String,
-      enum: ["NOT_READY", "AWAITING_PICKUP"],
+      enum: ["NOT_READY", "AWAITING_PICKUP", "FULFILLED", "CANCELLED"],
       required: true,
     },
   },

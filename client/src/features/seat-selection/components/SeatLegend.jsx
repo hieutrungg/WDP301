@@ -1,4 +1,4 @@
-import { Accessibility, Heart, X } from 'lucide-react'
+import { Accessibility, Heart, LockKeyhole, X } from 'lucide-react'
 
 const labels = {
   STANDARD: 'Standard',
@@ -28,8 +28,16 @@ function SeatLegend({ seatTypes, selectedCount }) {
         <span><strong className="block text-on-surface">Selected ({selectedCount})</strong>Your seats</span>
       </div>
       <div className="flex items-center gap-2">
-        <span className="grid size-6 place-items-center rounded bg-surface-container-lowest opacity-40"><X className="size-3.5" /></span>
-        <span><strong className="block text-on-surface">Reserved</strong>Unavailable</span>
+        <span className="grid size-6 place-items-center rounded border border-secondary bg-secondary/20 text-secondary"><LockKeyhole className="size-3.5" /></span>
+        <span><strong className="block text-on-surface">Held by you</strong>Your active hold</span>
+      </div>
+      <div className="flex items-center gap-2">
+        <span className="grid size-6 place-items-center rounded bg-surface-container-highest text-tertiary-container opacity-50"><X className="size-3.5" /></span>
+        <span><strong className="block text-on-surface">Unavailable</strong>Held or sold</span>
+      </div>
+      <div className="flex items-center gap-2">
+        <span className="grid size-6 place-items-center rounded border border-dashed border-white/20 bg-surface-container-lowest text-tertiary-container opacity-35"><X className="size-3.5" /></span>
+        <span><strong className="block text-on-surface">Disabled</strong>Not selectable</span>
       </div>
       <div className="flex items-center gap-2">
         <span className="grid size-6 place-items-center rounded border border-blue-500/40 bg-blue-950/60 text-blue-400"><Accessibility className="size-3.5" /></span>

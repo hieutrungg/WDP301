@@ -1,5 +1,13 @@
 export const PAYMENT_INDEXES = Object.freeze([
   {
+    fields: { orderId: 1 },
+    options: {
+      unique: true,
+      name: "uniq_payment_order",
+      partialFilterExpression: { orderId: { $type: "objectId" } },
+    },
+  },
+  {
     fields: { bookingId: 1 },
     options: {
       unique: true,

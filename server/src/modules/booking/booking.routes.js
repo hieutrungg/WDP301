@@ -14,7 +14,7 @@ export const createBookingRouter = (controller) => {
     "/",
     requirePermission("booking.create"),
     validate(createPendingBookingSchema, { code: "INVALID_BOOKING" }),
-    (req, res, next) => req.body.concessionSelection ? requireRole("CUSTOMER")(req, res, next) : next(),
+    (req, res, next) => req.body.concessionSelection ? requireRole("CUSTOMER", "STAFF")(req, res, next) : next(),
     controller.createPending,
   );
 

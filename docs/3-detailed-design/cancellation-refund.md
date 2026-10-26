@@ -16,5 +16,5 @@ Supports customer cancellation requests, eligibility/refund calculation, booking
 
 `RequestCancellation` checks ownership and policy, creates a RefundRequest, and moves Booking into `CANCELLATION_PENDING` when money has settled. `ProcessRefund` calls the gateway once per idempotency key, then finalizes booking cancellation, ticket invalidation, seat release, voucher/inventory compensation, and notification through ports/events.
 
-Open Design Question: define whether booking cancellation is effective immediately or only after refund success, and how partial gateway failure is surfaced.
+Approved owner decision (2026-10-27): cancellation becomes effective only after refund success. Customer requests close 45 minutes before showtime; checked-in tickets are rejected; refundable value is ticket price plus F&B not yet `FULFILLED`; fulfilled F&B is excluded; no service fee or monthly limit applies. Manager approves or rejects; Staff cannot approve. Digital payments use an idempotent mock refund adapter representing the original payment method, while cash is returned manually outside the system. Provider failure produces `FAILED` and supports safe retry.
 

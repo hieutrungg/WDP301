@@ -1,7 +1,7 @@
 import mongoose from "mongoose";
 import {
   PAYMENT_ATTEMPT_STATUSES,
-  PAYMENT_METHOD_VALUES,
+  PAYMENT_ACCEPTED_METHOD_VALUES,
   PAYMENT_STATUS,
   PAYMENT_STATUSES,
 } from "./payment.constants.js";
@@ -38,7 +38,7 @@ const paymentAttemptSchema = new mongoose.Schema(
       required: true,
       default: "INTERNAL_MOCK_GATEWAY",
     },
-    method: { type: String, required: true, enum: PAYMENT_METHOD_VALUES },
+    method: { type: String, required: true, enum: PAYMENT_ACCEPTED_METHOD_VALUES },
     amount: integerMoney,
     currency: { type: String, required: true, enum: ["VND"], default: "VND" },
     status: {
@@ -66,7 +66,7 @@ const paymentSchema = new mongoose.Schema(
     bookingId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Booking",
-      required: true,
+      required: false,
     },
     orderId: {
       type: mongoose.Schema.Types.ObjectId,
@@ -90,7 +90,7 @@ const paymentSchema = new mongoose.Schema(
     method: {
       type: String,
       required: true,
-      enum: PAYMENT_METHOD_VALUES,
+      enum: PAYMENT_ACCEPTED_METHOD_VALUES,
     },
     amount: integerMoney,
     currency: {
@@ -124,6 +124,9 @@ const paymentSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    refundedAmount: { type: Number, min: 0, validate: Number.isSafeInteger, default: null },
+    refundedAt: { type: Date, default: null },
+    refundReference: { type: String, trim: true, default: null },
     expiresAt: {
       type: Date,
       required: true,

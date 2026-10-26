@@ -13,6 +13,7 @@ export function useSeatAvailability(showtimeId) {
     queryFn: ({ signal }) => getSeatAvailability(showtimeId, signal),
     enabled: Boolean(showtimeId),
     refetchOnWindowFocus: true,
+    refetchInterval: 5000,
   })
 }
 

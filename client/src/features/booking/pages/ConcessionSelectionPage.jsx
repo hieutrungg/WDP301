@@ -467,28 +467,29 @@ function ConcessionSelectionSession() {
                   </p>
                 </div>
               )}
-              <button
-                type="button"
-                className={`${primary} mt-3 w-full`}
-                disabled={busy || !hold || !branchId}
-                onClick={() => continueCheckout()}
-              >
-                {busy
-                  ? "Checking…"
-                  : quote
-                    ? "Confirm selection & continue"
-                    : items.length
-                      ? "Review prices"
-                      : "Continue to payment"}
-              </button>
-              <button
-                type="button"
-                className="mt-4 w-full py-2 text-sm underline disabled:opacity-40"
-                disabled={busy || !hold}
-                onClick={() => continueCheckout(true)}
-              >
-                Skip food &amp; continue
-              </button>
+              {items.length > 0 ? (
+                <button
+                  type="button"
+                  className={`${primary} mt-3 w-full`}
+                  disabled={busy || !hold || !branchId}
+                  onClick={() => continueCheckout()}
+                >
+                  {busy
+                    ? "Checking…"
+                    : quote
+                      ? "Confirm selection & continue"
+                      : "Review prices"}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className={`${primary} mt-3 w-full`}
+                  disabled={busy || !hold}
+                  onClick={() => continueCheckout(true)}
+                >
+                  {busy ? "Continuing…" : "Skip F&B & continue to payment"}
+                </button>
+              )}
               <p className="mt-4 text-xs leading-5 text-on-surface-variant">
                 You can buy tickets without food. Your seat reservation time
                 stays the same.

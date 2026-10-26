@@ -38,7 +38,10 @@ import StockInPage from '../../features/inventory/pages/StockInPage'
 import StockLevelsPage from '../../features/inventory/pages/StockLevelsPage'
 import StaffShiftsPage from '../../features/staff-shifts/pages/StaffShiftsPage'
 import ConcessionCatalogPage from '../../features/concessions/pages/ConcessionCatalogPage'
+import CounterConcessionPosPage from '../../features/concessions/pages/CounterConcessionPosPage'
 import NotFoundPage from '../../pages/public/NotFoundPage'
+import CustomerRefundsPage from '../../features/refund/pages/CustomerRefundsPage'
+import ManagerRefundsPage from '../../features/refund/pages/ManagerRefundsPage'
 
 function ScrollToTop() {
   const { pathname } = useLocation()
@@ -75,6 +78,9 @@ export function AppRoutes() {
               path="booking-history"
               element={<CustomerBookingsPage key="booking-history" initialMode="history" />}
             />
+            <Route element={<PermissionRoute role="CUSTOMER" />}>
+              <Route path="refunds" element={<CustomerRefundsPage />} />
+            </Route>
             <Route path="booking/:showtimeId/seats" element={<SeatSelectionPage />} />
             <Route element={<PermissionRoute role="CUSTOMER" />}><Route path="booking/:showtimeId/concessions" element={<ConcessionSelectionPage />} /></Route>
             <Route path="booking/:showtimeId/checkout" element={<CheckoutPage />} />
@@ -101,7 +107,7 @@ export function AppRoutes() {
               <Route path="pos" element={<CounterPosPage />} />
               <Route path="pos/payment" element={<CounterPaymentPage />} />
               <Route path="pos/complete" element={<CounterCompletePage />} />
-              <Route path="concessions" element={<ConcessionCatalogPage staff />} />
+              <Route path="concessions" element={<CounterConcessionPosPage />} />
               <Route element={<PermissionRoute permission="inventory.view" />}>
                 <Route path="inventory" element={<StockLevelsPage stockInPath="/staff/inventory/stock-in" />} />
               </Route>
@@ -132,6 +138,7 @@ export function AppRoutes() {
             <Route element={<ManagerLayout />}>
               <Route index element={<Navigate to="showtimes" replace />} />
               <Route path="showtimes" element={<ManagerShowtimesPage />} />
+              <Route path="refunds" element={<ManagerRefundsPage />} />
               <Route element={<MovieManagementAccess />}>
                 <Route path="movies" element={<ManagerMoviesPage />} />
                 <Route path="movies/:movieId/edit" element={<UpdateMoviePage />} />

@@ -52,3 +52,11 @@ export async function simulatePaymentAttempt({
   )
   return response.data.data
 }
+
+export async function confirmCounterCash({ paymentId, attemptId, tenderedAmount }) {
+  const response = await httpClient.post(
+    `/payments/${paymentId}/attempts/${attemptId}/cash-confirm`,
+    { tenderedAmount },
+  )
+  return response.data.data
+}

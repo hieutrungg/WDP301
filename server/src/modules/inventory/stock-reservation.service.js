@@ -113,7 +113,7 @@ export const reserveStock = async ({
     { session },
   );
 };
-export const consumeStock = async ({ orderId, now, session }) => {
+export const consumeStock = async ({ orderId, now, session, source = "ONLINE_CHECKOUT" }) => {
   requireSession(session);
   const record = await StockReservation.findOne({ orderId })
     .session(session)
@@ -147,7 +147,7 @@ export const consumeStock = async ({ orderId, now, session }) => {
           type: "SALE",
           quantity: item.quantity,
           recordedBy: record.ownerId,
-          source: "ONLINE_CHECKOUT",
+          source,
           orderId: record.orderId,
           bookingId: record.bookingId,
           transactionDate: now,

@@ -79,6 +79,8 @@ const bookingSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "Payment",
     },
+    refundedAt: Date,
+    refundRequestId: { type: mongoose.Schema.Types.ObjectId, ref: "RefundRequest" },
   },
   {
     collection: "bookings",

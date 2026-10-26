@@ -531,6 +531,14 @@ Affected modules: `showtimes`, `rooms`, `bookings`, `payments`, `tickets`, `refu
 Status: APPROVED.
 Owner/Approver: Project owner.
 
+### Decision A-29
+
+Decision: Refund demo uses a 45-minute customer cutoff, blocks checked-in tickets, and refunds ticket value plus F&B not yet `FULFILLED`; fulfilled F&B is excluded. There is no service fee or monthly refund limit. Manager approves/rejects; Staff cannot approve. Digital refunds use an idempotent mock provider representing the original payment method; cash is returned manually outside the system. Booking, seat and F&B are finalized only after refund succeeds; failed processing is retryable.
+Reason: Deliver a bounded but transactionally safe demo without introducing an E-Gift wallet or a real gateway dependency.
+Affected modules: `refunds` (owner), `bookings`, `payments`, `tickets`, `concessions`, customer history and Manager operations. Migration adds refund indexes and refund lifecycle fields; existing Ticket integration remains blocked until an authoritative Ticket module exists.
+Status: APPROVED by project owner on 2026-10-27. Cross-owner/shared-contract review required before merge.
+Owner/Approver: Project owner.
+
 ## 22. Proposed decisions awaiting approval
 
 Các business/API/data decision chưa được owner duyệt tiếp tục nằm trong `docs/REQUIREMENTS_STATUS.md` và tab `Requirement Decisions` của Team Development Plan. Không suy diễn các decision đó từ các quyết định đã được duyệt A-01 đến A-28.

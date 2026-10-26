@@ -1,10 +1,11 @@
-import { Armchair, Building2, BriefcaseBusiness, DoorOpen, History, Ticket, UserRound } from 'lucide-react'
+import { Armchair, Building2, BriefcaseBusiness, CircleDollarSign, DoorOpen, History, Ticket, UserRound } from 'lucide-react'
 
 // `permission` / `role` only hide navigation; the API still enforces access.
 export const userMenuItems = [
   { label: 'My Profile', to: '/profile', icon: UserRound },
   { label: 'My Tickets', to: '/my-tickets', icon: Ticket },
   { label: 'Booking History', to: '/booking-history', icon: History },
+  { label: 'Cancellation & Refund', to: '/refunds', icon: CircleDollarSign, role: 'CUSTOMER' },
   // Way back to the role workspace from the public pages (home is no longer a forced redirect).
   { label: 'Manager Workspace', to: '/manager', icon: BriefcaseBusiness, role: 'MANAGER' },
   { label: 'Staff Workspace', to: '/staff', icon: BriefcaseBusiness, role: 'STAFF' },

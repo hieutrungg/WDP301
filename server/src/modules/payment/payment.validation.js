@@ -1,6 +1,6 @@
 import { z } from "zod";
 import {
-  PAYMENT_METHOD_VALUES,
+  PAYMENT_ACCEPTED_METHOD_VALUES,
   PAYMENT_SIMULATION_OUTCOME_VALUES,
 } from "./payment.constants.js";
 
@@ -8,7 +8,7 @@ const objectId = z.string().regex(/^[a-f\d]{24}$/i, "Invalid ObjectId");
 
 export const initiatePaymentSchema = z.object({
   bookingId: objectId,
-  method: z.enum(PAYMENT_METHOD_VALUES),
+  method: z.enum(PAYMENT_ACCEPTED_METHOD_VALUES),
   idempotencyKey: z.string().trim().min(8).max(120),
   amount: z.number().int().nonnegative().optional(),
   contactDetails: z
@@ -37,4 +37,9 @@ export const simulatePaymentNotificationSchema = z.object({
   outcome: z.enum(PAYMENT_SIMULATION_OUTCOME_VALUES).default("SUCCESS"),
   notificationKey: z.string().trim().min(4).max(120).optional(),
   failureReason: z.string().trim().min(1).max(200).optional(),
+});
+
+export const confirmCounterCashSchema = z.object({
+  tenderedAmount: z.number().int().nonnegative(),
+  notificationKey: z.string().trim().min(4).max(120).optional(),
 });

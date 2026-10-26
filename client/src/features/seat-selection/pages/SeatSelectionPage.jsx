@@ -209,7 +209,7 @@ function SeatMatrix({ rows, selectedSeatIds, interactionDisabled, onToggle }) {
   )
 }
 
-function BookingSummary({ selectedSeats, total, onRemove, onHold, savedCheckout, nextStepPath, selectionExpired, onRestart }) {
+function BookingSummary({ selectedSeats, total, onRemove, onHold, savedCheckout, nextStepPath, selectionExpired, onRestart, offersConcessions }) {
   return (
     <aside className="h-fit rounded-xl bg-surface-container-low p-5 shadow-xl lg:sticky lg:top-24">
       <div className="flex items-center justify-between border-b border-white/5 pb-4">
@@ -245,7 +245,7 @@ function BookingSummary({ selectedSeats, total, onRemove, onHold, savedCheckout,
         ) : selectionExpired ? (
           <button type="button" onClick={onRestart} className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary-container px-4 py-3.5 font-bold text-white"><RotateCcw className="size-4" />Select seats again</button>
         ) : (
-          <button type="button" onClick={onHold} disabled={!selectedSeats.length || total === null} className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary-container px-4 py-3.5 font-bold text-white shadow-crimson disabled:cursor-not-allowed disabled:opacity-40">Lock seats &amp; continue<ArrowRight className="size-4" /></button>
+          <button type="button" onClick={onHold} disabled={!selectedSeats.length || total === null} className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary-container px-4 py-3.5 font-bold text-white shadow-crimson disabled:cursor-not-allowed disabled:opacity-40">{offersConcessions ? 'Browse F&B' : 'Lock seats & continue'}<ArrowRight className="size-4" /></button>
         )}
       </div>
 
@@ -264,7 +264,8 @@ function SeatSelectionPage() {
   const navigate = useNavigate()
   const { account } = useAuth()
   const savedCheckout = readCheckout(sessionStorage, account.id, showtimeId)
-  const nextStepPath = `/booking/${showtimeId}/${hasRequiredRole(account, "CUSTOMER") && !savedCheckout?.bookingRequested ? "concessions" : "checkout"}`
+  const offersConcessions = hasRequiredRole(account, "CUSTOMER") && !savedCheckout?.bookingRequested
+  const nextStepPath = `/booking/${showtimeId}/${offersConcessions ? "concessions" : "checkout"}`
   const availability = useSeatAvailability(showtimeId)
   const [selectedSeatIds, setSelectedSeatIds] = useState([])
   const [selectionDeadline, setSelectionDeadline] = useState(() => Date.now() + SEAT_SELECTION_DURATION_MS)
@@ -362,7 +363,7 @@ function SeatSelectionPage() {
           <div className="flex flex-col gap-3 rounded-xl border border-white/5 bg-surface-container-lowest px-4 py-3 shadow-lg sm:flex-row sm:items-center sm:justify-between">
             <Link to="/showtimes" className="inline-flex shrink-0 items-center gap-2 text-xs font-semibold text-on-surface-variant hover:text-white"><ArrowLeft className="size-4" />Back to Showtime Selection (Step 4)</Link>
             <div className="flex min-w-0 items-center gap-3 text-xs"><span className="rounded bg-primary-container px-2 py-1 font-bold text-white">{selectedSeats.length} SEAT{selectedSeats.length === 1 ? '' : 'S'}</span><strong className="max-w-56 truncate">{selectedSeats.map((seat) => `${seat.row}${seat.number}`).join(', ') || 'No seats selected'}</strong><span className="text-on-surface-variant/30">|</span><strong className="font-heading text-base">{formatVnd(total)}</strong></div>
-            <button type="button" onClick={savedCheckout ? () => navigate(nextStepPath) : holdSeats} disabled={!savedCheckout && (selectionExpired || !selectedSeats.length || total === null)} className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-primary-container px-5 py-2.5 text-xs font-bold text-white shadow-crimson disabled:cursor-not-allowed disabled:opacity-45">{savedCheckout ? 'Resume checkout' : selectionExpired ? 'Selection time expired' : 'Confirm selected seats'}<ArrowRight className="size-4" /></button>
+            <button type="button" onClick={savedCheckout ? () => navigate(nextStepPath) : holdSeats} disabled={!savedCheckout && (selectionExpired || !selectedSeats.length || total === null)} className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-primary-container px-5 py-2.5 text-xs font-bold text-white shadow-crimson disabled:cursor-not-allowed disabled:opacity-45">{savedCheckout ? 'Resume checkout' : selectionExpired ? 'Selection time expired' : offersConcessions ? 'Browse F&B' : 'Confirm selected seats'}<ArrowRight className="size-4" /></button>
           </div>
           <div className="rounded-xl bg-surface-container-low p-4"><SeatLegend seatTypes={seatTypes} selectedCount={selectedSeats.length} /></div>
           {selectionExpired && !savedCheckout && <div role="alert" className="flex flex-col gap-3 rounded-xl border border-error/40 bg-error-container/20 p-4 text-sm text-error sm:flex-row sm:items-center sm:justify-between"><span><strong>Seat selection time expired.</strong> Your current selection was cleared. Start again to refresh availability.</span><button type="button" onClick={restartSelection} className="rounded-lg bg-primary-container px-4 py-2 font-bold text-white">Select again</button></div>}
@@ -374,7 +375,7 @@ function SeatSelectionPage() {
           </div>
         </section>
 
-        <BookingSummary selectedSeats={selectedSeats} total={total} savedCheckout={savedCheckout} nextStepPath={nextStepPath} selectionExpired={selectionExpired} onRestart={restartSelection} onRemove={toggleSeat} onHold={holdSeats} />
+        <BookingSummary selectedSeats={selectedSeats} total={total} savedCheckout={savedCheckout} nextStepPath={nextStepPath} selectionExpired={selectionExpired} onRestart={restartSelection} onRemove={toggleSeat} onHold={holdSeats} offersConcessions={offersConcessions} />
       </div>
 
     </main>

@@ -13,7 +13,7 @@ export const createConcessionCheckoutRouter = (service) => {
     "/quote",
     requireAuth,
     requirePermission("booking.create"),
-    requireRole("CUSTOMER"),
+    requireRole("CUSTOMER", "STAFF"),
     validate(concessionQuoteSchema, { code: "INVALID_CONCESSION_SELECTION" }),
     async (req, res, next) => {
       try {

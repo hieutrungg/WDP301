@@ -90,3 +90,61 @@
     display: none;
   }
 }
+
+@media print {
+  @page {
+    size: auto;
+    margin: 5mm;
+  }
+
+  html,
+  body {
+    min-width: 0;
+    background: #fff !important;
+    color: #111 !important;
+  }
+
+  body * {
+    visibility: hidden !important;
+  }
+
+  #counter-sale-receipt,
+  #counter-sale-receipt *,
+  #counter-concession-receipt,
+  #counter-concession-receipt * {
+    visibility: visible !important;
+  }
+
+  #counter-sale-receipt,
+  #counter-concession-receipt {
+    position: absolute;
+    inset: 0 auto auto 0;
+    width: 70mm;
+    max-width: none;
+    margin: 0;
+    padding: 3mm;
+    box-shadow: none !important;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+}
+
+#counter-concession-receipt {
+  position: fixed;
+  left: -10000px;
+  top: 0;
+  width: 70mm;
+  background: white;
+  color: #111;
+  padding: 3mm;
+}
+
+@media print {
+  #counter-concession-receipt {
+    left: 0;
+  }
+}

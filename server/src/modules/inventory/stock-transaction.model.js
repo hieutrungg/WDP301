@@ -12,7 +12,7 @@ const stockTransactionSchema = new mongoose.Schema(
     quantity: { type: Number, required: true, min: 1, validate: Number.isInteger },
     recordedBy: { type: mongoose.Schema.Types.ObjectId, ref: "Account", required: true },
     // IMPORT retains its Staff actor. Online SALE records the actual Customer, never a fake Staff.
-    source: { type: String, enum: ["ONLINE_CHECKOUT"] },
+    source: { type: String, enum: ["ONLINE_CHECKOUT", "COUNTER_POS"] },
     orderId: { type: mongoose.Schema.Types.ObjectId },
     bookingId: { type: mongoose.Schema.Types.ObjectId },
     transactionDate: { type: Date, required: true },

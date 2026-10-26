@@ -23,7 +23,7 @@ const navItems = [
   { label: 'Dashboard', icon: LayoutDashboard },
   { label: 'Sell Tickets', icon: Ticket, to: '/staff/pos', title: 'Sell tickets at counter', section: 'Counter' },
   { label: 'Scan Ticket', icon: ScanLine },
-  { label: 'Concession Menu', icon: Popcorn, to: '/staff/concessions', title: 'Concession menu', section: 'Concession & inventory' },
+  { label: 'Sell Concessions', icon: Popcorn, to: '/staff/concessions', title: 'Sell concessions', section: 'Concession & inventory' },
   {
     label: 'Inventory',
     icon: Boxes,
@@ -99,7 +99,7 @@ function StaffLayout() {
   const permissions = new Set(account?.permissions?.map(({ name }) => name))
   const current = findCurrentItem(location.pathname)
   // Counter POS pages expect the shell to pad them; inventory pages pad themselves like manager pages.
-  const padContent = location.pathname.startsWith('/staff/pos')
+  const padContent = location.pathname.startsWith('/staff/pos') || location.pathname === '/staff/concessions'
 
   const handleLogout = async () => {
     setIsLoggingOut(true)

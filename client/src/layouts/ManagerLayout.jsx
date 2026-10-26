@@ -11,6 +11,7 @@ import {
   LogOut,
   Menu,
   TicketPercent,
+  ReceiptText,
   UsersRound,
   X,
 } from "lucide-react";
@@ -54,6 +55,7 @@ const navItems = [
     permission: "inventory.view",
   },
   { label: "Promotions", icon: TicketPercent },
+  { label: "Refunds", icon: ReceiptText, to: "/manager/refunds" },
   {
     label: "Staff Shifts",
     icon: UsersRound,
@@ -153,6 +155,8 @@ function ManagerLayout() {
     breadcrumb = ["Facilities & rooms", "Room management"];
   if (location.pathname.startsWith("/manager/staff-shifts"))
     breadcrumb = ["Human resources & operations", "Staff shift monitoring"];
+  if (location.pathname.startsWith("/manager/refunds"))
+    breadcrumb = ["Revenue & customer care", "Refund review queue"];
   if (location.pathname.startsWith("/manager/movies")) {
     const screen = location.pathname.endsWith("/new") ? "Add new movie"
       : location.pathname.endsWith("/edit") ? "Update movie" : "Movie management";

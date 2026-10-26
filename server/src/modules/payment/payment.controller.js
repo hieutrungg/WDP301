@@ -66,4 +66,22 @@ export const createPaymentController = (service) => ({
       next(error);
     }
   },
+
+  confirmCounterCash: async (req, res, next) => {
+    try {
+      const { paymentId, attemptId } = req.validated?.params ?? req.params;
+      const data = await service.handlePaymentNotification({
+        paymentId,
+        attemptId,
+        outcome: "SUCCESS",
+        notificationKey: req.body?.notificationKey ?? `counter-cash:${attemptId}`,
+        actorOwnerId: req.auth.accountId,
+        requiredMethod: "CASH",
+        tenderedAmount: req.body.tenderedAmount,
+      });
+      res.status(200).json({ success: true, data });
+    } catch (error) {
+      next(error);
+    }
+  },
 });

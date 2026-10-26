@@ -2,7 +2,7 @@ import mongoose from "mongoose";
 
 const schema = new mongoose.Schema(
   {
-    bookingId: { type: mongoose.Schema.Types.ObjectId, required: true },
+    bookingId: { type: mongoose.Schema.Types.ObjectId },
     orderId: { type: mongoose.Schema.Types.ObjectId, required: true },
     branchId: { type: mongoose.Schema.Types.ObjectId, required: true },
     ownerId: { type: mongoose.Schema.Types.ObjectId, required: true },

@@ -12,6 +12,7 @@ import {
 import { createBookingService } from "../src/modules/booking/booking.service.js";
 import {
   PAYMENT_ATTEMPT_STATUS,
+  PAYMENT_ACCEPTED_METHOD_VALUES,
   PAYMENT_ERROR_CODE,
   PAYMENT_METHOD_VALUES,
   PAYMENT_METHODS,
@@ -281,11 +282,13 @@ test("Payment model and index definitions satisfy Payment aggregate and validato
   );
   assert.deepEqual(
     Payment.schema.path("method").enumValues,
-    PAYMENT_METHOD_VALUES,
+    PAYMENT_ACCEPTED_METHOD_VALUES,
   );
-  assert.equal(PAYMENT_INDEXES.length, 4);
-  assert.equal(PAYMENT_INDEXES[0].options.name, "uniq_payment_booking");
+  assert.equal(PAYMENT_INDEXES.length, 5);
+  assert.equal(PAYMENT_INDEXES[0].options.name, "uniq_payment_order");
   assert.equal(PAYMENT_INDEXES[0].options.unique, true);
+  assert.equal(PAYMENT_INDEXES[1].options.name, "uniq_payment_booking");
+  assert.equal(PAYMENT_INDEXES[1].options.unique, true);
 });
 
 test("1 & 2. Valid PENDING_PAYMENT booking creates Payment aggregate and idempotent retry returns same attempt", async () => {

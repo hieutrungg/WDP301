@@ -7,6 +7,8 @@ export const PAYMENT_STATUS = Object.freeze({
   CANCELLED: "CANCELLED",
   EXPIRED: "EXPIRED",
   REVIEW_REQUIRED: "REVIEW_REQUIRED",
+  REFUNDED: "REFUNDED",
+  PARTIALLY_REFUNDED: "PARTIALLY_REFUNDED",
 });
 
 export const PAYMENT_STATUSES = Object.freeze(Object.values(PAYMENT_STATUS));
@@ -25,6 +27,7 @@ export const PAYMENT_ATTEMPT_STATUSES = Object.freeze(
 );
 
 export const PAYMENT_METHOD = Object.freeze({
+  CASH: "CASH",
   MOMO_WALLET: "MOMO_WALLET",
   VNPAY_QR: "VNPAY_QR",
   CREDIT_DEBIT_CARD: "CREDIT_DEBIT_CARD",
@@ -33,10 +36,20 @@ export const PAYMENT_METHOD = Object.freeze({
 
 export const PAYMENT_METHODS = PAYMENT_METHOD;
 export const PAYMENT_METHOD_VALUES = Object.freeze(
-  Object.values(PAYMENT_METHOD),
+  Object.values(PAYMENT_METHOD).filter((method) => method !== PAYMENT_METHOD.CASH),
 );
+export const PAYMENT_ACCEPTED_METHOD_VALUES = Object.freeze(Object.values(PAYMENT_METHOD));
 
 export const PAYMENT_METHOD_META = Object.freeze({
+  [PAYMENT_METHOD.CASH]: Object.freeze({
+    id: PAYMENT_METHOD.CASH,
+    label: "Cash at counter",
+    gatewayName: "F-Cinema Counter Cash",
+    subtitle: "Staff-confirmed counter settlement",
+    badge: "CASH",
+    prefix: "CASH",
+    provider: "COUNTER",
+  }),
   [PAYMENT_METHOD.MOMO_WALLET]: Object.freeze({
     id: PAYMENT_METHOD.MOMO_WALLET,
     label: "MoMo E-Wallet",

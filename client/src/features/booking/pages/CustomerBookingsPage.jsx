@@ -35,6 +35,12 @@ const FILTER_TABS = [
 ]
 
 function getStatusBadge(booking, payment) {
+  if (booking?.status === 'REFUNDED') {
+    return {
+      label: payment?.status === 'PARTIALLY_REFUNDED' ? 'PARTIALLY REFUNDED' : 'REFUNDED',
+      className: 'border-sky-400/40 bg-sky-400/15 text-sky-300',
+    }
+  }
   if (booking?.status === 'CONFIRMED' && payment?.status === 'PAID') {
     return {
       label: 'CONFIRMED • PAID',

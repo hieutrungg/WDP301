@@ -2,6 +2,7 @@ export const BOOKING_STATUS = Object.freeze({
   PENDING_PAYMENT: "PENDING_PAYMENT",
   CONFIRMED: "CONFIRMED",
   EXPIRED: "EXPIRED",
+  REFUNDED: "REFUNDED",
 });
 
 export const BOOKING_STATUSES = Object.freeze(Object.values(BOOKING_STATUS));

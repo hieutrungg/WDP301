@@ -15,5 +15,7 @@ Supports staff counter sales, optional concessions, payment/cash confirmation, p
 
 `CreateCounterSale` coordinates staff authorization, seat hold, price, payment method, booking confirmation, and ticket issuance. `ValidateTicket` performs an atomic `ISSUED -> CHECKED_IN` transition and records scanner/time. `TicketPrinterPort` is best-effort after the sale is committed; reprint is separately authorized.
 
-Open Design Question: define whether cash sales create a Payment record and how cash drawer/shift reconciliation is captured.
+Approved owner decision (2026-10-26): a counter cash sale creates the same Payment aggregate as other methods. Staff enters the tendered amount only to prove it is at least the authoritative payable total; change and cash-drawer/shift reconciliation are handled outside this system. Counter QR reuses the Customer mock QR Payment flow. Counter ticket sales may include optional concessions and must reuse Booking, SeatHold, Inventory reservation and Payment lifecycle services.
+
+Standalone concession sales are approved for the Counter POS, including walk-in customers who already hold a ticket. They require an Order-first payable lifecycle without a Booking/SeatHold; this must not be represented by a synthetic ticket Booking.
 

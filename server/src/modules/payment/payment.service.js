@@ -8,7 +8,7 @@ import {
   PAYMENT_ATTEMPT_STATUS,
   PAYMENT_CURRENCY,
   PAYMENT_ERROR_CODE,
-  PAYMENT_METHOD_VALUES,
+  PAYMENT_ACCEPTED_METHOD_VALUES,
   PAYMENT_RECONCILIATION_REASON,
   PAYMENT_SIMULATION_OUTCOME,
   PAYMENT_STATUS,
@@ -216,7 +216,7 @@ export const createPaymentService = ({
       amount,
       contactDetails,
     }) => {
-      if (!PAYMENT_METHOD_VALUES.includes(method)) {
+      if (!PAYMENT_ACCEPTED_METHOD_VALUES.includes(method)) {
         throw paymentError(
           400,
           "Unsupported payment method",
@@ -487,6 +487,8 @@ export const createPaymentService = ({
       notificationKey,
       failureReason,
       actorOwnerId,
+      requiredMethod,
+      tenderedAmount,
     }) => {
       const initialPayment = await paymentRepository.findById(paymentId);
       ensurePaymentOwnership(initialPayment, actorOwnerId);
@@ -508,6 +510,12 @@ export const createPaymentService = ({
         }
 
         const attempt = payment.attempts[attemptIndex];
+        if (requiredMethod && attempt.method !== requiredMethod) {
+          throw paymentError(409, "This payment attempt is not a counter cash payment", PAYMENT_ERROR_CODE.INVALID_PAYMENT);
+        }
+        if (requiredMethod === "CASH" && (!Number.isSafeInteger(tenderedAmount) || tenderedAmount < payment.amount)) {
+          throw paymentError(400, "Cash received is less than the amount due", PAYMENT_ERROR_CODE.PAYMENT_AMOUNT_MISMATCH);
+        }
         const effectiveNotificationKey =
           notificationKey || `${attemptId}:${outcome}`;
 
