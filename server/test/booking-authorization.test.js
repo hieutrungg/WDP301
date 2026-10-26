@@ -30,6 +30,7 @@ test("Booking route enforces current account status and role/direct grants", asy
   app.use(express.json(), cookieParser());
   app.use("/api/bookings", createBookingRouter({
     createPending: (_req, res) => { creates += 1; res.status(201).json({ success: true }); },
+    cancel: () => { throw new Error("Create-authorization test must not invoke checkout cancellation"); },
   }));
   app.use(errorHandler);
   const server = await new Promise((resolve) => {
