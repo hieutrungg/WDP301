@@ -24,6 +24,7 @@ import ConcessionOrderSummary from '../components/ConcessionOrderSummary'
 import { cancelCheckout, createPendingBooking } from '../api/bookingApi'
 import {
   cancelPaymentAttempt,
+  getBookingPaymentDetails,
   initiatePayment,
   simulatePaymentAttempt,
 } from '../api/paymentApi'
@@ -143,11 +144,21 @@ function CheckoutSession() {
     methodToUse,
     sequenceToUse,
   ) => {
-    const idempotencyKey = buildPaymentAttemptKey({
-      bookingId: targetBooking.bookingId,
-      method: methodToUse,
-      attemptSequence: sequenceToUse,
-    })
+    // Reload resets local sequence state. Recover an unsettled request from the
+    // server, and never reuse a terminal attempt's key for a new retry.
+    const details = await getBookingPaymentDetails(targetBooking.bookingId)
+    const attempts = details.payment?.attempts ?? []
+    const pending = attempts.find(
+      (value) => value.status === 'PENDING' && value.method === methodToUse,
+    )
+    const previous = attempts.at(-1)
+    const idempotencyKey = pending?.idempotencyKey ?? (previous
+      ? `pay-retry:${targetBooking.bookingId}:${methodToUse}:${previous.attemptId}`
+      : buildPaymentAttemptKey({
+        bookingId: targetBooking.bookingId,
+        method: methodToUse,
+        attemptSequence: sequenceToUse,
+      }))
 
     const initiated = await initiatePayment({
       bookingId: targetBooking.bookingId,
