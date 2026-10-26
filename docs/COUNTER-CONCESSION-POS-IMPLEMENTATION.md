@@ -14,11 +14,11 @@ Implemented 2026-10-27 from the approved UC24/28/29 owner decision.
 
 - `POST /api/counter-concessions/orders`
 - `POST /api/counter-concessions/orders/:orderId/confirm-qr`
-- Both routes require authenticated `STAFF` plus the existing `booking.create` counter permission. Server reloads catalog price/recipe/stock and ignores client totals.
+- Both routes require authenticated `STAFF`. Server reloads catalog price/recipe/stock and ignores client totals.
 - `orders.bookingId`, `orders.customerAccountId`, `payments.bookingId` and `inventory_reservations.bookingId` become optional for Order-first walk-in sales. `orders.type` adds `COUNTER` and records `createdByStaffId`; Payment adds the existing optional `orderId` relationship with a unique partial index.
 - Migration `20261027-counter-concession-pos.js` is opt-in and dry-run by default. It was not applied to any database.
 
 ## Deferred
 
 - Real QR gateway callback/webhook, cash drawer reconciliation, runner/kitchen ticket and pickup fulfillment remain outside this demo slice.
-- The route temporarily reuses `booking.create` because a dedicated concession-sale permission has not been approved. Backend role checking still restricts it to Staff.
+- A dedicated concession-sale permission remains unapproved, so this demo slice uses the approved Staff-only role boundary without coupling a standalone food order to ticket-booking permission.

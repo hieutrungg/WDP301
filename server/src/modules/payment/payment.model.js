@@ -124,7 +124,15 @@ const paymentSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
-    refundedAmount: { type: Number, min: 0, validate: Number.isSafeInteger, default: null },
+    refundedAmount: {
+      type: Number,
+      min: 0,
+      validate: {
+        validator: (value) => value == null || Number.isSafeInteger(value),
+        message: "Refunded amount must be an integer number of VND",
+      },
+      default: null,
+    },
     refundedAt: { type: Date, default: null },
     refundReference: { type: String, trim: true, default: null },
     expiresAt: {

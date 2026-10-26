@@ -35,6 +35,23 @@ test("order-first persistence keeps booking optional and adds one payment per or
   assert.equal(PAYMENT_INDEXES.some(({ options }) => options.name === "uniq_payment_order"), true);
 });
 
+test("a new standalone Payment accepts the nullable refund fields", async () => {
+  const payment = new Payment({
+    orderId: id,
+    payableReference: "FD-TEST-001",
+    customerAccountId: id,
+    gatewayTransactionId: "CASH-TEST-001",
+    method: "CASH",
+    amount: 94_000,
+    currency: "VND",
+    status: "PENDING",
+    expiresAt: new Date(Date.now() + 60_000),
+    attempts: [],
+  });
+  await payment.validate();
+  assert.equal(payment.refundedAmount, null);
+});
+
 test("counter concession migration is dry-run by default", async () => {
   await runMigration(["--db", "counter_concession_test"]);
 });

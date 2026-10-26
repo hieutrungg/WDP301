@@ -119,7 +119,7 @@
   #counter-concession-receipt {
     position: absolute;
     inset: 0 auto auto 0;
-    width: 70mm;
+    width: 90mm;
     max-width: none;
     margin: 0;
     padding: 3mm;
@@ -137,14 +137,162 @@
   position: fixed;
   left: -10000px;
   top: 0;
-  width: 70mm;
+  width: 90mm;
   background: white;
   color: #111;
-  padding: 3mm;
+  padding: 6mm;
+  font-family: 'Inter', Arial, sans-serif;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+#counter-concession-receipt .receipt-header {
+  padding-bottom: 4mm;
+  text-align: center;
+  border-bottom: 1.5px solid #111;
+}
+
+#counter-concession-receipt .receipt-brand {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+#counter-concession-receipt .receipt-title {
+  margin: 1mm 0 0;
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+}
+
+#counter-concession-receipt .receipt-subtitle {
+  margin: 1mm 0 0;
+  font-size: 10px;
+  color: #555;
+}
+
+#counter-concession-receipt .receipt-details {
+  display: grid;
+  gap: 1.5mm;
+  padding: 4mm 0;
+  border-bottom: 1px dashed #555;
+}
+
+#counter-concession-receipt .receipt-details > div {
+  display: grid;
+  grid-template-columns: 18mm minmax(0, 1fr);
+  gap: 2mm;
+}
+
+#counter-concession-receipt .receipt-details span {
+  color: #555;
+}
+
+#counter-concession-receipt .receipt-details strong {
+  overflow-wrap: anywhere;
+}
+
+#counter-concession-receipt .receipt-items {
+  padding: 3mm 0;
+}
+
+#counter-concession-receipt .receipt-table-heading,
+#counter-concession-receipt .receipt-item,
+#counter-concession-receipt .receipt-total {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 4mm;
+}
+
+#counter-concession-receipt .receipt-table-heading {
+  margin-bottom: 2mm;
+  padding-bottom: 1.5mm;
+  border-bottom: 1px solid #bbb;
+  color: #555;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+#counter-concession-receipt .receipt-item {
+  padding: 2mm 0;
+  font-size: 12px;
+}
+
+#counter-concession-receipt .receipt-item > div {
+  min-width: 0;
+}
+
+#counter-concession-receipt .receipt-item p {
+  margin: 0.5mm 0 0;
+  color: #555;
+  font-size: 11px;
+}
+
+#counter-concession-receipt .receipt-item > strong {
+  flex: none;
+}
+
+#counter-concession-receipt .receipt-total {
+  padding: 3mm 0;
+  border-top: 2px solid #111;
+  border-bottom: 2px solid #111;
+  font-size: 18px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+#counter-concession-receipt .receipt-footer {
+  padding-top: 5mm;
+  text-align: center;
+}
+
+#counter-concession-receipt .receipt-footer p {
+  margin: 0;
+}
+
+#counter-concession-receipt .receipt-footer p:first-child {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+#counter-concession-receipt .receipt-footer p:last-child {
+  margin-top: 1mm;
+  color: #666;
+  font-size: 10px;
 }
 
 @media print {
   #counter-concession-receipt {
-    left: 0;
+    inset: 0 auto auto 50%;
+    width: calc(100vw - 20mm);
+    max-width: 190mm;
+    padding: 10mm 12mm;
+    font-size: 14px;
+    transform: translateX(-50%);
+  }
+
+  #counter-concession-receipt .receipt-brand {
+    font-size: 30px;
+  }
+
+  #counter-concession-receipt .receipt-title {
+    font-size: 16px;
+  }
+
+  #counter-concession-receipt .receipt-details {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 12mm;
+  }
+
+  #counter-concession-receipt .receipt-item {
+    font-size: 14px;
+  }
+
+  #counter-concession-receipt .receipt-total {
+    font-size: 22px;
   }
 }

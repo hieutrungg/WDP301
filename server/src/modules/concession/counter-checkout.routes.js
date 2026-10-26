@@ -1,12 +1,14 @@
 import { Router } from "express";
 import { requireAuth } from "../../middlewares/authMiddleware.js";
-import { requirePermission, requireRole } from "../../middlewares/permissionMiddleware.js";
+import { requireRole } from "../../middlewares/permissionMiddleware.js";
 import { validate } from "../../middlewares/validateMiddleware.js";
 import { createCounterConcessionOrderSchema, counterConcessionOrderParamsSchema } from "./counter-checkout.validation.js";
 
 export const createCounterConcessionCheckoutRouter = (service) => {
   const router = Router();
-  router.use(requireAuth, requirePermission("booking.create"), requireRole("STAFF"));
+  // Standalone concession sales are a Staff-only counter capability. Do not reuse
+  // the ticket-booking permission: a walk-in food order has no Booking aggregate.
+  router.use(requireAuth, requireRole("STAFF"));
   router.post(
     "/orders",
     validate(createCounterConcessionOrderSchema, { code: "INVALID_COUNTER_CONCESSION_ORDER" }),
