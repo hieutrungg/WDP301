@@ -1,3 +1,4 @@
+import ConcessionOrderSummary from '../components/ConcessionOrderSummary'
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
@@ -569,6 +570,7 @@ function BookingConfirmationPage() {
             </div>
           </section>
         )}
+        <ConcessionOrderSummary order={booking?.concessionOrder} paid={isConfirmedAndPaid} />
       </div>
     </main>
   )

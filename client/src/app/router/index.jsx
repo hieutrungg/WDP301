@@ -30,12 +30,15 @@ import CounterPosPage from '../../features/counter-pos/pages/CounterPosPage'
 import CounterPaymentPage from '../../features/counter-pos/pages/CounterPaymentPage'
 import CounterCompletePage from '../../features/counter-pos/pages/CounterCompletePage'
 import SeatSelectionPage from '../../features/seat-selection/pages/SeatSelectionPage'
+import ConcessionSelectionPage from '../../features/booking/pages/ConcessionSelectionPage'
 import CheckoutPage from '../../features/booking/pages/CheckoutPage'
 import BookingConfirmationPage from '../../features/booking/pages/BookingConfirmationPage'
 import CustomerBookingsPage from '../../features/booking/pages/CustomerBookingsPage'
 import StockInPage from '../../features/inventory/pages/StockInPage'
 import StockLevelsPage from '../../features/inventory/pages/StockLevelsPage'
 import StaffShiftsPage from '../../features/staff-shifts/pages/StaffShiftsPage'
+import ConcessionCatalogPage from '../../features/concessions/pages/ConcessionCatalogPage'
+import NotFoundPage from '../../pages/public/NotFoundPage'
 
 function ScrollToTop() {
   const { pathname } = useLocation()
@@ -47,10 +50,8 @@ function ScrollToTop() {
   return null
 }
 
-function AppRouter() {
+export function AppRoutes() {
   return (
-    <BrowserRouter>
-      <ScrollToTop />
       <Routes>
         <Route element={<PublicLayout />}>
           {/* Home stays reachable for every role (logo link). Role redirect (A-16) happens on login only. */}
@@ -63,6 +64,7 @@ function AppRouter() {
           <Route path="showtimes" element={<ShowtimesPage />} />
           <Route path="movies" element={<MoviesPage />} />
           <Route path="movies/:movieId" element={<MovieDetailPage />} />
+          <Route path="concessions" element={<ConcessionCatalogPage />} />
           <Route element={<ProtectedRoute />}>
             <Route path="profile" element={<ProfilePage />} />
             <Route
@@ -74,6 +76,7 @@ function AppRouter() {
               element={<CustomerBookingsPage key="booking-history" initialMode="history" />}
             />
             <Route path="booking/:showtimeId/seats" element={<SeatSelectionPage />} />
+            <Route element={<PermissionRoute role="CUSTOMER" />}><Route path="booking/:showtimeId/concessions" element={<ConcessionSelectionPage />} /></Route>
             <Route path="booking/:showtimeId/checkout" element={<CheckoutPage />} />
             <Route
               path="booking/:showtimeId/confirmation/:bookingId"
@@ -86,6 +89,7 @@ function AppRouter() {
             <Route path="profile/edit" element={<EditProfilePage />} />
             <Route path="profile/change-password" element={<ChangePasswordPage />} />
           </Route>
+          <Route path="*" element={<NotFoundPage />} />
         </Route>
 
         {/* Staff surface has its own shell, like admin/manager. UX guard only; the API enforces
@@ -97,6 +101,7 @@ function AppRouter() {
               <Route path="pos" element={<CounterPosPage />} />
               <Route path="pos/payment" element={<CounterPaymentPage />} />
               <Route path="pos/complete" element={<CounterCompletePage />} />
+              <Route path="concessions" element={<ConcessionCatalogPage staff />} />
               <Route element={<PermissionRoute permission="inventory.view" />}>
                 <Route path="inventory" element={<StockLevelsPage stockInPath="/staff/inventory/stock-in" />} />
               </Route>
@@ -149,6 +154,14 @@ function AppRouter() {
           </Route>
         </Route>
       </Routes>
+  )
+}
+
+function AppRouter() {
+  return (
+    <BrowserRouter>
+      <ScrollToTop />
+      <AppRoutes />
     </BrowserRouter>
   )
 }

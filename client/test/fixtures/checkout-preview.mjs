@@ -9,6 +9,7 @@ if (!process.argv.includes('--serve')) process.exit(0)
 const showtimeId = '111111111111111111111111'
 const ownerId = '222222222222222222222222'
 const seatId = '333333333333333333333333'
+const branchId = '777777777777777777777777', foodId = '888888888888888888888888'
 const holds = new Map(), bookings = new Map(), payments = new Map()
 const requests = []
 let scenario = 'normal'
@@ -55,11 +56,19 @@ const server = await createServer({
           for (const hold of holds.values()) hold.status = 'RELEASED'
           return send({ success: true, data: { status: 'RELEASED' } })
         }
+        if (req.url.startsWith('/api/concession-categories?')) return send({success:true,data:[],meta:{page:1,limit:100,total:0,totalPages:0}})
+        if (req.url.startsWith('/api/concessions?') || req.url.startsWith('/api/combos?')) return send({success:true,data:req.url.includes('/combos?')?[]:[{id:foodId,name:'Test popcorn',price:30000,size:'Large',available:true,isSpecialOffer:false}],meta:{page:1,limit:12,total:1,totalPages:1}})
+        if (req.url === '/api/concession-checkout/quote') {
+          const hold=[...holds.values()].at(-1), items=body.items.map(line=>({...line,name:'Test popcorn',size:'Large',unitPrice:30000,subtotal:line.quantity*30000}))
+          const concessionAmount=items.reduce((sum,line)=>sum+line.subtotal,0)
+          return send({success:true,data:{holdId:hold.holdId,branchId,branchName:'Local test cinema',expiresAt:hold.expiresAt,serverNow:new Date().toISOString(),ticketAmount:110500,concessionAmount,amount:110500+concessionAmount,currency:'VND',items,quoteReference:'a'.repeat(64)}})
+        }
         if (req.url === '/api/bookings') {
           if (!bookings.has(body.requestKey)) bookings.set(body.requestKey, {
             bookingId: '555555555555555555555555', bookingCode: 'FC-FIXTURE-001', payableReference: 'PAY-FIXTURE-ONLY',
             showtimeId, customerAccountId: ownerId, status: 'PENDING_PAYMENT',
-            amount: 110500, totalAmount: 110500, currency: 'VND', expiresAt: [...holds.values()].at(-1).expiresAt,
+            ...(body.concessionSelection ? {ticketAmount:110500,concessionAmount:body.concessionSelection.items.reduce((sum,line)=>sum+line.quantity*30000,0),concessionOrder:{orderId:'999999999999999999999999',orderCode:'FD-FIXTURE-ONLY',branchId,status:'PENDING_PAYMENT',paymentStatus:'PENDING',items:body.concessionSelection.items.map(line=>({...line,name:'Test popcorn',unitPrice:30000,subtotal:line.quantity*30000})),totalAmount:body.concessionSelection.items.reduce((sum,line)=>sum+line.quantity*30000,0)}} : {}),
+            amount: 110500+(body.concessionSelection?.items.reduce((sum,line)=>sum+line.quantity*30000,0)??0), totalAmount: 110500+(body.concessionSelection?.items.reduce((sum,line)=>sum+line.quantity*30000,0)??0), currency: 'VND', expiresAt: [...holds.values()].at(-1).expiresAt,
           })
           if (scenario === 'lost-response') {
             scenario = 'normal'
@@ -100,6 +109,7 @@ const server = await createServer({
           entry.payment.settlementReference = entry.activeAttempt.gatewayTransactionRef
           entry.payment.paidAt = new Date().toISOString()
           entry.booking.status = 'CONFIRMED'
+            if (entry.booking.concessionOrder) Object.assign(entry.booking.concessionOrder,{status:'CONFIRMED',paymentStatus:'PAID',pickupStatus:'AWAITING_PICKUP'})
           return send({ success: true, data: { outcome: 'CONFIRMED', booking: entry.booking, payment: entry.payment, activeAttempt: entry.activeAttempt } })
         }
         if (req.url.startsWith('/api/payments/bookings/') && req.method === 'GET') {

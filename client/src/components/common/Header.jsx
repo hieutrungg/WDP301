@@ -3,7 +3,7 @@ import { ChevronDown, LogOut, MapPin, Menu, Search, X } from "lucide-react";
 import AppLogo from "./AppLogo";
 import UserMenu from "./UserMenu";
 import { getUserMenuItems } from "./userMenuItems";
-import { Link, NavLink, useNavigate } from "react-router";
+import { Link, NavLink, useLocation, useNavigate } from "react-router";
 import { toast } from "sonner";
 import { useAuth } from "../../features/auth/hooks/useAuth";
 import { getPublicCinemas } from "../../lib/api/publicCinemaApi";
@@ -14,7 +14,7 @@ const navItems = [
   { label: "Movies", to: "/movies" },
   { label: "Food & Drink", to: "/concessions" },
   { label: "Theatres & Tickets", href: "/#theatres-&-tickets" },
-  { label: "Offers", href: "/#offers" },
+  { label: "Offers" },
 ];
 
 function Header() {
@@ -22,6 +22,7 @@ function Header() {
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const { account, initialized, isAuthenticated, logout } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchQuery, setSearchQuery] = useState("");
   const [branches, setBranches] = useState([]);
   const [branchesLoading, setBranchesLoading] = useState(true);
@@ -167,7 +168,7 @@ function Header() {
               >
                 {item.label}
               </NavLink>
-            ) : (
+            ) : item.href ? (
               <a
                 key={item.label}
                 href={item.href}
@@ -175,6 +176,10 @@ function Header() {
               >
                 {item.label}
               </a>
+            ) : (
+              <span key={item.label} aria-disabled="true" className="cursor-not-allowed rounded-lg px-3 py-2 text-sm text-on-surface-variant/50">
+                {item.label}<span className="ml-1 text-[10px]">Soon</span>
+              </span>
             ),
           )}
         </nav>
@@ -191,6 +196,7 @@ function Header() {
             <>
               <Link
                 to="/login"
+                state={{ from: location }}
                 className="hidden rounded-lg bg-primary-container px-4 py-2 text-xs font-bold text-white shadow-crimson transition-opacity hover:opacity-90 md:inline-flex"
               >
                 Sign In
@@ -246,7 +252,7 @@ function Header() {
                 >
                   {item.label}
                 </NavLink>
-              ) : (
+              ) : item.href ? (
                 <a
                   key={item.label}
                   href={item.href}
@@ -255,12 +261,17 @@ function Header() {
                 >
                   {item.label}
                 </a>
+              ) : (
+                <span key={item.label} aria-disabled="true" className="cursor-not-allowed rounded-lg px-3 py-2.5 text-sm text-on-surface-variant/50">
+                  {item.label}<span className="ml-2 text-[10px]">Soon</span>
+                </span>
               ),
             )}
             {initialized && !isAuthenticated && (
               <div className="mt-2 flex gap-2 border-t border-white/5 pt-3">
                 <Link
                   to="/login"
+                  state={{ from: location }}
                   onClick={() => setMenuOpen(false)}
                   className="flex-1 rounded-lg bg-primary-container px-4 py-2.5 text-center text-sm font-bold text-white"
                 >

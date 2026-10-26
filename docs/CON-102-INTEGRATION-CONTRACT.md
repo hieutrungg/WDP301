@@ -1,0 +1,52 @@
+# CON-102 — Combined ticket + optional F&D implementation contract
+
+Date: 2026-10-25. Status: APPROVED FOR IMPLEMENTATION by Hieu in this chat on 2026-10-25. Cross-owner review remains required before merge. The Customer business flow below was approved in this chat on 2026-10-24 and recorded in Iter3 row 12. It supersedes the standalone-order flow in the earlier CON-102-APPROVAL-DRAFT.md. No Stock Goods, standalone POS, refund, voucher or real-gateway scope is added.
+
+## Approved business scope
+
+Movie / Showtime / Seats -> acquire SeatHold -> optional F&D for that Showtime's branch, or Skip -> review -> one combined mock Payment -> one confirmation containing ticket and optional F&D pickup information. Adding items alone does not reserve stock. Revalidate prices/recipe/stock at checkout; insufficient stock lets Customer edit/remove items and still buy tickets. Do not extend the SeatHold expiry. Success before expiry confirms both parts and consumes stock once; explicit checkout cancellation/expiry releases holds/reservations; late success routes to review and never issues/fulfills. Guest browsing only, signed-in Customer for purchase. Existing ticket-only checkout remains supported.
+
+## Approved relationship and amounts (approved for implementation)
+
+1. Retain Booking as the ticket aggregate and add an optional linked F&D Order using the existing documented orders collection. Orders have an optional bookingId reference; for this task, every new online F&D order requires bookingId and at most one such Order can belong to a Booking. Standalone order checkout is not implemented.
+2. Keep Payment.bookingId required and reuse POST /api/payments, methods, mock attempts and callback/result URLs. One Payment per Booking covers the whole checkout; do not create a fake Booking for an F&D order. No general-purpose payable-target redesign is needed in this task.
+3. Booking.subtotal remains the seat-price subtotal. Add optional concessionAmount (integer VND, absent means 0); totalAmount = subtotal - discountAmount + concessionAmount. Existing ticket-only amounts are unchanged. Snapshot order name, size, unit price, quantities and expanded combo components server-side at checkout. Payment continues to read totalAmount from the server.
+4. Booking and linked Order expire at the original SeatHold.expiresAt. Verified success finalizes SeatHold + Booking + Order + Inventory in one Mongo transaction through their owner ports. A reservation that cannot be consumed causes the whole confirmation to fail/expire rather than issuing a ticket with unfulfilled paid F&D. Existing Payment review handling remains authoritative for late results.
+
+## Approved API additions (approved for implementation)
+
+- New protected POST /api/concession-checkout/quote with {holdId, items:[{itemType:'CONCESSION'|'COMBO',itemId,quantity}]}. Customer identity comes from backend auth. Branch comes from the hold's Showtime, never a client-selected branch. Positive integer quantities, max 50 unique lines and max 100 units/line; duplicated type/ID lines rejected. These limits are approved implementation bounds for this task.
+- Quote returns holdId, branchId, expiresAt, ticketAmount, concessionAmount, amount, currency:'VND', allowlisted item snapshots, and a server-issued tamper-resistant quoteReference. Quote does not reserve or deduct stock. No internal stock counts or supplier data exposed. It expires with the hold. The reference binds owner/hold/branch/requested lines/current quote. Submit revalidates it instead of trusting client names/prices/amounts.
+- Extend existing POST /api/bookings additively with optional concessionSelection:{quoteReference,items}. No selection preserves the existing request contract. Idempotency also binds the selected lines/quote: a reused request key with another selection returns a conflict, not the previous order silently.
+- Additive Booking/Payment detail DTO fields: ticketAmount, concessionAmount and optional concessionOrder:{orderId,orderCode,branchId,status,paymentStatus,pickupStatus,items,totalAmount}. Existing bookingId/status/payableReference/expiresAt/amount/currency remain. For ticket-only requests, omit the linked order and use concessionAmount=0.
+- Add protected explicit checkout-cancel command so canceling the entire checkout can release both holds atomically. Canceling an individual failed/mock payment attempt is distinct: it leaves a still-live checkout available for retry until the original deadline. This distinction was included in the approved contract; the existing Payment cancel-attempt endpoint retains its meaning.
+- Approved module errors: 400 INVALID_CONCESSION_SELECTION; 409 CONCESSION_QUOTE_CHANGED, INSUFFICIENT_CONCESSION_STOCK, CONCESSION_CHECKOUT_EXPIRED and CONCESSION_REQUEST_KEY_REUSED. Reuse existing 401/403/hold errors where appropriate. No public endpoint directly confirms a paid order. Zero-valued F&D contributes 0 to ticket checkout; retain existing mock Payment handling for a nonnegative combined amount, including zero, without creating a new free-settlement bypass.
+
+## Approved persistence / Inventory contracts (approved for implementation)
+
+- Booking optional concessionAmount; orders model for the existing designed collection, plus bookingId/expiresAt and immutable recipe snapshots. Approved Order statuses: PENDING_PAYMENT -> CONFIRMED or EXPIRED; paymentStatus PENDING/PAID/REVIEW_REQUIRED; pickupStatus NOT_READY/AWAITING_PICKUP. No Customer-controlled pickup completion.
+- New inventory_reservations collection stores bookingId/orderId/branchId, component requirements, expiresAt, status ACTIVE/CONSUMED/RELEASED and idempotency evidence. Add optional inventories.reservedQuantity (legacy absent reads as 0) to allow conditional atomic reservation against on-hand stock. Do not rename quantity or reset stock daily.
+- Inventory-owned reserve/consume/release contracts take the caller's Mongo session and derive one summed requirement per concessionId across loose items and all combo lines. Any shortage rolls back the complete reservation. Reserve uses on-hand minus reserved; consume decrements on-hand and reserved and writes SALE exactly once; release only decrements reserved.
+- Expired reservations must be released before a new checkout checks capacity. Catalog availability must become reservation-aware; no independent stock writes in Concession code. Stock Goods continues to increment on-hand quantity as before. Implemented cleanup uses independently committed batches of at most 100 before checkout, with a bounded in-transaction expiry reconciliation; Inventory integration review is required.
+- Online SALE audit must identify the real Customer/system source and linked order. Current stock_transactions.recordedBy is documented as a Staff actor; approved-for-implementation audit/schema adaptation still needs Nam’s integration review before merge. Never fabricate a Staff account or grant inventory permissions to Customer.
+- Approved unique indexes: one Order per Booking (partial for bookingId), unique orderCode; one reservation per linked Order; unique SALE evidence per Order + concessionId (partial for online linked sales). Add expiry lookup indexes only for implemented cleanup queries. Versioned migrations, autoIndex/autoCreate disabled on runtime import; no development migration/seed/backfill runs automatically.
+
+## Client implementation plan
+
+- New protected /booking/:showtimeId/concessions between Seats and Checkout. Acquire/recover the original server hold before selection and display its remaining time. On resume after Booking creation, go to the existing checkout instead of editing a pending paid amount.
+- Reuse catalog cards/data, locked to the Showtime branch. Add quantity controls, selection summary, Skip/Continue and server quote confirmation. Persist selection only in account/showtime/tab-scoped session data; it is never a price/permission authority. Expiry clears edit entitlement and offers seat selection.
+- Checkout shows seat subtotal, quoted F&D, combined server total and one existing mock Payment flow. Update client total-verification logic: current bookingMatchesHold assumes amount equals seats only and must account for the server-approved F&D quote. Do not merely change the static 0 VND label.
+- Confirmation/history show the real linked order and pickup code only after backend confirmation. Staff sale/pickup operations and standalone F&D remain outside this task. UI remains English and follows C13/C14/C15 Stitch.
+
+## Ownership, approval and tests
+
+Hieu: Concession Order and Booking integration/UI. Nam: Inventory reservation/consume/release/audit review. Ha: SeatHold branch/expiry/session handoff review. Cuong: combined Payment amount, callbacks, retry/cancel distinction and receipt/detail DTO review. Hiếu approved this additive API/schema/relationship plan on 2026-10-25; the optional-F&D business flow had already been approved. Shared integration review remains required before merge.
+
+Test isolated MongoDB only: ticket-only compatibility, Skip, changed quote/recipe, hidden/inactive items, branch mismatch, same last item concurrently, combined combo/item demand, reservation rollback, idempotent submit/callback/release, stock-in during holds, boundary expiry, late success, failed attempt/retry, cancellation, cross-account denial and server-controlled amounts. Browser: back/reload, account changes, countdown preservation, quantity controls, Skip, shortage correction, combined payment and receipt. No development Atlas data changes, commits, pushes or sheet-status updates in this proposal.
+
+## Approval record
+
+AGENTS.md prohibits unapproved API-contract/database-relationship changes and implementation of BLOCKED_BY_DECISION requirements. The historical REQUIREMENTS_STATUS rows block broad sale-time Inventory mutations; its new CON-102 scoped approval record overrides only this combined-online flow. the latest Iter3 scope approves the business flow while explicitly requiring Inventory/Payment contract and schema review. Hieu approved this concrete technical contract in the next chat turn: “được nhớ sửa cả các file liên quan nữa nhé”. This approval unblocks only the CON-102 online combined checkout described here; adjustments, waste, refunds and standalone sales remain outside scope. Existing BOOK-010 and INT-FE-001 working-tree changes are preserved.
+
+
+Implementation and verified rollout details: see CON-102-IMPLEMENTATION.md.

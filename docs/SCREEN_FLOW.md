@@ -134,3 +134,8 @@ Role changes, account-status changes and branch-status changes need immutable au
 | Administrator | `/admin`, `/admin/accounts/*`, `/admin/roles/*`, `/admin/branches/*` |
 
 Use separate layout shells and route guards for customer, staff, manager and administrator surfaces. Authorization must also be enforced by the server; client-side route guards are navigation aids, not a security boundary.
+
+
+### CON-102 runtime integration — 2026-10-25
+
+The existing optional C13 step is implemented at `/booking/:showtimeId/concessions`, between Seats and Checkout for Customer. Branch is locked to the held Showtime; Skip goes to the existing ticket checkout. One mock Payment covers tickets and selected food; confirmation/history show the linked order after verification. Countdown retains the original hold deadline. See `CON-102-IMPLEMENTATION.md`. The diagram already represents optional C13, so its topology and SRS are unchanged.

@@ -107,21 +107,33 @@ function matchesPrefix(pathname, prefix) {
 export function getLoginDestination(account, requestedPath) {
   const roleNames = getAccountRoleNames(account)
   const homePath = getRoleHomePath(account)
-  const normalizedPath =
+  const requested =
     typeof requestedPath === 'string'
       ? requestedPath.trim()
-      : requestedPath?.pathname?.trim() || ''
+      : `${requestedPath?.pathname || ''}${requestedPath?.search || ''}${requestedPath?.hash || ''}`
 
   if (
-    !normalizedPath ||
-    !normalizedPath.startsWith('/') ||
-    NON_DESTINATION_PATHS.has(normalizedPath)
+    !requested.startsWith('/') ||
+    requested.startsWith('//') ||
+    requested.includes('\\') ||
+    Array.from(requested).some((character) => character.charCodeAt(0) <= 32 || character.charCodeAt(0) === 127)
   ) {
     return homePath
   }
 
+  let destination
+  try {
+    destination = new URL(requested, 'https://f-cinema.invalid')
+  } catch {
+    return homePath
+  }
+  const pathname = destination.pathname
+  if (destination.origin !== 'https://f-cinema.invalid' || pathname.startsWith('//')) return homePath
+  if (NON_DESTINATION_PATHS.has(pathname.replace(/\/+$/, '') || '/')) return homePath
+  const normalizedPath = `${pathname}${destination.search}${destination.hash}`
+
   const matchedRolePrefix = ROLE_PREFIX_RULES.find(({ prefix }) =>
-    matchesPrefix(normalizedPath, prefix),
+    matchesPrefix(pathname, prefix),
   )
 
   if (matchedRolePrefix) {
@@ -129,7 +141,7 @@ export function getLoginDestination(account, requestedPath) {
   }
 
   if (homePath !== '/') {
-    return matchesPrefix(normalizedPath, homePath) ? normalizedPath : homePath
+    return matchesPrefix(pathname, homePath) ? normalizedPath : homePath
   }
 
   return normalizedPath

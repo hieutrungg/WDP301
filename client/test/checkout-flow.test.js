@@ -123,3 +123,31 @@ test('PAY-001 preserves all 4 C14 payment methods and generates deterministic mo
   assert.deepEqual(matrixA, matrixB)
   assert.notDeepEqual(matrixA, matrixC)
 })
+
+
+test('CON-102 forwards signed selection, verifies combined receipt and preserves it during replay', async () => {
+  const hold = holdFixture(), storage = storageFixture()
+  const selection = { quoteReference: 'a'.repeat(64), items: [{ itemType: 'CONCESSION', itemId: 'food', quantity: 2 }] }
+  const quote = { holdId: hold.holdId, ticketAmount: 110500, concessionAmount: 60000, amount: 170500, branchId: 'branch', currency: 'VND' }
+  const attempt = { ...attemptFixture(), concessionSelection: selection, concessionQuote: quote }
+  const booking = { ...bookingFixture(), amount: 170500, ticketAmount: 110500, concessionAmount: 60000, concessionOrder: { totalAmount: 60000, branchId: 'branch' } }
+  const createBooking = async command => { assert.deepEqual(command.concessionSelection, selection); return booking }
+  assert.equal((await submitBooking({ attempt, hold, storage, createBooking })).amount, 170500)
+  const saved = readCheckout(storage, attempt.ownerId, attempt.showtimeId)
+  assert.equal(saved.bookingRequested, true)
+  assert.equal((await restoreCheckout({ attempt: saved, acquire: async () => hold, createBooking })).booking.amount, 170500)
+  await assert.rejects(submitBooking({ attempt, hold, createBooking: async () => ({ ...booking, amount: 110500 }) }), /could not be verified/)
+  await assert.rejects(submitBooking({ attempt, hold, createBooking: async () => ({ ...booking, concessionOrder: {totalAmount:60000,branchId:'other'} }) }), /could not be verified/)
+  await assert.rejects(submitBooking({ attempt: { ...attempt, concessionQuote: null }, hold, createBooking: () => assert.fail('Missing quote must stop before mutation') }), /Review your food prices/)
+})
+
+test('CON-102 confirmed stock/quote rejection enables editing; uncertain network failure retains replay identity', async () => {
+  const attempt = attemptFixture(), hold = holdFixture(), storage = storageFixture()
+  for (const code of ['CONCESSION_QUOTE_CHANGED','INSUFFICIENT_CONCESSION_STOCK']) {
+    await assert.rejects(submitBooking({ attempt, hold, storage, createBooking: async () => { throw {response:{data:{code}}} } }))
+    const saved=readCheckout(storage,attempt.ownerId,attempt.showtimeId)
+    assert.equal(saved.bookingRequested,false); assert.equal(saved.requestKey,attempt.requestKey)
+  }
+  await assert.rejects(submitBooking({ attempt, hold, storage, createBooking: async () => { throw new Error('Network interrupted') } }))
+  assert.equal(readCheckout(storage,attempt.ownerId,attempt.showtimeId).bookingRequested,true)
+})

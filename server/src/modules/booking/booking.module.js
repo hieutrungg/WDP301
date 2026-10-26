@@ -10,6 +10,8 @@ import { showtimeSeatPriceQuoter } from "./seat-price.service.js";
 import { createBookingController } from "./booking.controller.js";
 import { createBookingRouter } from "./booking.routes.js";
 import { createBookingService } from "./booking.service.js";
+import { createConcessionCheckoutService, selectionFingerprint } from "../concession/checkout.service.js";
+import { createConcessionCheckoutRouter } from "../concession/checkout.routes.js";
 
 const showtimeReader = {
   getBookableShowtime: getBookableShowtimeForBooking,
@@ -31,7 +33,12 @@ export const seatHoldService = createSeatHoldService({
   priceQuoter: showtimeSeatPriceQuoter,
 });
 
+export const concessionCheckoutService = createConcessionCheckoutService({
+  getLiveHold: command => seatHoldService.getLiveHoldForBooking(command), getShowtime: getBookableShowtimeForBooking,
+});
+export const concessionCheckoutRoutes = createConcessionCheckoutRouter(concessionCheckoutService);
 export const bookingService = createBookingService({
+  concessionPort: { ...concessionCheckoutService, fingerprint: selectionFingerprint },
   seatHoldPort: {
     getLiveHoldForBooking: (command) => seatHoldService.getLiveHoldForBooking(command),
     consumeHoldForBooking: (command) => seatHoldService.consumeHoldForBooking(command),

@@ -17,7 +17,7 @@ export const PAYMENT_METHOD_OPTIONS = Object.freeze([
     instructions: [
       'Open the MoMo app or use the Mock Action below.',
       'Verify the F-Cinema booking reference and VND total.',
-      'Click "Tôi đã thanh toán" to simulate verified settlement.',
+      'Click "Simulate successful payment" to simulate verified settlement.',
     ],
   },
   {
@@ -31,7 +31,7 @@ export const PAYMENT_METHOD_OPTIONS = Object.freeze([
     instructions: [
       'Scan with any VietQR / VNPAY-QR banking app (Demo Mode).',
       'Confirm the exact integer VND amount locked by the server.',
-      'Click "Tôi đã thanh toán" to simulate verified settlement.',
+      'Click "Simulate successful payment" to simulate verified settlement.',
     ],
   },
   {
@@ -45,7 +45,7 @@ export const PAYMENT_METHOD_OPTIONS = Object.freeze([
     instructions: [
       '3D-Secure / EMV QR verification simulated via Internal Mock Gateway.',
       'No real card numbers or external API keys are transmitted.',
-      'Click "Tôi đã thanh toán" to simulate verified settlement.',
+      'Click "Simulate successful payment" to simulate verified settlement.',
     ],
   },
   {
@@ -59,7 +59,7 @@ export const PAYMENT_METHOD_OPTIONS = Object.freeze([
     instructions: [
       'Express biometric / QR token generated in Demo Mode.',
       'Verify booking reference and countdown timer before confirming.',
-      'Click "Tôi đã thanh toán" to simulate verified settlement.',
+      'Click "Simulate successful payment" to simulate verified settlement.',
     ],
   },
 ])

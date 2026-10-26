@@ -1,3 +1,4 @@
+import { hasRequiredRole } from '../../auth/utils/loginDestination'
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   AlertTriangle,
@@ -88,9 +89,9 @@ function BookingStepper() {
             <span className="size-2 animate-pulse rounded-full bg-white" />5. Seats · Selecting
           </span>
           <span className="text-surface-variant">›</span>
-          <span className="shrink-0 rounded-full px-3 py-1.5 text-on-surface-variant/60">6. Checkout</span>
+          <span className="shrink-0 rounded-full px-3 py-1.5 text-on-surface-variant/60">6. Food & Drink (optional)</span>
           <span className="text-surface-variant/50">›</span>
-          <span className="shrink-0 rounded-full px-3 py-1.5 text-on-surface-variant/60">7. Payment</span>
+          <span className="shrink-0 rounded-full px-3 py-1.5 text-on-surface-variant/60">7. Checkout & Payment</span>
         </nav>
         <span className="inline-flex shrink-0 items-center gap-2 rounded-full bg-surface-container px-3 py-1.5 text-xs font-medium">
           <Zap className="size-4 fill-secondary text-secondary" />Live Seat Availability · Real-time Updates
@@ -100,7 +101,7 @@ function BookingStepper() {
   )
 }
 
-function SessionBar({ showtime, savedCheckout, showtimeId, selectionDeadline, onExpire }) {
+function SessionBar({ showtime, savedCheckout, nextStepPath, selectionDeadline, onExpire }) {
   const startAt = showtime?.startAt ? new Date(showtime.startAt) : null
   const endAt = showtime?.endAt ? new Date(showtime.endAt) : null
   const movie = showtime?.movie
@@ -143,7 +144,7 @@ function SessionBar({ showtime, savedCheckout, showtimeId, selectionDeadline, on
           <div>
             <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-on-surface-variant">{savedCheckout ? 'Your checkout' : 'Seat selection time'}</p>
             <p className="font-heading text-2xl font-extrabold text-primary-container">
-              {savedCheckout ? <Link to={`/booking/${showtimeId}/checkout`} className="text-base underline">Resume checkout</Link> : <SelectionCountdown key={selectionDeadline} deadline={selectionDeadline} onExpire={onExpire} />}
+              {savedCheckout ? <Link to={nextStepPath} className="text-base underline">Resume checkout</Link> : <SelectionCountdown key={selectionDeadline} deadline={selectionDeadline} onExpire={onExpire} />}
               {!savedCheckout && <span className="ml-2 text-xs font-normal text-on-surface-variant">left to select</span>}
             </p>
           </div>
@@ -208,7 +209,7 @@ function SeatMatrix({ rows, selectedSeatIds, interactionDisabled, onToggle }) {
   )
 }
 
-function BookingSummary({ selectedSeats, total, onRemove, onHold, savedCheckout, showtimeId, selectionExpired, onRestart }) {
+function BookingSummary({ selectedSeats, total, onRemove, onHold, savedCheckout, nextStepPath, selectionExpired, onRestart }) {
   return (
     <aside className="h-fit rounded-xl bg-surface-container-low p-5 shadow-xl lg:sticky lg:top-24">
       <div className="flex items-center justify-between border-b border-white/5 pb-4">
@@ -240,7 +241,7 @@ function BookingSummary({ selectedSeats, total, onRemove, onHold, savedCheckout,
 
       <div className="mt-4 space-y-3">
         {savedCheckout ? (
-          <Link to={`/booking/${showtimeId}/checkout`} className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary-container px-4 py-3.5 font-bold text-white">Resume checkout<ArrowRight className="size-4" /></Link>
+          <Link to={nextStepPath} className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary-container px-4 py-3.5 font-bold text-white">Resume checkout<ArrowRight className="size-4" /></Link>
         ) : selectionExpired ? (
           <button type="button" onClick={onRestart} className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary-container px-4 py-3.5 font-bold text-white"><RotateCcw className="size-4" />Select seats again</button>
         ) : (
@@ -263,6 +264,7 @@ function SeatSelectionPage() {
   const navigate = useNavigate()
   const { account } = useAuth()
   const savedCheckout = readCheckout(sessionStorage, account.id, showtimeId)
+  const nextStepPath = `/booking/${showtimeId}/${hasRequiredRole(account, "CUSTOMER") && !savedCheckout?.bookingRequested ? "concessions" : "checkout"}`
   const availability = useSeatAvailability(showtimeId)
   const [selectedSeatIds, setSelectedSeatIds] = useState([])
   const [selectionDeadline, setSelectionDeadline] = useState(() => Date.now() + SEAT_SELECTION_DURATION_MS)
@@ -326,12 +328,12 @@ function SeatSelectionPage() {
     if (total === null) return toast.error('Ticket prices are not configured for all selected seats.')
     try {
       if (readCheckout(sessionStorage, account.id, showtimeId)) {
-        navigate(`/booking/${showtimeId}/checkout`)
+        navigate(nextStepPath)
         return
       }
       const attempt = newCheckout({ ownerId: account.id, showtimeId, seats: selectedSeats })
       writeCheckout(sessionStorage, attempt)
-      navigate(`/booking/${showtimeId}/checkout`)
+      navigate(nextStepPath)
 
     } catch {
       toast.error('Unable to save checkout in this tab. Allow browser storage and try again.')
@@ -353,14 +355,14 @@ function SeatSelectionPage() {
   return (
     <main className="min-h-screen bg-background pt-20 text-on-surface">
       <BookingStepper />
-      <SessionBar showtime={showtime} savedCheckout={savedCheckout} showtimeId={showtimeId} selectionDeadline={selectionDeadline} onExpire={handleSelectionExpired} />
+      <SessionBar showtime={showtime} savedCheckout={savedCheckout} nextStepPath={nextStepPath} selectionDeadline={selectionDeadline} onExpire={handleSelectionExpired} />
 
       <div className="mx-auto grid max-w-[1400px] gap-7 px-4 py-8 sm:px-6 lg:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)]">
         <section className="min-w-0 space-y-5">
           <div className="flex flex-col gap-3 rounded-xl border border-white/5 bg-surface-container-lowest px-4 py-3 shadow-lg sm:flex-row sm:items-center sm:justify-between">
             <Link to="/showtimes" className="inline-flex shrink-0 items-center gap-2 text-xs font-semibold text-on-surface-variant hover:text-white"><ArrowLeft className="size-4" />Back to Showtime Selection (Step 4)</Link>
             <div className="flex min-w-0 items-center gap-3 text-xs"><span className="rounded bg-primary-container px-2 py-1 font-bold text-white">{selectedSeats.length} SEAT{selectedSeats.length === 1 ? '' : 'S'}</span><strong className="max-w-56 truncate">{selectedSeats.map((seat) => `${seat.row}${seat.number}`).join(', ') || 'No seats selected'}</strong><span className="text-on-surface-variant/30">|</span><strong className="font-heading text-base">{formatVnd(total)}</strong></div>
-            <button type="button" onClick={savedCheckout ? () => navigate(`/booking/${showtimeId}/checkout`) : holdSeats} disabled={!savedCheckout && (selectionExpired || !selectedSeats.length || total === null)} className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-primary-container px-5 py-2.5 text-xs font-bold text-white shadow-crimson disabled:cursor-not-allowed disabled:opacity-45">{savedCheckout ? 'Resume checkout' : selectionExpired ? 'Selection time expired' : 'Confirm selected seats'}<ArrowRight className="size-4" /></button>
+            <button type="button" onClick={savedCheckout ? () => navigate(nextStepPath) : holdSeats} disabled={!savedCheckout && (selectionExpired || !selectedSeats.length || total === null)} className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-primary-container px-5 py-2.5 text-xs font-bold text-white shadow-crimson disabled:cursor-not-allowed disabled:opacity-45">{savedCheckout ? 'Resume checkout' : selectionExpired ? 'Selection time expired' : 'Confirm selected seats'}<ArrowRight className="size-4" /></button>
           </div>
           <div className="rounded-xl bg-surface-container-low p-4"><SeatLegend seatTypes={seatTypes} selectedCount={selectedSeats.length} /></div>
           {selectionExpired && !savedCheckout && <div role="alert" className="flex flex-col gap-3 rounded-xl border border-error/40 bg-error-container/20 p-4 text-sm text-error sm:flex-row sm:items-center sm:justify-between"><span><strong>Seat selection time expired.</strong> Your current selection was cleared. Start again to refresh availability.</span><button type="button" onClick={restartSelection} className="rounded-lg bg-primary-container px-4 py-2 font-bold text-white">Select again</button></div>}
@@ -372,7 +374,7 @@ function SeatSelectionPage() {
           </div>
         </section>
 
-        <BookingSummary selectedSeats={selectedSeats} total={total} savedCheckout={savedCheckout} showtimeId={showtimeId} selectionExpired={selectionExpired} onRestart={restartSelection} onRemove={toggleSeat} onHold={holdSeats} />
+        <BookingSummary selectedSeats={selectedSeats} total={total} savedCheckout={savedCheckout} nextStepPath={nextStepPath} selectionExpired={selectionExpired} onRestart={restartSelection} onRemove={toggleSeat} onHold={holdSeats} />
       </div>
 
     </main>

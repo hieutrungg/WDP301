@@ -20,7 +20,8 @@ import { acquireSeatHold, releaseSeatHold } from '../../seat-selection/api/seatH
 import { useSeatAvailability } from '../../seat-selection/hooks/useSeatAvailability'
 import { formatSeatMoney } from '../../seat-selection/utils/seatPricing'
 import { getApiErrorMessage } from '../../../lib/api/apiError'
-import { createPendingBooking } from '../api/bookingApi'
+import ConcessionOrderSummary from '../components/ConcessionOrderSummary'
+import { cancelCheckout, createPendingBooking } from '../api/bookingApi'
 import {
   cancelPaymentAttempt,
   initiatePayment,
@@ -55,6 +56,12 @@ const terminalHoldCodes = new Set([
 ])
 
 function CheckoutPage() {
+  const { showtimeId } = useParams()
+  const { account } = useAuth()
+  return <CheckoutSession key={`${account.id}:${showtimeId}`} />
+}
+
+function CheckoutSession() {
   const { showtimeId } = useParams()
   const { account } = useAuth()
   const navigate = useNavigate()
@@ -374,7 +381,11 @@ function CheckoutPage() {
   const error = actionError ?? checkout.error
   const seconds = Math.max(0, Math.ceil(remaining / 1000))
   const selectedMethodMeta = getPaymentMethodOption(selectedMethod)
-  const totalAmount = currentBooking?.amount ?? hold?.priceQuote?.totalAmount ?? 0
+  const foodOrder = currentBooking?.concessionOrder ?? (attempt.concessionSelection ? attempt.concessionQuote : null)
+  const foodAmount = currentBooking?.concessionAmount ?? foodOrder?.concessionAmount ?? foodOrder?.totalAmount ?? 0
+  const ticketAmount = hold?.priceQuote?.totalAmount ?? 0
+  const totalAmount = currentBooking?.amount ?? (ticketAmount + foodAmount)
+  const editableFood = !currentBooking && (!requested || ['CONCESSION_QUOTE_CHANGED', 'INSUFFICIENT_CONCESSION_STOCK', 'INVALID_CONCESSION_SELECTION'].includes(error?.response?.data?.code))
 
   return (
     <main className="min-h-screen bg-background pb-20 pt-20 text-on-surface">
@@ -615,17 +626,19 @@ function CheckoutPage() {
                         Concessions &amp; Add-ons
                       </h2>
                       <p className="text-xs text-on-surface-variant">
-                        Online ticket reservation • Concession add-ons: 0 ₫
+                        Optional food: {formatSeatMoney(foodAmount)}
                       </p>
                     </div>
                   </div>
                   <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-[#131315] px-3 py-1 text-xs font-semibold text-on-surface-variant">
                     <Popcorn className="size-3.5 text-secondary" />
-                    0 Items Selected
+                    {foodOrder?.items?.reduce((sum, line) => sum + line.quantity, 0) ?? 0} Items Selected
                   </span>
                 </div>
               </div>
 
+              <ConcessionOrderSummary order={foodOrder ? { ...foodOrder, totalAmount: foodAmount } : null} paid={confirmed} />
+              {editableFood && <Link to={`/booking/${showtimeId}/concessions`} className="inline-block text-sm text-secondary underline">Edit food selection or skip</Link>}
               {/* 03. Payment Method (All 4 C14 Payment Methods) */}
               <div className="rounded-2xl border border-white/10 bg-surface-container-low p-6">
                 <div className="mb-5 flex flex-wrap items-center justify-between gap-2">
@@ -708,7 +721,7 @@ function CheckoutPage() {
                       </div>
                       <p className="text-xs text-on-surface-variant">
                         Click <strong className="text-white">Complete Payment</strong> in the Order Summary to generate your unique Mock QR Payment Attempt and confirm with{' '}
-                        <strong className="text-white">&ldquo;Tôi đã thanh toán&rdquo;</strong>.
+                        <strong className="text-white">&ldquo;Simulate successful payment&rdquo;</strong>.
                       </p>
                     </div>
                     {activeAttempt && (
@@ -842,12 +855,12 @@ function CheckoutPage() {
                   <div className="flex justify-between text-on-surface-variant">
                     <span>Tickets Subtotal</span>
                     <span className="font-mono text-white">
-                      {formatSeatMoney(totalAmount)}
+                      {formatSeatMoney(ticketAmount)}
                     </span>
                   </div>
                   <div className="flex justify-between text-on-surface-variant">
                     <span>Concessions &amp; Combos</span>
-                    <span className="font-mono text-white">0 ₫</span>
+                    <span className="font-mono text-white">{formatSeatMoney(foodAmount)}</span>
                   </div>
                   <div className="flex justify-between text-on-surface-variant">
                     <span>Voucher / Discount</span>
@@ -924,6 +937,12 @@ function CheckoutPage() {
                   Seat prices and totals are confirmed by the server. Tickets are issued only after backend payment verification.
                 </p>
 
+                {currentBooking?.status === 'PENDING_PAYMENT' && !confirmed && <button type="button" disabled={busy} className="mt-4 w-full text-sm text-error underline" onClick={async () => {
+                  if (busyRef.current) return
+                  busyRef.current = true; setBusy(true); setActionError(null)
+                  try { await cancelCheckout(currentBooking.bookingId); clearCheckout(sessionStorage, account.id, showtimeId); navigate(`/booking/${showtimeId}/seats`, { replace: true }) }
+                  catch (cause) { setActionError(cause) } finally { busyRef.current = false; setBusy(false) }
+                }}>Cancel entire checkout & release reservations</button>}
                 {((!requested &&
                   !attempt.bookingRequested &&
                   !currentBooking) ||

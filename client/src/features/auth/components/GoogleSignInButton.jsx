@@ -16,7 +16,7 @@ function GoogleSignInButton({ onError, rememberMe = false }) {
     try {
       const account = await loginWithGoogle(credential, rememberMe)
       toast.success('Welcome to F-Cinema!')
-      navigate(getLoginDestination(account, location.state?.from?.pathname), { replace: true })
+      navigate(getLoginDestination(account, location.state?.from), { replace: true })
     } catch (error) {
       const message = getApiErrorMessage(error)
       onError?.(message)

@@ -108,6 +108,7 @@ const toBookingSummary = (booking) => {
     seatLines: booking.seatLines || [],
     seats: booking.seats || [],
     subtotal: booking.subtotal ?? totalAmount,
+    ...(booking.concessionAmount !== undefined ? { ticketAmount: booking.subtotal, concessionAmount: booking.concessionAmount } : {}),
     discountAmount: booking.discountAmount ?? 0,
     amount: totalAmount,
     totalAmount,
@@ -836,8 +837,9 @@ export const createPaymentService = ({
       );
 
       const isBookingExpiredByClock =
-        details.booking.status === BOOKING_STATUS.PENDING_PAYMENT &&
-        new Date(details.booking.expiresAt).getTime() <= currentNow.getTime();
+        details.booking.status === BOOKING_STATUS.EXPIRED ||
+        (details.booking.status === BOOKING_STATUS.PENDING_PAYMENT &&
+        new Date(details.booking.expiresAt).getTime() <= currentNow.getTime());
 
       if (
         isBookingExpiredByClock &&
@@ -858,7 +860,7 @@ export const createPaymentService = ({
         payment = await paymentRepository.saveState(payment._id, {
           status: PAYMENT_STATUS.EXPIRED,
           attempts: updatedAttempts,
-        });
+        }, { status: payment.status, updatedAt: payment.updatedAt }) ?? await paymentRepository.findByBookingId(details.booking.bookingId);
       }
 
       const effectiveBooking = isBookingExpiredByClock
@@ -931,7 +933,7 @@ export const createPaymentService = ({
           payment = await paymentRepository.saveState(payment._id, {
             status: PAYMENT_STATUS.EXPIRED,
             attempts: updatedAttempts,
-          });
+          }, { status: payment.status, updatedAt: payment.updatedAt }) ?? await paymentRepository.findByBookingId(detail.booking.bookingId);
         }
 
         const latestAttempt = pickLatestAttempt(payment);
