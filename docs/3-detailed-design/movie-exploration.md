@@ -18,3 +18,7 @@ Supports browsing/searching active movies, viewing details and available showtim
 
 Open Design Question: confirm whether multiple reviews per customer/movie are allowed and whether reviews require showtime completion or merely a paid booking.
 
+## Owner approval and implementation — 2026-10-27
+
+Hiếu resolved the preceding historical question: one review per Customer/Movie, after a confirmed paid non-refunded screening reaches stored endAt (including cleanup); no check-in requirement. Immediate publication, integer 1–5 and optional content up to 2,000 characters are approved. Create only; no edit/delete, moderation queue or loyalty reward. REV-102 uses Booking-owned eligibility with owning-module Payment/Showtime/Refund ports, and a separate Movie write adapter over the same movie_reviews collection as REV-101. The unique-index migration requires explicit target approval before development-Atlas apply. See `../REV-102-IMPLEMENTATION.md` for contracts, concurrency, tests and rollout status. This note records chat approvals and does not rewrite the SRS.
+
