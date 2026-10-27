@@ -38,6 +38,8 @@ import ETicketPage from '../../features/ticket/pages/ETicketPage'
 import StockInPage from '../../features/inventory/pages/StockInPage'
 import StockLevelsPage from '../../features/inventory/pages/StockLevelsPage'
 import StaffShiftsPage from '../../features/staff-shifts/pages/StaffShiftsPage'
+import RolesPage from '../../features/access-control/pages/RolesPage'
+import StaffAccountsPage from '../../features/access-control/pages/StaffAccountsPage'
 import ConcessionCatalogPage from '../../features/concessions/pages/ConcessionCatalogPage'
 import CounterConcessionPosPage from '../../features/concessions/pages/CounterConcessionPosPage'
 import NotFoundPage from '../../pages/public/NotFoundPage'
@@ -133,6 +135,13 @@ export function AppRoutes() {
               {/* Read-only for Admin: room writes need the MANAGER role on the API. */}
               <Route element={<PermissionRoute permission="room.view" />}>
                 <Route path="rooms" element={<RoomManagementPage readOnly />} />
+              </Route>
+              {/* UX guard only; the API enforces account.manage / role.view + the ADMIN role. */}
+              <Route element={<PermissionRoute permission="account.manage" />}>
+                <Route path="staff-accounts" element={<StaffAccountsPage />} />
+              </Route>
+              <Route element={<PermissionRoute permission="role.view" />}>
+                <Route path="roles" element={<RolesPage />} />
               </Route>
             </Route>
           </Route>

@@ -155,3 +155,18 @@ test("TICKET-001 C17 fullscreen E-Ticket requires a session and renders outside 
   assert.doesNotMatch(customer, /404.*Page not found/);
   assert.doesNotMatch(render(path), /Loading your E-Ticket/);
 });
+
+test("ROLE-101/STAFF-101 Admin access-control screens are routed behind the ADMIN guard", () => {
+  const adminGrants = ["branch.manage", "account.manage", "role.view"];
+  const staffHtml = render("/admin/staff-accounts", actor("ADMIN", adminGrants));
+  assert.match(staffHtml, /Staff Account Management/);
+  assert.match(staffHtml, /Create staff account/);
+  const rolesHtml = render("/admin/roles", actor("ADMIN", adminGrants));
+  assert.match(rolesHtml, /Role Management/);
+  assert.match(rolesHtml, /Create role/);
+
+  // A MANAGER holding staff.manage, or a non-Admin with the grants, is refused (BR-26/BR-32).
+  assert.match(render("/admin/staff-accounts", actor("MANAGER", ["staff.manage"])), /403/);
+  assert.match(render("/admin/roles", actor("CUSTOMER", adminGrants)), /403/);
+  assert.match(render("/admin/roles", actor("ADMIN", ["branch.manage"])), /403/);
+});

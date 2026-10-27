@@ -29,7 +29,7 @@ export const registerSchema = z
   })
   .refine((values) => values.password === values.confirmPassword, {
     path: ['confirmPassword'],
-    message: 'Passwords do not match',
+    message: 'Password confirmation does not match.', // MSG08
   })
 
 export const verifyEmailSchema = z.object({
