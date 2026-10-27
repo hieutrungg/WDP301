@@ -21,6 +21,22 @@ export const TICKET_ERROR = Object.freeze({
   TICKET_NOT_FOUND: "TICKET_NOT_FOUND",
   TICKET_FORBIDDEN: "TICKET_FORBIDDEN",
   BOOKING_NOT_CONFIRMED: "TICKET_BOOKING_NOT_CONFIRMED",
+  // TICKET-101 check-in (BR-17, BR-40).
+  CHECK_IN_VALIDATION_FAILED: "TICKET_CHECK_IN_VALIDATION_FAILED",
+  ALREADY_USED: "TICKET_ALREADY_USED",
+  INVALIDATED: "TICKET_INVALIDATED",
+  SHOWTIME_UNAVAILABLE: "TICKET_SHOWTIME_UNAVAILABLE",
+  WRONG_BRANCH: "TICKET_WRONG_BRANCH",
+  TOO_EARLY: "TICKET_CHECK_IN_TOO_EARLY",
+  SHOWTIME_ENDED: "TICKET_SHOWTIME_ENDED",
+  BRANCH_NOT_ASSIGNED: "BRANCH_NOT_ASSIGNED",
 });
+
+// Owner decision 2026-10-27: check-in opens 30 minutes before the showtime starts and closes at
+// the showtime's stored end; Staff check in only tickets of their own branch, one ticket per code.
+export const CHECK_IN_OPENS_BEFORE_MINUTES = 30;
+
+// Readable code printed on the E-Ticket, e.g. TK-1A2B3C4D5E.
+export const TICKET_CODE_PATTERN = /^TK-[A-F0-9]{10}$/;
 
 export const QR_PAYLOAD_PREFIX = "FCINEMA-TICKET:v1";

@@ -35,9 +35,12 @@ import CheckoutPage from '../../features/booking/pages/CheckoutPage'
 import BookingConfirmationPage from '../../features/booking/pages/BookingConfirmationPage'
 import CustomerBookingsPage from '../../features/booking/pages/CustomerBookingsPage'
 import ETicketPage from '../../features/ticket/pages/ETicketPage'
+import TicketCheckInPage from '../../features/ticket/pages/TicketCheckInPage'
 import StockInPage from '../../features/inventory/pages/StockInPage'
 import StockLevelsPage from '../../features/inventory/pages/StockLevelsPage'
 import StaffShiftsPage from '../../features/staff-shifts/pages/StaffShiftsPage'
+import RolesPage from '../../features/access-control/pages/RolesPage'
+import StaffAccountsPage from '../../features/access-control/pages/StaffAccountsPage'
 import ConcessionCatalogPage from '../../features/concessions/pages/ConcessionCatalogPage'
 import CounterConcessionPosPage from '../../features/concessions/pages/CounterConcessionPosPage'
 import NotFoundPage from '../../pages/public/NotFoundPage'
@@ -118,6 +121,10 @@ export function AppRoutes() {
               <Route path="pos/payment" element={<CounterPaymentPage />} />
               <Route path="pos/complete" element={<CounterCompletePage />} />
               <Route path="concessions" element={<CounterConcessionPosPage />} />
+              {/* TICKET-101. UX guard only; the API enforces ticket.validate + the STAFF/MANAGER role. */}
+              <Route element={<PermissionRoute permission="ticket.validate" />}>
+                <Route path="check-in" element={<TicketCheckInPage />} />
+              </Route>
               <Route element={<PermissionRoute permission="inventory.view" />}>
                 <Route path="inventory" element={<StockLevelsPage stockInPath="/staff/inventory/stock-in" />} />
               </Route>
@@ -137,6 +144,13 @@ export function AppRoutes() {
               {/* Read-only for Admin: room writes need the MANAGER role on the API. */}
               <Route element={<PermissionRoute permission="room.view" />}>
                 <Route path="rooms" element={<RoomManagementPage readOnly />} />
+              </Route>
+              {/* UX guard only; the API enforces account.manage / role.view + the ADMIN role. */}
+              <Route element={<PermissionRoute permission="account.manage" />}>
+                <Route path="staff-accounts" element={<StaffAccountsPage />} />
+              </Route>
+              <Route element={<PermissionRoute permission="role.view" />}>
+                <Route path="roles" element={<RolesPage />} />
               </Route>
             </Route>
           </Route>

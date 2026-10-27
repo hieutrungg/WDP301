@@ -1,8 +1,10 @@
 import crypto from "node:crypto";
 import { AppError } from "../../utils/AppError.js";
+import { AUDIT_ACTION, AUDIT_TARGET } from "../audit/audit.constants.js";
 import { BOOKING_STATUS } from "../booking/booking.constants.js";
 import { ticketRepository as defaultTicketRepository } from "./ticket.repository.js";
 import {
+  CHECK_IN_OPENS_BEFORE_MINUTES,
   QR_PAYLOAD_PREFIX,
   TICKET_ERROR,
   TICKET_ISSUANCE_STATUS,
@@ -24,6 +26,24 @@ const defaultGenerateQrCode = (ticketCode) =>
   `${QR_PAYLOAD_PREFIX}:${ticketCode}:${crypto.randomBytes(16).toString("base64url")}`;
 
 const toDate = (value) => (value ? new Date(value) : null);
+
+// dd/MM/yyyy HH:mm in Asia/Ho_Chi_Minh for check-in messages (SRS 4.2.1).
+const formatVnDateTime = (value) => {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-GB", {
+      timeZone: "Asia/Ho_Chi_Minh",
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23",
+    })
+      .formatToParts(new Date(value))
+      .map(({ type, value: part }) => [type, part]),
+  );
+  return `${parts.day}/${parts.month}/${parts.year} ${parts.hour}:${parts.minute}`;
+};
 
 export const toTicketDto = (ticket) => ({
   ticketId: idString(ticket._id),
@@ -89,6 +109,8 @@ export const createTicketService = ({
   now = () => new Date(),
   generateCode = defaultGenerateCode,
   generateQrCode = defaultGenerateQrCode,
+  // Audit sink for check-ins; the module injects recordAuditEvent, tests keep the no-op.
+  auditLog = async () => {},
 } = {}) => {
   if (typeof bookingReader?.getBookingDetails !== "function") {
     throw new TypeError("bookingReader.getBookingDetails is required");
@@ -214,7 +236,93 @@ export const createTicketService = ({
     };
   };
 
+  // TICKET-101: Staff check-in by ticket code. Order of checks: ticket state (BR-17/BR-40), the
+  // Booking it belongs to (a refunded booking is never admitted even if its tickets were not
+  // invalidated yet), the Showtime and branch, then the check-in window. The final ISSUED -> USED
+  // write is a compare-and-set, so concurrent check-ins of one ticket admit it once.
+  const checkInTicket = async ({ ticketCode, staffAccountId, staffBranchId }) => {
+    if (!staffBranchId) {
+      throw ticketError(403, "Your account is not assigned to a cinema branch.", TICKET_ERROR.BRANCH_NOT_ASSIGNED);
+    }
+
+    const alreadyUsed = (ticket) =>
+      ticketError(
+        409,
+        `Ticket ${ticket.ticketCode} was already checked in${ticket.checkedInAt ? ` at ${formatVnDateTime(ticket.checkedInAt)}` : ""}. It cannot be used again.`,
+        TICKET_ERROR.ALREADY_USED,
+      );
+    const invalidated = (ticket) =>
+      ticketError(
+        409,
+        `Ticket ${ticket.ticketCode} is no longer valid (refunded or cancelled) and cannot be admitted.`,
+        TICKET_ERROR.INVALIDATED,
+      );
+
+    const ticket = await ticketRepository.findByTicketCode(ticketCode);
+    if (!ticket) throw ticketError(404, "No ticket matches this code.", TICKET_ERROR.TICKET_NOT_FOUND);
+    if (ticket.status === TICKET_STATUS.USED) throw alreadyUsed(ticket);
+    if (ticket.status !== TICKET_STATUS.ISSUED) throw invalidated(ticket);
+
+    const { booking, showtime } = await bookingReader.getBookingDetails({
+      bookingId: idString(ticket.bookingId),
+      ownerId: idString(ticket.customerAccountId),
+    });
+    if (booking.status !== BOOKING_STATUS.CONFIRMED) {
+      if (booking.status === BOOKING_STATUS.REFUNDED) {
+        await invalidateTicketsByBooking({ bookingId: ticket.bookingId, reason: "BOOKING_REFUNDED" });
+      }
+      throw invalidated(ticket);
+    }
+
+    if (!showtime?.startAt || !showtime?.endAt || (showtime.status && showtime.status !== "PUBLISHED")) {
+      throw ticketError(409, "The showtime of this ticket is not available for check-in.", TICKET_ERROR.SHOWTIME_UNAVAILABLE);
+    }
+
+    const cinemaId = idString(showtime.cinema?.id);
+    if (!cinemaId || cinemaId !== idString(staffBranchId)) {
+      throw ticketError(
+        403,
+        `This ticket is for ${showtime.cinema?.branchName ?? "another branch"}. It can only be checked in at that branch.`,
+        TICKET_ERROR.WRONG_BRANCH,
+      );
+    }
+
+    const at = now();
+    const opensAt = new Date(new Date(showtime.startAt).getTime() - CHECK_IN_OPENS_BEFORE_MINUTES * 60_000);
+    if (at < opensAt) {
+      throw ticketError(
+        409,
+        `Check-in for this showtime opens at ${formatVnDateTime(opensAt)} (${CHECK_IN_OPENS_BEFORE_MINUTES} minutes before it starts).`,
+        TICKET_ERROR.TOO_EARLY,
+      );
+    }
+    if (at >= new Date(showtime.endAt)) {
+      throw ticketError(409, "This showtime has ended. The ticket can no longer be checked in.", TICKET_ERROR.SHOWTIME_ENDED);
+    }
+
+    if (!(await ticketRepository.markUsed(ticket._id, { at, by: staffAccountId }))) {
+      // Lost the race: another check-in admitted it first, or it was invalidated meanwhile.
+      const current = await ticketRepository.findById(ticket._id);
+      throw current?.status === TICKET_STATUS.USED ? alreadyUsed(current) : invalidated(ticket);
+    }
+
+    await auditLog({
+      actorAccountId: staffAccountId,
+      action: AUDIT_ACTION.TICKET_CHECKED_IN,
+      targetType: AUDIT_TARGET.TICKET,
+      targetId: ticket._id,
+      summary: `Checked in ticket ${ticket.ticketCode}`,
+      changes: { status: { from: TICKET_STATUS.ISSUED, to: TICKET_STATUS.USED }, bookingId: idString(ticket.bookingId) },
+    });
+
+    return {
+      ticket: toTicketDto(await ticketRepository.findById(ticket._id)),
+      bookingCheckIn: await getCheckInStatusByBooking({ bookingId: ticket.bookingId }),
+    };
+  };
+
   return {
+    checkInTicket,
     issueTicketsForConfirmedBooking,
     listTicketsForBooking,
     getTicketsForOwner,

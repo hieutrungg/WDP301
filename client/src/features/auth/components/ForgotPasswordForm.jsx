@@ -82,7 +82,8 @@ function EmailStep({ defaultEmail, onSent }) {
     setServerError('')
     try {
       await forgotPasswordRequest(email)
-      toast.success('A verification code has been sent to your email.')
+      // MSG07 (UC04 step 5 sends a code rather than a link).
+      toast.success(`A password reset code has been sent to ${email}.`)
       onSent(email)
     } catch (error) {
       const emailError = getApiFieldErrors(error).find((item) => item.field === 'email')
@@ -151,7 +152,7 @@ function OtpStep({ email, onVerified, onChangeEmail }) {
     try {
       await forgotPasswordRequest(email)
       setCooldown(RESEND_COOLDOWN_SECONDS)
-      toast.success('A new verification code has been sent.')
+      toast.success(`A new password reset code has been sent to ${email}.`)
     } catch (error) {
       setServerError(getApiErrorMessage(error))
     } finally {
@@ -292,7 +293,8 @@ function SuccessStep() {
       </span>
       <h1 className="font-heading text-2xl font-bold text-white sm:text-[28px]">Password reset successful</h1>
       <p className="mt-2 text-sm leading-6 text-on-surface-variant">
-        Your password has been updated. You can now sign in with your new password.
+        {/* MSG09 */}
+        Your information has been updated successfully. You can now sign in with your new password.
       </p>
       <Link to="/login" replace className={`${primaryButtonClass} mt-6`}>
         Back to sign in <ArrowRight className="size-5" />

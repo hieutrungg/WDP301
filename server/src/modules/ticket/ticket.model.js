@@ -57,6 +57,8 @@ const ticketSchema = new mongoose.Schema(
     },
     issuedAt: { type: Date, required: true },
     checkedInAt: { type: Date, default: null },
+    // TICKET-101: Staff/Manager account that checked the ticket in (CR-21).
+    checkedInBy: { type: ObjectId, default: null },
     invalidatedAt: { type: Date, default: null },
     invalidationReason: { type: String, trim: true, default: null },
   },

@@ -36,6 +36,7 @@ Dữ liệu được tổ chức thành các collection chứa document BSON. D�
 | 22 | `suppliers` | Đã thiết kế | Nhà cung cấp hàng hóa |
 | 23 | `stock_transactions` | Đã thiết kế | Lịch sử nhập / xuất / điều chỉnh kho |
 | 24 | `email_verifications` | *Chưa có thiết kế* | Mã hoặc token xác thực email |
+| 25 | `audit_logs` | Đã thiết kế | Nhật ký thao tác quản trị (append-only), thêm mới cho ROLE-101..103 / STAFF-101 |
 
 **Chú thích trạng thái:**
 * *Có dữ liệu*: đã có document mẫu trong database.
@@ -68,6 +69,8 @@ Lưu trữ thông tin xác thực, hồ sơ người dùng, vai trò, quyền g�
 | `employeeProfile` | `Object` (embedded) | Thông tin nhân viên. **Chỉ có ở tài khoản nhân viên** |
 | `employeeProfile.branchId` | `ObjectId` | Tham chiếu đến `branches._id` (chi nhánh làm việc) |
 | `employeeProfile.position` | `string` | Chức vụ / vị trí công việc |
+| `createdBy` | `ObjectId` *(tùy chọn)* | Tham chiếu `accounts._id` (Admin tạo tài khoản nhân viên) *(thêm mới cho STAFF-101)* |
+| `updatedBy` | `ObjectId` *(tùy chọn)* | Tham chiếu `accounts._id` (Admin thay đổi gần nhất) *(thêm mới cho STAFF-101)* |
 | `createdAt` | `Date` | Thời điểm tạo |
 | `updatedAt` | `Date` | Thời điểm cập nhật gần nhất |
 | `__v` | `number` | Version key của Mongoose *(có trong DB, chưa có trong tài liệu thiết kế)* |
@@ -83,6 +86,10 @@ Lưu trữ thông tin xác thực, hồ sơ người dùng, vai trò, quyền g�
 | `name` | `string` | Tên vai trò, **unique** (ví dụ: `ADMIN`, `STAFF`, `CUSTOMER`) |
 | `description` | `string` | Mô tả vai trò và trách nhiệm |
 | `permissionIds` | `Array<ObjectId>` | Tham chiếu danh sách `permissions._id` (mọi quyền phải tồn tại) |
+| `createdBy` / `updatedBy` | `ObjectId` *(tùy chọn)* | Tham chiếu `accounts._id` (Admin tạo / sửa role) *(thêm mới cho ROLE-101..103)* |
+| `createdAt` / `updatedAt` | `Date` *(tùy chọn)* | Mongoose timestamps; role seed cũ không có *(thêm mới cho ROLE-101..103)* |
+
+> Tên 4 system role (`ADMIN`, `MANAGER`, `STAFF`, `CUSTOMER`) không bao giờ đổi. `ADMIN` luôn giữ mọi permission và không sửa được qua API. Role không bị xóa (SRS không có use case xóa role).
 
 ---
 
@@ -94,6 +101,24 @@ Danh mục các quyền thao tác được định nghĩa sẵn trong hệ thố
 | `_id` | `ObjectId` | Khóa chính (Primary Key) |
 | `name` | `string` | Mã định danh quyền, **unique** (ví dụ: `MOVIE_CREATE`, `TICKET_CANCEL`) |
 | `description` | `string` | Mô tả quyền thao tác |
+
+---
+
+### 2.3a. `audit_logs` *(thêm mới cho ROLE-101..103 / STAFF-101, owner duyệt 2026-10-27)*
+Nhật ký bất biến cho thao tác quản trị (CR-20/CR-21). Ứng dụng chỉ insert, không update/xóa. Không lưu secret (password hash, OTP).
+
+| Trường (Field) | Kiểu dữ liệu | Quan hệ / Ghi chú |
+| :--- | :--- | :--- |
+| `_id` | `ObjectId` | Khóa chính |
+| `actorAccountId` | `ObjectId` | Tham chiếu `accounts._id` (người thực hiện), bắt buộc |
+| `action` | `string` | `STAFF_ACCOUNT_CREATED`, `STAFF_ACCOUNT_UPDATED`, `STAFF_ACCOUNT_ENABLED`, `STAFF_ACCOUNT_DISABLED`, `STAFF_ACCESS_ASSIGNED`, `ROLE_CREATED`, `ROLE_UPDATED`, `ROLE_PERMISSIONS_ASSIGNED`, `TICKET_CHECKED_IN` (TICKET-101) |
+| `targetType` | `string` | `ACCOUNT`, `ROLE` hoặc `TICKET` |
+| `targetId` | `ObjectId` | `accounts._id`, `roles._id` hoặc `tickets._id` |
+| `summary` | `string` | Mô tả ngắn (≤ 300 ký tự) |
+| `changes` | `Object` | Tóm tắt before/after của các field đã đổi, hoặc tên role/permission được thêm/bớt |
+| `createdAt` | `Date` | Thời điểm ghi nhận |
+
+Chưa có index phụ: chưa có use case đọc nhật ký (PROJECT_CONVENTIONS §8).
 
 ---
 
@@ -269,6 +294,7 @@ Từng vé xem phim được sinh ra từ đơn đặt vé đã thanh toán thà
 | `qrCode` | `string` | Giá trị mã QR dùng để soát vé |
 | `status` | `string` | Trạng thái vé (ví dụ: `VALID`, `USED`, `CANCELLED`, `REFUNDED`) |
 | `checkedInAt` | `Date` | Thời điểm soát vé thành công |
+| `checkedInBy` | `ObjectId` *(tùy chọn)* | Tham chiếu `accounts._id` (Staff/Manager soát vé) *(thêm mới cho TICKET-101)* |
 
 ---
 

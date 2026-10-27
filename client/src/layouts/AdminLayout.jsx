@@ -6,10 +6,16 @@ import AppLogo from '../components/common/AppLogo'
 import { useAuth } from '../features/auth/hooks/useAuth'
 
 // Items without `to` are planned admin screens from SCREEN_FLOW §5 that have no route yet.
+const BREADCRUMBS = [
+  ['/admin/rooms', 'Room management'],
+  ['/admin/staff-accounts', 'Staff account management'],
+  ['/admin/roles', 'Role management'],
+]
+
 const navItems = [
   { label: 'Dashboard', icon: LayoutDashboard },
-  { label: 'Accounts', icon: Users },
-  { label: 'Roles & Permissions', icon: KeyRound },
+  { label: 'Staff Accounts', icon: Users, to: '/admin/staff-accounts' },
+  { label: 'Roles & Permissions', icon: KeyRound, to: '/admin/roles' },
   { label: 'Branches', icon: Building2, to: '/admin/branches' },
   { label: 'Rooms', icon: DoorOpen, to: '/admin/rooms' },
 ]
@@ -123,7 +129,7 @@ function AdminLayout() {
             <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-1.5 text-xs text-on-surface-variant">
               <span className="hidden sm:inline">System administration</span>
               <ChevronRight className="hidden size-3.5 sm:block" />
-              <span className="truncate font-semibold text-on-surface">{pathname.startsWith('/admin/rooms') ? 'Room management' : 'Cinema branch management'}</span>
+              <span className="truncate font-semibold text-on-surface">{BREADCRUMBS.find(([prefix]) => pathname.startsWith(prefix))?.[1] ?? 'Cinema branch management'}</span>
             </nav>
           </div>
 

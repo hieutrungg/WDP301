@@ -1,0 +1,22 @@
+// Audit trail for administration actions (CR-20/CR-21, SRS 4.2.4). Owner decision 2026-10-27:
+// an append-only `audit_logs` collection; records are never updated or deleted by the app.
+export const AUDIT_TARGET = Object.freeze({
+  ACCOUNT: "ACCOUNT",
+  ROLE: "ROLE",
+  TICKET: "TICKET",
+});
+
+export const AUDIT_ACTION = Object.freeze({
+  STAFF_ACCOUNT_CREATED: "STAFF_ACCOUNT_CREATED",
+  STAFF_ACCOUNT_UPDATED: "STAFF_ACCOUNT_UPDATED",
+  STAFF_ACCOUNT_ENABLED: "STAFF_ACCOUNT_ENABLED",
+  STAFF_ACCOUNT_DISABLED: "STAFF_ACCOUNT_DISABLED",
+  STAFF_ACCESS_ASSIGNED: "STAFF_ACCESS_ASSIGNED",
+  ROLE_CREATED: "ROLE_CREATED",
+  ROLE_UPDATED: "ROLE_UPDATED",
+  ROLE_PERMISSIONS_ASSIGNED: "ROLE_PERMISSIONS_ASSIGNED",
+  TICKET_CHECKED_IN: "TICKET_CHECKED_IN",
+});
+
+export const AUDIT_TARGETS = Object.values(AUDIT_TARGET);
+export const AUDIT_ACTIONS = Object.values(AUDIT_ACTION);

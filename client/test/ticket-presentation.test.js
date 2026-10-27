@@ -44,3 +44,17 @@ test('seat types and sibling navigation are derived from the booking ticket list
   assert.equal(getSiblingTickets(tickets, 'c').next, null)
   assert.equal(getSiblingTickets(undefined, 'a').total, 0)
 })
+
+test('C16 summarizes persisted tickets instead of a preview reference', async () => {
+  const { describeTicketIssuance } = await import('../src/features/ticket/utils/ticketPresentation.js')
+  const summary = describeTicketIssuance({
+    status: 'ISSUED',
+    tickets: [
+      { ticketId: 'a', status: 'ISSUED' },
+      { ticketId: 'b', status: 'USED' },
+    ],
+  })
+  assert.deepEqual(summary, { ticketCount: 2, validCount: 1, usedCount: 1, invalidCount: 0, label: '2 E-Tickets · 1 checked in' })
+  assert.equal(describeTicketIssuance({ status: 'ISSUANCE_PENDING', tickets: [] }).label, 'Tickets are being issued')
+  assert.equal(describeTicketIssuance(null).label, '')
+})

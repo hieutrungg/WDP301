@@ -3,7 +3,9 @@ import { AppError } from "../../utils/AppError.js";
 import { getCurrentAccount } from "../auth/auth.service.js";
 import { googleTokenVerifier } from "../auth/google.service.js";
 import {
+  countActiveAccountsGroupedByRole,
   findAccountById,
+  findAccountsByIds,
   findAccountWithPasswordById,
   setAccountPasswordHash,
   updateAccountProfile,
@@ -73,4 +75,24 @@ export const changePassword = async (accountId, input) => {
 
   const passwordHash = await bcrypt.hash(input.newPassword, BCRYPT_ROUNDS);
   await setAccountPasswordHash(account._id, passwordHash);
+};
+
+// Read contracts for Role management (role-permission module).
+export const countActiveAccountsByRoleIds = (roleIds) => countActiveAccountsGroupedByRole(roleIds);
+
+// id -> { id, username, fullName } for "created/updated by" labels. Never returns secrets.
+export const getAccountSummariesByIds = async (accountIds) => {
+  if (accountIds.length === 0) return new Map();
+
+  const accounts = await findAccountsByIds(accountIds, { username: 1, "profile.fullName": 1 });
+  return new Map(
+    accounts.map((account) => [
+      account._id.toString(),
+      {
+        id: account._id.toString(),
+        username: account.username,
+        fullName: account.profile?.fullName ?? null,
+      },
+    ]),
+  );
 };

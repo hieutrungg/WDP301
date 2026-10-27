@@ -81,3 +81,22 @@ export function getSiblingTickets(tickets, ticketId) {
     next: index < tickets.length - 1 ? tickets[index + 1] : null,
   }
 }
+
+// C16 list summary from the Payment read's `ticketIssuance` (persisted tickets, not a preview).
+export function describeTicketIssuance(issuance) {
+  const tickets = issuance?.tickets ?? []
+  const usedCount = tickets.filter((ticket) => ticket.status === 'USED').length
+  const invalidCount = tickets.filter((ticket) => ticket.status === 'INVALIDATED').length
+  const validCount = tickets.filter((ticket) => ticket.status === 'ISSUED').length
+
+  let label = ''
+  if (issuance?.status === 'ISSUANCE_PENDING') label = 'Tickets are being issued'
+  else if (tickets.length > 0) {
+    const parts = [`${tickets.length} ${tickets.length === 1 ? 'E-Ticket' : 'E-Tickets'}`]
+    if (usedCount) parts.push(`${usedCount} checked in`)
+    if (invalidCount) parts.push(`${invalidCount} invalidated`)
+    label = parts.join(' · ')
+  }
+
+  return { ticketCount: tickets.length, validCount, usedCount, invalidCount, label }
+}

@@ -3,7 +3,9 @@ import cors from "cors";
 import helmet from "helmet";
 import cookieParser from "cookie-parser";
 import accountRoutes from "./modules/account/account.routes.js";
+import staffAccountRoutes from "./modules/account/staff-account.routes.js";
 import authRoutes from "./modules/auth/auth.routes.js";
+import { permissionRoutes, roleRoutes } from "./modules/role-permission/role.routes.js";
 import branchRoutes from "./modules/branch/branch.routes.js";
 import cinemaRoutes from "./modules/branch/cinema.routes.js";
 import movieRoutes from "./modules/movie/movie.routes.js";
@@ -51,6 +53,9 @@ app.get("/api/health", (req, res) => {
 
 app.use("/api/auth", authRoutes);
 app.use("/api/accounts", accountRoutes);
+app.use("/api/staff-accounts", staffAccountRoutes);
+app.use("/api/roles", roleRoutes);
+app.use("/api/permissions", permissionRoutes);
 app.use("/api/branches", branchRoutes);
 app.use("/api/cinemas", cinemaRoutes);
 app.use("/api/movies", movieRoutes);

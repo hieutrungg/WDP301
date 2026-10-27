@@ -14,6 +14,7 @@ export const createInMemoryHarness = ({
   ticketRepository = createInMemoryTicketRepository(),
   gateway,
   clientUrl,
+  auditLog,
 } = {}) => {
   let currentNow = new Date(initialNow);
   const ownerId = objectId();
@@ -21,6 +22,8 @@ export const createInMemoryHarness = ({
   const holdId = objectId();
   const showtimeId = objectId();
   const roomId = objectId();
+  // Stable branch id so check-in tests can sign in a Staff member of the same branch.
+  const cinemaId = objectId();
   const seatIds = [objectId(), objectId()];
   const expiresAt = new Date(currentNow.getTime() + 10 * 60 * 1000);
 
@@ -159,7 +162,7 @@ export const createInMemoryHarness = ({
         endAt: new Date("2026-10-24T15:30:00.000Z").toISOString(),
         // Nested projection matching showtime.service getBookableShowtimeForBooking.
         movie: { id: objectId(), title: "Dune: Part Two", ageRating: "T13" },
-        cinema: { id: objectId(), branchName: "F-Cinema Landmark 81" },
+        cinema: { id: cinemaId, branchName: "F-Cinema Landmark 81" },
         room: { id: roomId, roomName: "IMAX Hall 04", roomType: "IMAX" },
       };
     },
@@ -248,6 +251,7 @@ export const createInMemoryHarness = ({
       getBookingDetails: (query) => bookingService.getCustomerBookingDetails(query),
     },
     now: () => new Date(currentNow),
+    ...(auditLog ? { auditLog } : {}),
   });
 
   const paymentService = createPaymentService({
@@ -268,6 +272,7 @@ export const createInMemoryHarness = ({
     otherOwnerId,
     holdId,
     showtimeId,
+    cinemaId,
     seatIds,
     holds,
     bookings,

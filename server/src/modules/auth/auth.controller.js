@@ -96,7 +96,8 @@ export const resendVerification = async (req, res, next) => {
 export const forgotPassword = async (req, res, next) => {
   try {
     await authService.requestPasswordReset(req.body);
-    res.json({ success: true, message: "A password reset code has been sent to your email." });
+    // MSG07, worded for the OTP variant UC04 step 5 allows (a code, not a link).
+    res.json({ success: true, message: `A password reset code has been sent to ${req.body.email}.` });
   } catch (error) {
     next(error);
   }
@@ -114,7 +115,11 @@ export const verifyResetOtp = async (req, res, next) => {
 export const resetPassword = async (req, res, next) => {
   try {
     await authService.resetPassword(req.body);
-    res.json({ success: true, message: "Your password has been reset. You can now sign in." });
+    // MSG09 (UC04 step 11).
+    res.json({
+      success: true,
+      message: "Your information has been updated successfully. You can now sign in with your new password.",
+    });
   } catch (error) {
     next(error);
   }

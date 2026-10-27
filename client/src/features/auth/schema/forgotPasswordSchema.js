@@ -2,7 +2,13 @@ import { z } from 'zod'
 import { passwordRules } from '../../account/schema/accountSchemas'
 
 export const forgotPasswordEmailSchema = z.object({
-  email: z.string().trim().min(1, 'Enter your email address').email('Enter a valid email address').max(254),
+  // MSG01 / MSG03 / MSG02
+  email: z
+    .string()
+    .trim()
+    .min(1, 'The Email field is required.')
+    .email('The Email format is invalid.')
+    .max(254, 'Exceed max length of 254.'),
 })
 
 export const resetOtpSchema = z.object({
@@ -22,5 +28,5 @@ export const newPasswordSchema = z
   })
   .refine((values) => values.newPassword === values.confirmPassword, {
     path: ['confirmPassword'],
-    message: 'Passwords do not match',
+    message: 'Password confirmation does not match.', // MSG08
   })

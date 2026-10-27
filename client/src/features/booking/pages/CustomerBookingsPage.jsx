@@ -22,10 +22,18 @@ import {
   X,
 } from 'lucide-react'
 import { Link } from 'react-router'
+import QrCodeImage from '../../../components/ui/QrCode'
 import { getApiErrorMessage } from '../../../lib/api/apiError'
 import { formatSeatMoney } from '../../seat-selection/utils/seatPricing'
+import { getBookingTickets } from '../../ticket/api/ticketApi'
+import {
+  describeTicketIssuance,
+  formatSeatType,
+  formatVnDateTime,
+  getTicketStatusMeta,
+  isTicketAdmissible,
+} from '../../ticket/utils/ticketPresentation'
 import { listMyBookingPayments } from '../api/paymentApi'
-import { MockQrSvg } from '../components/MockPaymentModal'
 import { getPaymentMethodOption } from '../utils/mockQrCode'
 
 const FILTER_TABS = [
@@ -38,22 +46,23 @@ const FILTER_TABS = [
 function getStatusBadge(booking, payment) {
   if (booking?.status === 'REFUNDED') {
     return {
-      label: payment?.status === 'PARTIALLY_REFUNDED' ? 'PARTIALLY REFUNDED' : 'REFUNDED',
+      label:
+        payment?.status === 'PARTIALLY_REFUNDED'
+          ? 'PARTIALLY REFUNDED'
+          : 'REFUNDED',
       className: 'border-sky-400/40 bg-sky-400/15 text-sky-300',
     }
   }
   if (booking?.status === 'CONFIRMED' && payment?.status === 'PAID') {
     return {
       label: 'CONFIRMED • PAID',
-      className:
-        'border-emerald-500/40 bg-emerald-500/15 text-emerald-400',
+      className: 'border-emerald-500/40 bg-emerald-500/15 text-emerald-400',
     }
   }
   if (payment?.status === 'REVIEW_REQUIRED') {
     return {
       label: 'REVIEW REQUIRED (LATE PAYMENT)',
-      className:
-        'border-secondary/40 bg-secondary/15 text-secondary',
+      className: 'border-secondary/40 bg-secondary/15 text-secondary',
     }
   }
   if (booking?.status === 'PENDING_PAYMENT') {
@@ -68,12 +77,180 @@ function getStatusBadge(booking, payment) {
   }
 }
 
-function TicketDetailModal({ item, onClose }) {
+// Real tickets of a paid booking (GET /api/tickets/bookings/:bookingId): one per seat, with the
+// scannable QR only while the ticket is still valid for entry.
+function BookingTicketsPanel({ bookingId }) {
+  const [selectedId, setSelectedId] = useState(null)
   const [copiedCode, setCopiedCode] = useState(false)
+  const ticketsQuery = useQuery({
+    queryKey: ['booking-tickets', bookingId],
+    queryFn: () => getBookingTickets(bookingId),
+    staleTime: 0,
+  })
 
+  if (ticketsQuery.isPending) {
+    return (
+      <div
+        role="status"
+        className="my-auto flex items-center gap-2 py-10 text-xs text-on-surface-variant"
+      >
+        <LoaderCircle className="size-5 animate-spin text-primary" />
+        Loading your E-Tickets…
+      </div>
+    )
+  }
+
+  if (ticketsQuery.isError) {
+    return (
+      <div role="alert" className="my-auto space-y-3 py-8">
+        <AlertTriangle className="mx-auto size-8 text-error" />
+        <p className="text-xs text-on-surface-variant">
+          {getApiErrorMessage(ticketsQuery.error)}
+        </p>
+        <button
+          type="button"
+          onClick={() => ticketsQuery.refetch()}
+          className="rounded-xl bg-primary px-4 py-2 text-xs font-bold text-white"
+        >
+          Try again
+        </button>
+      </div>
+    )
+  }
+
+  const tickets = ticketsQuery.data?.tickets ?? []
+  if (tickets.length === 0) {
+    return (
+      <div className="my-auto space-y-3 py-8">
+        <Clock3 className="mx-auto size-10 text-amber-400" />
+        <h3 className="font-heading text-base font-bold text-white">
+          Tickets are being issued
+        </h3>
+        <p className="text-xs text-on-surface-variant">
+          Your payment is confirmed. Refresh in a moment to see your E-Tickets.
+        </p>
+        <button
+          type="button"
+          onClick={() => ticketsQuery.refetch()}
+          className="rounded-xl border border-white/15 px-4 py-2 text-xs font-bold text-white"
+        >
+          Refresh
+        </button>
+      </div>
+    )
+  }
+
+  const ticket =
+    tickets.find(({ ticketId }) => ticketId === selectedId) ?? tickets[0]
+  const status = getTicketStatusMeta(ticket.status)
+
+  const select = (next) => {
+    setSelectedId(next.ticketId)
+    setCopiedCode(false)
+  }
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(ticket.ticketCode)
+      setCopiedCode(true)
+      window.setTimeout(() => setCopiedCode(false), 2000)
+    } catch {
+      setCopiedCode(false)
+    }
+  }
+
+  return (
+    <>
+      <div className="w-full">
+        <span className="inline-flex items-center gap-1.5 rounded-full border border-secondary/40 bg-secondary/15 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-secondary">
+          <QrCode className="size-3.5" />
+          E-Ticket{' '}
+          {tickets.length > 1
+            ? `${tickets.indexOf(ticket) + 1} of ${tickets.length}`
+            : ''}
+        </span>
+        {tickets.length > 1 && (
+          <div
+            className="mt-3 flex flex-wrap justify-center gap-1.5"
+            role="tablist"
+            aria-label="Choose a seat"
+          >
+            {tickets.map((item) => (
+              <button
+                key={item.ticketId}
+                type="button"
+                role="tab"
+                aria-selected={item.ticketId === ticket.ticketId}
+                onClick={() => select(item)}
+                className={`rounded-md border px-2.5 py-1 font-heading text-xs font-black ${item.ticketId === ticket.ticketId ? 'border-primary bg-primary/25 text-white' : 'border-white/15 text-on-surface-variant hover:text-white'}`}
+              >
+                {item.seat.label}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="my-5 flex flex-col items-center">
+        {isTicketAdmissible(ticket) ? (
+          <QrCodeImage
+            value={ticket.qrCode}
+            size={185}
+            label="E-TICKET"
+            ariaLabel={`Admission QR for seat ${ticket.seat.label}`}
+          />
+        ) : (
+          <div className="flex size-[200px] items-center justify-center rounded-2xl border border-white/10 bg-surface-container-low p-4 text-xs text-on-surface-variant">
+            {ticket.status === 'USED' && ticket.checkedInAt
+              ? `Checked in at ${formatVnDateTime(ticket.checkedInAt)}`
+              : status.label}
+          </div>
+        )}
+
+        <span
+          className={`mt-3 rounded-full border px-3 py-0.5 text-[10px] font-black uppercase tracking-wider ${status.tone}`}
+        >
+          {status.label}
+        </span>
+        <p className="mt-2 text-[11px] text-on-surface-variant">
+          Seat {ticket.seat.label} · {formatSeatType(ticket.seat.type)}
+        </p>
+
+        <div className="mt-3 flex items-center gap-2 rounded-xl border border-white/10 bg-surface-container px-3.5 py-2">
+          <span className="font-mono text-xs font-black tracking-wider text-secondary">
+            {ticket.ticketCode}
+          </span>
+          <button
+            type="button"
+            onClick={handleCopy}
+            title="Copy ticket code"
+            className="text-on-surface-variant hover:text-white"
+          >
+            <Copy className="size-3.5" />
+          </button>
+        </div>
+        {copiedCode && (
+          <span className="mt-1 text-[11px] font-bold text-emerald-400">
+            Ticket code copied!
+          </span>
+        )}
+      </div>
+
+      <Link
+        to={`/tickets/${ticket.ticketId}`}
+        className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#e50914] to-[#b5000b] px-5 py-2.5 text-xs font-bold uppercase tracking-wider text-white shadow-lg shadow-primary/25"
+      >
+        Open fullscreen E-Ticket
+        <ExternalLink className="size-3.5" />
+      </Link>
+    </>
+  )
+}
+
+function TicketDetailModal({ item, onClose }) {
   if (!item) return null
 
-  const { booking, payment, showtime, ticketIssuance } = item
+  const { booking, payment, showtime } = item
   const seats = item.seats?.length ? item.seats : booking?.seats || []
   const isConfirmedAndPaid =
     booking?.status === 'CONFIRMED' && payment?.status === 'PAID'
@@ -84,20 +261,7 @@ function TicketDetailModal({ item, onClose }) {
     : null
   const displayRef =
     booking?.bookingCode || booking?.payableReference || booking?.bookingId
-  const previewQrCode =
-    ticketIssuance?.previewReference ||
-    `ETKT-PREVIEW-${booking?.payableReference}`
   const statusBadge = getStatusBadge(booking, payment)
-
-  const handleCopy = async (text) => {
-    try {
-      await navigator.clipboard.writeText(text)
-      setCopiedCode(true)
-      window.setTimeout(() => setCopiedCode(false), 2000)
-    } catch {
-      setCopiedCode(false)
-    }
-  }
 
   return (
     <div
@@ -130,7 +294,9 @@ function TicketDetailModal({ item, onClose }) {
             </h2>
             <p className="mt-1 text-xs text-on-surface-variant">
               Booking Code:{' '}
-              <strong className="font-mono text-secondary">#{displayRef}</strong>{' '}
+              <strong className="font-mono text-secondary">
+                #{displayRef}
+              </strong>{' '}
               • Payable Ref:{' '}
               <span className="font-mono text-white">
                 {booking?.payableReference}
@@ -157,7 +323,7 @@ function TicketDetailModal({ item, onClose }) {
               <div className="rounded-2xl border border-white/10 bg-[#131315] p-4">
                 <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">
                   <Building2 className="size-3.5 text-primary" />
-                  Cinema &amp; Screening Room
+                  Cinema &amp; Hall
                 </div>
                 <p className="mt-1.5 font-heading text-base font-bold text-white">
                   {showtime?.cinemaName ||
@@ -174,29 +340,30 @@ function TicketDetailModal({ item, onClose }) {
               <div className="rounded-2xl border border-white/10 bg-[#131315] p-4">
                 <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">
                   <Calendar className="size-3.5 text-secondary" />
-                  Screening Date &amp; Time
+                  Screening Date &amp; Time Screening Date &amp; Time
                 </div>
                 <p className="mt-1.5 font-heading text-base font-bold text-white">
-                  {showtime?.startAt
-                    ? new Date(showtime.startAt).toLocaleString('en-GB', {
-                        timeZone: 'Asia/Ho_Chi_Minh',
-                      })
-                    : 'Scheduled Screening'}
+                  {formatVnDateTime(showtime?.startAt, 'Scheduled screening')}
                 </p>
                 <p className="mt-0.5 text-xs text-emerald-400">
-                  Vietnam Time (GMT+7)
+                  Vietnam time (GMT+7)
                 </p>
               </div>
             </div>
 
             <BookingPriceSummary booking={booking} />
-            <ConcessionOrderSummary order={booking?.concessionOrder} paid={booking?.status === 'CONFIRMED' && payment?.status === 'PAID'} />
+            <ConcessionOrderSummary
+              order={booking?.concessionOrder}
+              paid={
+                booking?.status === 'CONFIRMED' && payment?.status === 'PAID'
+              }
+            />
             {/* Detailed Seats Table */}
             <div className="rounded-2xl border border-white/10 bg-[#131315] p-4">
               <div className="mb-3 flex items-center justify-between">
                 <span className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-on-surface-variant">
                   <Armchair className="size-4 text-primary" />
-                  Seat Details ({seats.length} seats)
+                  Booked seats ({seats.length})
                 </span>
                 <span className="font-mono text-xs font-bold text-secondary">
                   {seats.map((s) => s.label).join(', ')}
@@ -214,7 +381,10 @@ function TicketDetailModal({ item, onClose }) {
                         {seat.label}
                       </span>
                       <span className="text-on-surface-variant">
-                        Seat Type: <strong className="text-white">{seat.type || 'STANDARD'}</strong>
+                        Seat type:{' '}
+                        <strong className="text-white">
+                          {seat.type || 'STANDARD'}
+                        </strong>
                       </span>
                     </div>
                     <strong className="font-mono text-sm text-white">
@@ -229,18 +399,18 @@ function TicketDetailModal({ item, onClose }) {
             <div className="rounded-2xl border border-white/10 bg-[#131315] p-4">
               <h3 className="mb-3 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-on-surface-variant">
                 <CreditCard className="size-4 text-secondary" />
-                Payment &amp; Amount Details
+                Payment &amp; Amount
               </h3>
 
               <div className="space-y-2 text-xs">
                 <div className="flex justify-between text-on-surface-variant">
-                  <span>Payment Method</span>
+                  <span>Payment method</span>
                   <strong className="text-white">
-                    {methodMeta ? methodMeta.label : 'No payment method selected'}
+                    {methodMeta ? methodMeta.label : 'No method selected'}
                   </strong>
                 </div>
                 <div className="flex justify-between text-on-surface-variant">
-                  <span>Settlement Reference</span>
+                  <span>Settlement reference</span>
                   <span className="font-mono text-white">
                     {payment?.settlementReference ||
                       payment?.settlementAttemptId ||
@@ -248,22 +418,17 @@ function TicketDetailModal({ item, onClose }) {
                   </span>
                 </div>
                 <div className="flex justify-between text-on-surface-variant">
-                  <span>Booking / Payment Time</span>
+                  <span>Booked / paid at</span>
                   <span className="text-white">
-                    {payment?.paidAt
-                      ? new Date(payment.paidAt).toLocaleString('en-GB', {
-                          timeZone: 'Asia/Ho_Chi_Minh',
-                        })
-                      : booking?.bookingTime
-                        ? new Date(booking.bookingTime).toLocaleString('en-GB', {
-                            timeZone: 'Asia/Ho_Chi_Minh',
-                          })
-                        : '—'}
+                    {formatVnDateTime(
+                      payment?.paidAt || booking?.bookingTime,
+                      '—',
+                    )}
                   </span>
                 </div>
                 <div className="flex items-baseline justify-between border-t border-white/10 pt-3">
                   <span className="font-bold uppercase tracking-wider text-on-surface-variant">
-                    Total Amount (VND)
+                    Total amount (VND)
                   </span>
                   <strong className="font-heading text-2xl font-black text-secondary">
                     {formatSeatMoney(
@@ -278,78 +443,44 @@ function TicketDetailModal({ item, onClose }) {
             </div>
           </div>
 
-          {/* Right 5 Cols: DEMO E-TICKET PREVIEW QR Stub */}
+          {/* Right 5 Cols: the booking's real E-Tickets (TICKET-001) */}
           <div className="flex flex-col items-center justify-between rounded-2xl border border-white/10 bg-[#131315] p-6 text-center lg:col-span-5">
             {isConfirmedAndPaid ? (
-              <>
-                <div className="w-full">
-                  <span className="inline-flex items-center gap-1.5 rounded-full border border-secondary/40 bg-secondary/15 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-secondary">
-                    <QrCode className="size-3.5" />
-                    DEMO E-TICKET PREVIEW
-                  </span>
-                  <p className="mt-1.5 text-xs text-on-surface-variant">
-                    E-Ticket &amp; QR Preview
-                  </p>
-                </div>
-
-                <div className="my-5 flex flex-col items-center">
-                  <MockQrSvg
-                    payload={previewQrCode}
-                    size={185}
-                    badgeLabel="E-TICKET"
-                    ariaLabel={`Demo E-Ticket QR for ${previewQrCode}`}
-                  />
-
-                  <div className="mt-4 flex items-center gap-2 rounded-xl border border-white/10 bg-surface-container px-3.5 py-2">
-                    <span className="font-mono text-xs font-black tracking-wider text-secondary">
-                      {previewQrCode}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => handleCopy(previewQrCode)}
-                      title="Copy Ticket Code"
-                      className="text-on-surface-variant hover:text-white"
-                    >
-                      <Copy className="size-3.5" />
-                    </button>
-                  </div>
-                  {copiedCode && (
-                    <span className="mt-1 text-[11px] font-bold text-emerald-400">
-                      Ticket code copied!
-                    </span>
-                  )}
-                </div>
-
-                <div className="w-full rounded-xl border border-secondary/30 bg-secondary/10 p-3 text-left text-[11px] leading-relaxed text-on-surface-variant">
-                  <strong className="block text-secondary">
-                    DEMO E-TICKET PREVIEW:
-                  </strong>
-                  {ticketIssuance?.notice ||
-                    'This QR code is a demo preview. The official ticket module has not been integrated yet.'}
-                </div>
-              </>
+              <BookingTicketsPanel bookingId={booking.bookingId} />
+            ) : booking?.status === 'REFUNDED' ? (
+              <div className="my-auto space-y-3 py-6">
+                <RefreshCcw className="mx-auto size-12 text-sky-300" />
+                <h3 className="font-heading text-lg font-bold text-white">
+                  Booking refunded
+                </h3>
+                <p className="text-xs leading-relaxed text-on-surface-variant">
+                  The refund for this booking is complete, so its E-Tickets are
+                  no longer valid for entry.
+                </p>
+              </div>
             ) : isReviewRequired ? (
               <div className="my-auto space-y-3 py-6">
                 <ShieldAlert className="mx-auto size-12 text-secondary" />
                 <h3 className="font-heading text-lg font-bold text-white">
-                  Late Payment After Seat Hold Expiration
+                  Late payment after the seat hold expired
                 </h3>
                 <p className="text-xs leading-relaxed text-on-surface-variant">
-                  This transaction is <strong className="text-secondary">REVIEW_REQUIRED</strong> ({payment?.reconciliationReason}). No E-Ticket QR code is issued for an expired booking.
+                  The transaction is{' '}
+                  <strong className="text-secondary">REVIEW_REQUIRED</strong> (
+                  {payment?.reconciliationReason}). No E-Ticket QR code is
+                  issued for an expired booking.
                 </p>
               </div>
             ) : (
               <div className="my-auto space-y-3 py-6">
                 <Clock3 className="mx-auto size-12 text-amber-400" />
                 <h3 className="font-heading text-lg font-bold text-white">
-                  {isPending
-                    ? 'Payment Incomplete'
-                    : 'Booking Expired'}
+                  {isPending ? 'Payment not completed' : 'Booking expired'}
                 </h3>
                 <p className="text-xs leading-relaxed text-on-surface-variant">
                   {isPending
-                    ? 'An E-Ticket QR code is created only after the backend confirms successful payment.'
-                    : 'The seat hold expired before payment was completed.'}
+                    ? 'The E-Ticket QR code is issued only after the server confirms a successful payment.'
+                    : 'The seat hold ended before the payment was completed.'}
                 </p>
               </div>
             )}
@@ -363,7 +494,7 @@ function TicketDetailModal({ item, onClose }) {
             onClick={onClose}
             className="rounded-xl border border-white/15 bg-surface-container px-5 py-2.5 text-xs font-bold uppercase tracking-wider text-white transition hover:border-white/30"
           >
-            Close
+            Close Close
           </button>
 
           <div className="flex flex-wrap items-center gap-3">
@@ -372,16 +503,16 @@ function TicketDetailModal({ item, onClose }) {
                 to={`/booking/${booking.showtimeId}/checkout`}
                 className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-xs font-bold uppercase tracking-wider text-white"
               >
-                Continue to Payment
+                Continue payment
                 <ExternalLink className="size-3.5" />
               </Link>
             )}
             {booking?.bookingId && booking?.showtimeId && (
               <Link
                 to={`/booking/${booking.showtimeId}/confirmation/${booking.bookingId}`}
-                className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-[#e50914] to-[#b5000b] px-5 py-2.5 text-xs font-bold uppercase tracking-wider text-white shadow-lg shadow-primary/25"
+                className="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-surface-container px-5 py-2.5 text-xs font-bold uppercase tracking-wider text-white transition hover:border-white/30"
               >
-                Open Full-Screen E-Ticket (C15)
+                Booking confirmation
                 <ExternalLink className="size-3.5" />
               </Link>
             )}
@@ -467,7 +598,8 @@ function CustomerBookingsPage({ initialMode = 'tickets' }) {
                 : 'My Tickets'}
             </h1>
             <p className="mt-1 text-sm text-on-surface-variant">
-              Select any ticket or booking to view seat details, the amount paid, screening date and room, and the E-Ticket QR preview.
+              Select any booking to see its seats, amount, screening date, hall
+              and your E-Tickets with their entry QR codes.
             </p>
           </div>
 
@@ -480,7 +612,7 @@ function CustomerBookingsPage({ initialMode = 'tickets' }) {
             <RefreshCcw
               className={`size-4 ${historyQuery.isFetching ? 'animate-spin' : ''}`}
             />
-            Refresh List
+            Refresh list
           </button>
         </div>
 
@@ -488,7 +620,7 @@ function CustomerBookingsPage({ initialMode = 'tickets' }) {
         <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
           <div className="rounded-2xl border border-emerald-500/25 bg-surface-container-low p-4">
             <span className="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">
-              Confirmed Tickets (Paid)
+              Paid bookings
             </span>
             <p className="mt-1 font-heading text-2xl font-black text-emerald-400">
               {summary.confirmedTicketsCount}
@@ -496,7 +628,7 @@ function CustomerBookingsPage({ initialMode = 'tickets' }) {
           </div>
           <div className="rounded-2xl border border-white/10 bg-surface-container-low p-4">
             <span className="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">
-              Total Bookings
+              Total bookings
             </span>
             <p className="mt-1 font-heading text-2xl font-black text-white">
               {summary.totalBookings}
@@ -504,7 +636,7 @@ function CustomerBookingsPage({ initialMode = 'tickets' }) {
           </div>
           <div className="rounded-2xl border border-amber-400/25 bg-surface-container-low p-4">
             <span className="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">
-              Awaiting Payment
+              Awaiting payment
             </span>
             <p className="mt-1 font-heading text-2xl font-black text-amber-300">
               {summary.pendingCount}
@@ -512,7 +644,7 @@ function CustomerBookingsPage({ initialMode = 'tickets' }) {
           </div>
           <div className="rounded-2xl border border-white/10 bg-surface-container-low p-4">
             <span className="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">
-              Expired / Reconciliation
+              Expired / Under review
             </span>
             <p className="mt-1 font-heading text-2xl font-black text-secondary">
               {summary.expiredOrReviewCount}
@@ -548,7 +680,7 @@ function CustomerBookingsPage({ initialMode = 'tickets' }) {
             className="mt-8 flex items-center justify-center gap-3 rounded-2xl border border-white/10 bg-surface-container-low p-12 text-sm"
           >
             <LoaderCircle className="size-6 animate-spin text-primary" />
-            Loading tickets and booking history…
+            Loading your tickets and booking history…
           </div>
         )}
 
@@ -566,7 +698,7 @@ function CustomerBookingsPage({ initialMode = 'tickets' }) {
               onClick={() => historyQuery.refetch()}
               className="mt-4 rounded-xl bg-primary px-5 py-2.5 text-xs font-bold text-white"
             >
-              Try Again
+              Try again
             </button>
           </div>
         )}
@@ -578,10 +710,10 @@ function CustomerBookingsPage({ initialMode = 'tickets' }) {
               <div className="rounded-3xl border border-white/10 bg-surface-container-low p-12 text-center">
                 <Ticket className="mx-auto size-12 text-primary/70" />
                 <h2 className="mt-4 font-heading text-xl font-bold text-white">
-                  No tickets or bookings found in this section
+                  No tickets or bookings in this section yet
                 </h2>
                 <p className="mt-2 text-sm text-on-surface-variant">
-                  Choose a movie and select your seats to get an E-Ticket.
+                  Choose a movie and book your seats to receive an E-Ticket.
                 </p>
                 <div className="mt-6 flex justify-center gap-3">
                   {activeFilter !== 'ALL' && allItems.length > 0 && (
@@ -590,14 +722,14 @@ function CustomerBookingsPage({ initialMode = 'tickets' }) {
                       onClick={() => setActiveFilter('ALL')}
                       className="rounded-xl border border-white/15 bg-surface-container px-5 py-3 text-xs font-bold text-white"
                     >
-                      View All Bookings ({allItems.length})
+                      View all bookings ({allItems.length})
                     </button>
                   )}
                   <Link
                     to="/movies"
                     className="rounded-xl bg-primary px-6 py-3 text-xs font-bold uppercase tracking-wider text-white"
                   >
-                    Book Tickets Now
+                    Book a movie now
                   </Link>
                 </div>
               </div>
@@ -612,8 +744,8 @@ function CustomerBookingsPage({ initialMode = 'tickets' }) {
                   ? getPaymentMethodOption(payment.method)
                   : null
                 const isPaidTicket =
-                  booking?.status === 'CONFIRMED' &&
-                  payment?.status === 'PAID'
+                  booking?.status === 'CONFIRMED' && payment?.status === 'PAID'
+                const ticketSummary = describeTicketIssuance(ticketIssuance)
                 const displayRef =
                   booking?.bookingCode ||
                   booking?.payableReference ||
@@ -668,12 +800,10 @@ function CustomerBookingsPage({ initialMode = 'tickets' }) {
 
                           <span className="inline-flex items-center gap-1.5">
                             <Calendar className="size-3.5 text-secondary" />
-                            {showtime?.startAt
-                              ? new Date(showtime.startAt).toLocaleString(
-                                  'en-GB',
-                                  { timeZone: 'Asia/Ho_Chi_Minh' },
-                                )
-                              : 'Scheduled Time'}
+                            {formatVnDateTime(
+                              showtime?.startAt,
+                              'Scheduled time',
+                            )}
                           </span>
                         </div>
 
@@ -681,7 +811,7 @@ function CustomerBookingsPage({ initialMode = 'tickets' }) {
                         <div className="flex flex-wrap items-center gap-1.5 pt-1">
                           <span className="mr-1 inline-flex items-center gap-1 text-xs text-on-surface-variant">
                             <Armchair className="size-3.5 text-primary" />
-                            Seats ({seats.length}):
+                            Seats ({seats.length}): Seats ({seats.length}):
                           </span>
                           {seats.map((seat) => (
                             <span
@@ -696,24 +826,19 @@ function CustomerBookingsPage({ initialMode = 'tickets' }) {
 
                       {/* Right Price, Mini QR Preview & CTA */}
                       <div className="flex flex-wrap items-center justify-between gap-5 border-t border-white/10 pt-4 lg:border-t-0 lg:pt-0">
-                        {isPaidTicket && (
-                          <div className="hidden items-center gap-3 rounded-xl border border-white/10 bg-[#131315] px-3 py-2 sm:flex">
-                            <MockQrSvg
-                              payload={
-                                ticketIssuance?.previewReference ||
-                                `ETKT-PREVIEW-${booking.payableReference}`
-                              }
-                              size={54}
-                              badgeLabel="QR"
-                              ariaLabel="Mini E-Ticket QR preview"
-                            />
+                        {isPaidTicket && ticketSummary.label && (
+                          <div className="flex items-center gap-3 rounded-xl border border-white/10 bg-[#131315] px-3 py-2">
+                            <Ticket className="size-6 text-secondary" />
                             <div className="text-left">
                               <span className="block text-[10px] font-bold uppercase tracking-wider text-secondary">
-                                DEMO E-TICKET QR
+                                {ticketSummary.label}
                               </span>
                               <span className="font-mono text-[11px] text-white">
-                                {ticketIssuance?.previewReference ||
-                                  `ETKT-PREVIEW-${booking.payableReference}`}
+                                {ticketIssuance.tickets
+                                  .slice(0, 2)
+                                  .map((ticket) => ticket.ticketCode)
+                                  .join(', ')}
+                                {ticketIssuance.tickets.length > 2 ? ', …' : ''}
                               </span>
                             </div>
                           </div>
@@ -721,7 +846,7 @@ function CustomerBookingsPage({ initialMode = 'tickets' }) {
 
                         <div className="text-left lg:text-right">
                           <span className="block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
-                            Total
+                            Total Total
                           </span>
                           <strong className="font-heading text-2xl font-black text-secondary">
                             {formatSeatMoney(
@@ -742,7 +867,7 @@ function CustomerBookingsPage({ initialMode = 'tickets' }) {
                           className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-[#e50914] to-[#b5000b] px-4 py-3 text-xs font-bold uppercase tracking-wider text-white shadow-md shadow-primary/20 transition group-hover:brightness-110"
                         >
                           <QrCode className="size-4" />
-                          View Details &amp; QR
+                          {isPaidTicket ? 'View E-Tickets' : 'View details'}
                         </button>
                       </div>
                     </div>

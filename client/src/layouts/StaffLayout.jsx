@@ -22,7 +22,14 @@ import { useAuth } from '../features/auth/hooks/useAuth'
 const navItems = [
   { label: 'Dashboard', icon: LayoutDashboard },
   { label: 'Sell Tickets', icon: Ticket, to: '/staff/pos', title: 'Sell tickets at counter', section: 'Counter' },
-  { label: 'Scan Ticket', icon: ScanLine },
+  {
+    label: 'Ticket Check-in',
+    icon: ScanLine,
+    to: '/staff/check-in',
+    permission: 'ticket.validate',
+    title: 'Ticket check-in',
+    section: 'Counter',
+  },
   { label: 'Sell Concessions', icon: Popcorn, to: '/staff/concessions', title: 'Sell concessions', section: 'Concession & inventory' },
   {
     label: 'Inventory',
