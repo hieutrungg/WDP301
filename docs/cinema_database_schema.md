@@ -821,6 +821,8 @@ erDiagram
 | `stock_transactions` | `{ branchId: 1, type: 1, transactionDate: -1 }` | Danh sách phiếu nhập gần đây của một chi nhánh (CMS_UC40) |
 | `staff_shifts` | `{ branchId: 1, startTime: -1 }` | Danh sách ca và dashboard của một chi nhánh (CMS_UC38) |
 | `staff_shifts` | `{ employeeAccountId: 1, startTime: 1 }` | Kiểm tra trùng giờ khi phân ca cho một nhân viên (CMS_UC38) |
+| `payments` | `{ status: 1, paidAt: 1, amount: 1 }` | Tính tổng thanh toán thành công theo thời điểm thu (REP-102) |
+| `refund_requests` | `{ status: 1, processedAt: 1, refundAmount: 1 }` | Tính tổng refund đã hoàn tất theo thời điểm xử lý (REP-102) |
 
 ### 4.2. Ràng buộc trên Embedded Document
 
@@ -871,6 +873,19 @@ erDiagram
 Collection sau có trong database nhưng chưa được mô tả trong tài liệu thiết kế nên chưa xác định được cấu trúc trường:
 * **Hệ thống:** `email_verifications`
 
+### Reporting export audit (`report_exports`)
+
+| Field | Type | Required | Description |
+| :--- | :--- | :---: | :--- |
+| `actorId` | ObjectId → `accounts` | Yes | Manager who generated a successful export |
+| `branchId` | ObjectId → `branches` | Yes | Server-resolved reporting scope |
+| `format` | String (`xlsx`/`pdf`) | Yes | Export format |
+| `filters` | Object | Yes | `fromDate`, `toDate`, optional `movieId`, and `category` |
+| `generatedAt`, `dataCutoffAt`, `createdAt` | Date | Yes | Report cutoff and audit creation time |
+| `transactionCount` | Number | Yes | Number of rows exported |
+
+This collection contains metadata only, not report files or payment/customer PII. Application behavior only inserts records; no update/delete route exists. Indexes: `{ branchId: 1, createdAt: -1 }` and `{ actorId: 1, createdAt: -1 }`.
+
 ---
 
 ## 6. Lịch sử thay đổi schema
@@ -883,6 +898,8 @@ Collection sau có trong database nhưng chưa được mô tả trong tài li�
 | 2026-10-17 | `permissions`, `roles` *(dữ liệu, không đổi cấu trúc)* | Thêm quyền `inventory.stock_in`, gán cho role `STAFF`; đảm bảo `inventory.view` gán cho `STAFF` và `MANAGER` | CMS_UC40 chỉ dành cho Staff; Manager chỉ xem tồn kho (CMS_UC39) | `server/src/seeds/seed-inventory.js` (idempotent, `$addToSet`) |
 | 2026-10-20 | `staff_shifts` *(PROPOSED, chờ team review)* | CMS_UC38 (ca làm việc tối thiểu): thêm field tùy chọn `createdBy`, `cancelledBy`, `cancelledAt`, `approvedBy`, `approvedAt`, `approvalNote`; chốt `status` lưu `SCHEDULED`/`APPROVED`/`CANCELLED`; thêm index `{ branchId, startTime: -1 }` và `{ employeeAccountId, startTime: 1 }`. Không thêm collection mới, không thêm chấm công. Dùng quyền có sẵn `shift.view` / `shift.manage`; chi nhánh và nhân viên xác định qua `accounts.employeeProfile.branchId` | Không cần backfill: field mới tùy chọn; document cũ đọc là `SCHEDULED`. `server/src/migrations/20261020-staff-shift-monitoring.js` (chỉ tạo index); không có seed dữ liệu mẫu |
 | 2026-10-21 | `rooms` *(PROPOSED, chờ team review)* | ROOM-001 (quản lý phòng): chốt `status` = `ACTIVE`/`MAINTENANCE`/`INACTIVE` (đọc `AVAILABLE` như `ACTIVE`); thêm unique index `uniq_room_branch_name_normalized` `{ branchId, roomName }` với collation `en` strength 2. Không đổi cấu trúc field. Quyền dùng sẵn `room.view` (đọc: STAFF/MANAGER/ADMIN) và `room.manage` + role `MANAGER` (ghi); ADMIN chỉ đọc | Không cần backfill dữ liệu: `AVAILABLE` cũ vẫn hợp lệ. Cần chạy `server/src/migrations/20261021-room-management-indexes.js` để tạo index; script liệt kê và dừng nếu đã có tên phòng trùng trong cùng chi nhánh. Showtime chỉ nhận phòng `ACTIVE`/`AVAILABLE` nên hai trạng thái mới bị loại khỏi lịch chiếu mà không cần sửa Showtime |
+| 2026-10-27 | `payments`, `refund_requests` | Thêm index đọc `{ status, paidAt, amount }` và `{ status, processedAt, refundAmount }` cho REP-102; không đổi field hoặc dữ liệu nghiệp vụ | `server/src/migrations/20261027-revenue-report-indexes.js`; cần apply riêng trên từng database trước khi cần hiệu năng production |
+| 2026-10-27 | `report_exports`; `roles` *(dữ liệu, không đổi cấu trúc)* | Ghi metadata cho export doanh thu thành công; gán quyền hiện có `report.view`/`report.export` cho `MANAGER`; thêm index theo branch/actor và thời gian | UC43 yêu cầu export và ghi nhận actor, scope, format, timestamp | `server/src/migrations/20261027-rep-104-report-export.js` (idempotent; phải chạy trước rollout) |
 
 **Chưa thay đổi (cố ý):** `combos` chưa có tồn kho riêng; tồn kho combo bị hoãn đến khi có quyết định về công thức/thành phần (xem `docs/REQUIREMENTS_STATUS.md`, UC39/40).
 

@@ -181,6 +181,12 @@ test("BOOK-009 creates a PENDING_PAYMENT booking from a live owner hold", async 
     payableReference: "PAY-BOOKING-001",
     expiresAt: fixture.expiresAt.toISOString(),
     amount: 190000,
+    ticketAmount: 190000,
+    discountAmount: 0,
+    concessionAmount: 0,
+    pricingVersion: 0,
+    pricingLocked: false,
+    voucher: null,
     currency: "VND",
     idempotent: false,
   });

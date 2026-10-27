@@ -1,10 +1,12 @@
 import mongoose from "mongoose";
-import { REFUND_STATUSES, REFUND_STATUS } from "./refund.constants.js";
+import { REFUND_REQUEST_TYPE, REFUND_STATUSES, REFUND_STATUS } from "./refund.constants.js";
 
 const money = { type: Number, required: true, min: 0, validate: Number.isSafeInteger };
 
 const schema = new mongoose.Schema({
   bookingId: { type: mongoose.Schema.Types.ObjectId, required: true, ref: "Booking" },
+  showtimeId: { type: mongoose.Schema.Types.ObjectId, ref: "Showtime", default: null },
+  requestType: { type: String, enum: Object.values(REFUND_REQUEST_TYPE), required: true, default: REFUND_REQUEST_TYPE.CUSTOMER_REQUEST },
   paymentId: { type: mongoose.Schema.Types.ObjectId, required: true, ref: "Payment" },
   customerAccountId: { type: mongoose.Schema.Types.ObjectId, required: true, ref: "Account" },
   reason: { type: String, required: true, trim: true, maxlength: 500 },
@@ -33,9 +35,10 @@ const schema = new mongoose.Schema({
   rejectionReason: { type: String, trim: true, default: null },
 }, { collection: "refund_requests", timestamps: true, versionKey: false, autoIndex: false });
 
-schema.index({ bookingId: 1 }, { unique: true, name: "uniq_refund_booking" });
+schema.index({ bookingId: 1, requestType: 1 }, { unique: true, name: "uniq_refund_booking_type" });
 schema.index({ idempotencyKey: 1 }, { unique: true, name: "uniq_refund_idempotency" });
 schema.index({ status: 1, requestedAt: 1 }, { name: "idx_refund_manager_queue" });
 schema.index({ customerAccountId: 1, requestedAt: -1 }, { name: "idx_refund_customer_history" });
+schema.index({ status: 1, processedAt: 1, refundAmount: 1 }, { name: "idx_refund_revenue_processed_at" });
 
 export const RefundRequest = mongoose.models.RefundRequest || mongoose.model("RefundRequest", schema);

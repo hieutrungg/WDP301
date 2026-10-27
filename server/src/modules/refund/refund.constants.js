@@ -6,6 +6,11 @@ export const REFUND_STATUS = Object.freeze({
   FAILED: "FAILED",
 });
 
+export const REFUND_REQUEST_TYPE = Object.freeze({
+  CUSTOMER_REQUEST: "CUSTOMER_REQUEST",
+  SHOWTIME_CANCELLATION: "SHOWTIME_CANCELLATION",
+});
+
 export const REFUND_STATUSES = Object.freeze(Object.values(REFUND_STATUS));
 export const REFUND_CUTOFF_MINUTES = 45;
 

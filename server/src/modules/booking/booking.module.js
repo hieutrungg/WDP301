@@ -12,6 +12,11 @@ import { createBookingRouter } from "./booking.routes.js";
 import { createBookingService } from "./booking.service.js";
 import { createConcessionCheckoutService, selectionFingerprint } from "../concession/checkout.service.js";
 import { createConcessionCheckoutRouter } from "../concession/checkout.routes.js";
+import { promotionService } from "../promotion/promotion.service.js";
+import { bookingRepository } from "./booking.repository.js";
+import { createBookingVoucherService } from "./booking-voucher.service.js";
+import { createBookingVoucherRouter } from "./booking-voucher.routes.js";
+import { paymentPricingReader } from "../payment/payment-pricing.read-service.js";
 
 const showtimeReader = {
   getBookableShowtime: getBookableShowtimeForBooking,
@@ -38,6 +43,7 @@ export const concessionCheckoutService = createConcessionCheckoutService({
 });
 export const concessionCheckoutRoutes = createConcessionCheckoutRouter(concessionCheckoutService);
 export const bookingService = createBookingService({
+  promotionPort: promotionService,
   concessionPort: { ...concessionCheckoutService, fingerprint: selectionFingerprint },
   seatHoldPort: {
     getLiveHoldForBooking: (command) => seatHoldService.getLiveHoldForBooking(command),
@@ -47,6 +53,10 @@ export const bookingService = createBookingService({
   showtimeReader,
   roomLayoutReader,
 });
+
+export const bookingVoucherService = createBookingVoucherService({ repository: bookingRepository, promotionPort: promotionService, seatHoldPort: seatHoldService, paymentReader: paymentPricingReader });
+bookingService.lockPricingForPayment = bookingVoucherService.lockPricingForPayment;
+export const bookingVoucherRoutes = createBookingVoucherRouter(bookingVoucherService);
 
 export const seatAvailabilityRoutes = createSeatAvailabilityRouter(
   createSeatAvailabilityController(seatAvailabilityService),

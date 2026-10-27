@@ -71,6 +71,7 @@ const paymentAttemptSchema = new mongoose.Schema(
 
 const paymentSchema = new mongoose.Schema(
   {
+    pricingVersion: { type: Number, min: 0, validate: Number.isSafeInteger },
     bookingId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Booking",

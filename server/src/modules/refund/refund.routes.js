@@ -13,6 +13,7 @@ export const createRefundRouter = (controller) => {
   for (const [path, handler] of [["approve", controller.approve], ["retry", controller.retry]]) {
     router.post(`/:refundId/${path}`, requireRole("MANAGER"), validate(refundParamsSchema, { source: "params", code: "INVALID_REFUND_ID" }), handler);
   }
+  router.post("/:refundId/confirm-cash", requireRole("MANAGER"), validate(refundParamsSchema, { source: "params", code: "INVALID_REFUND_ID" }), controller.confirmCash);
   router.post("/:refundId/reject", requireRole("MANAGER"), validate(refundParamsSchema, { source: "params", code: "INVALID_REFUND_ID" }), validate(rejectRefundSchema), controller.reject);
   return router;
 };

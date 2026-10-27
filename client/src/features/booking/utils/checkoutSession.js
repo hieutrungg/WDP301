@@ -56,7 +56,10 @@ export function validHoldQuote(hold, attempt) {
 }
 
 export function bookingMatchesHold(booking, hold, quote) {
+  const discount = booking?.discountAmount ?? 0
+  const validDiscount = Number.isSafeInteger(discount) && discount >= 0 && discount <= hold.priceQuote.totalAmount && (!discount || Boolean(booking.voucher))
   return typeof booking?.bookingId === 'string' && typeof booking.payableReference === 'string' &&
+    validDiscount &&
     ['PENDING_PAYMENT', 'CONFIRMED', 'EXPIRED'].includes(booking.status) &&
     booking.currency === 'VND' && (quote ? (
       quote.holdId === hold.holdId && quote.currency === 'VND' &&
@@ -64,9 +67,9 @@ export function bookingMatchesHold(booking, hold, quote) {
       Number.isSafeInteger(quote.concessionAmount) && quote.concessionAmount >= 0 &&
       quote.amount === quote.ticketAmount + quote.concessionAmount &&
       booking.ticketAmount === quote.ticketAmount && booking.concessionAmount === quote.concessionAmount &&
-      booking.amount === quote.amount && booking.concessionOrder?.totalAmount === quote.concessionAmount &&
+      booking.amount === quote.amount - discount && booking.concessionOrder?.totalAmount === quote.concessionAmount &&
       booking.concessionOrder?.branchId === quote.branchId
-    ) : booking.amount === hold.priceQuote.totalAmount) &&
+    ) : booking.amount === hold.priceQuote.totalAmount - discount) &&
     Number.isFinite(Date.parse(booking.expiresAt)) &&
     Date.parse(booking.expiresAt) === Date.parse(hold.expiresAt)
 }

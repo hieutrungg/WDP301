@@ -16,17 +16,21 @@ import concessionRoutes from "./modules/concession/concession.routes.js";
 import staffShiftRoutes from "./modules/staff-shift/staff-shift.routes.js";
 import {
   bookingRoutes,
+  bookingVoucherRoutes,
   concessionCheckoutRoutes,
   seatAvailabilityRoutes,
   seatHoldRoutes,
 } from "./modules/booking/booking.module.js";
 import { paymentRoutes } from "./modules/payment/payment.module.js";
 import { refundRoutes } from "./modules/refund/refund.module.js";
+import reportingRoutes from "./modules/reporting/reporting.routes.js";
+import revenueExportRoutes from "./modules/reporting/revenue-export.routes.js";
 import { ticketRoutes } from "./modules/ticket/ticket.module.js";
 import { counterConcessionCheckoutRoutes } from "./modules/concession/counter-checkout.module.js";
 import { notFound } from "./middlewares/notFoundMiddleware.js";
 import { errorHandler } from "./middlewares/errorMiddleware.js";
 import { env } from "./config/env.js";
+import { promotionRoutes } from "./modules/promotion/promotion.routes.js";
 
 const app = express();
 
@@ -63,10 +67,14 @@ app.use("/api/inventory", inventoryRoutes);
 app.use("/api", concessionRoutes);
 app.use("/api/staff-shifts", staffShiftRoutes);
 app.use("/api/bookings", bookingRoutes);
+app.use("/api/bookings", bookingVoucherRoutes);
+app.use("/api", promotionRoutes);
 app.use("/api/concession-checkout", concessionCheckoutRoutes);
 app.use("/api/counter-concessions", counterConcessionCheckoutRoutes);
 app.use("/api/payments", paymentRoutes);
 app.use("/api/refunds", refundRoutes);
+app.use("/api/analytics", reportingRoutes);
+app.use("/api/reports", revenueExportRoutes);
 app.use("/api/tickets", ticketRoutes);
 
 app.use(notFound);

@@ -46,4 +46,8 @@ export const PAYMENT_INDEXES = Object.freeze([
       name: "idx_payment_customer_history",
     },
   },
+  {
+    fields: { status: 1, paidAt: 1, amount: 1 },
+    options: { name: "idx_payment_revenue_paid_at" },
+  },
 ]);

@@ -24,7 +24,7 @@ import { useAuth } from "../features/auth/hooks/useAuth";
 // Items without `to` are planned manager screens from SCREEN_FLOW §4 that have no route yet.
 // `permission` only hides navigation; the API still enforces access.
 const navItems = [
-  { label: "Dashboard", icon: LayoutDashboard },
+  { label: "Dashboard", icon: LayoutDashboard, to: "/manager/dashboard", permission: "analytics.view" },
   {
     label: "Movies",
     icon: Film,
@@ -54,7 +54,7 @@ const navItems = [
     to: "/manager/inventory",
     permission: "inventory.view",
   },
-  { label: "Promotions", icon: TicketPercent },
+  { label: "Promotions", icon: TicketPercent, to: "/manager/promotions" },
   { label: "Refunds", icon: ReceiptText, to: "/manager/refunds" },
   {
     label: "Staff Shifts",
@@ -62,7 +62,7 @@ const navItems = [
     to: "/manager/staff-shifts",
     permission: "shift.view",
   },
-  { label: "Reports", icon: ChartLine },
+  { label: "Reports", icon: ChartLine, to: "/manager/reports/revenue", permission: "report.view" },
 ];
 
 function SidebarNav({ permissions, onNavigate }) {
@@ -147,6 +147,7 @@ function ManagerLayout() {
   const showtimePage = location.pathname.startsWith("/manager/showtimes");
   const inventoryPage = location.pathname.startsWith("/manager/inventory");
   let breadcrumb = ["Auditorium settings", "Configure room seat maps"];
+  if (location.pathname.startsWith("/manager/promotions")) breadcrumb = ["Commercial operations", "Promotion management"];
   if (showtimePage)
     breadcrumb = ["Schedule & programming", "Showtime management"];
   if (inventoryPage)
@@ -157,6 +158,8 @@ function ManagerLayout() {
     breadcrumb = ["Human resources & operations", "Staff shift monitoring"];
   if (location.pathname.startsWith("/manager/refunds"))
     breadcrumb = ["Revenue & customer care", "Refund review queue"];
+  if (location.pathname.startsWith("/manager/reports"))
+    breadcrumb = ["Reporting & finance", "Revenue reports"];
   if (location.pathname.startsWith("/manager/movies")) {
     const screen = location.pathname.endsWith("/new") ? "Add new movie"
       : location.pathname.endsWith("/edit") ? "Update movie" : "Movie management";
