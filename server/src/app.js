@@ -14,6 +14,7 @@ import concessionRoutes from "./modules/concession/concession.routes.js";
 import staffShiftRoutes from "./modules/staff-shift/staff-shift.routes.js";
 import {
   bookingRoutes,
+  bookingVoucherRoutes,
   concessionCheckoutRoutes,
   seatAvailabilityRoutes,
   seatHoldRoutes,
@@ -27,6 +28,7 @@ import { counterConcessionCheckoutRoutes } from "./modules/concession/counter-ch
 import { notFound } from "./middlewares/notFoundMiddleware.js";
 import { errorHandler } from "./middlewares/errorMiddleware.js";
 import { env } from "./config/env.js";
+import { promotionRoutes } from "./modules/promotion/promotion.routes.js";
 
 const app = express();
 
@@ -60,6 +62,8 @@ app.use("/api/inventory", inventoryRoutes);
 app.use("/api", concessionRoutes);
 app.use("/api/staff-shifts", staffShiftRoutes);
 app.use("/api/bookings", bookingRoutes);
+app.use("/api/bookings", bookingVoucherRoutes);
+app.use("/api", promotionRoutes);
 app.use("/api/concession-checkout", concessionCheckoutRoutes);
 app.use("/api/counter-concessions", counterConcessionCheckoutRoutes);
 app.use("/api/payments", paymentRoutes);

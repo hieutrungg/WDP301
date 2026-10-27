@@ -45,6 +45,8 @@ import CustomerRefundsPage from '../../features/refund/pages/CustomerRefundsPage
 import ManagerRefundsPage from '../../features/refund/pages/ManagerRefundsPage'
 import ManagerDashboardPage from '../../features/manager-dashboard/pages/ManagerDashboardPage'
 import RevenueReportsPage from '../../features/manager-reports/pages/RevenueReportsPage'
+import PromotionsPage from '../../features/promotions/pages/PromotionsPage'
+import PromotionFormPage from '../../features/promotions/pages/PromotionFormPage'
 
 function ScrollToTop() {
   const { pathname } = useLocation()
@@ -153,6 +155,9 @@ export function AppRoutes() {
               </Route>
               <Route path="showtimes" element={<ManagerShowtimesPage />} />
               <Route path="refunds" element={<ManagerRefundsPage />} />
+              <Route path="promotions" element={<PromotionsPage />} />
+              <Route path="promotions/new" element={<PromotionFormPage />} />
+              <Route path="promotions/:promotionId/edit" element={<PromotionFormPage />} />
               <Route element={<MovieManagementAccess />}>
                 <Route path="movies" element={<ManagerMoviesPage />} />
                 <Route path="movies/:movieId/edit" element={<UpdateMoviePage />} />

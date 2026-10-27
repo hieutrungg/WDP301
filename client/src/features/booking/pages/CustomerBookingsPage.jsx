@@ -1,4 +1,5 @@
 import ConcessionOrderSummary from '../components/ConcessionOrderSummary'
+import BookingPriceSummary from '../components/BookingPriceSummary'
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
@@ -188,6 +189,7 @@ function TicketDetailModal({ item, onClose }) {
               </div>
             </div>
 
+            <BookingPriceSummary booking={booking} />
             <ConcessionOrderSummary order={booking?.concessionOrder} paid={booking?.status === 'CONFIRMED' && payment?.status === 'PAID'} />
             {/* Detailed Seats Table */}
             <div className="rounded-2xl border border-white/10 bg-[#131315] p-4">

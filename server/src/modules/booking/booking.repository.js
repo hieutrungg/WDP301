@@ -49,6 +49,17 @@ export const createBookingRepository = ({
     return booking.toObject();
   },
 
+  updatePricing({ bookingId, expectedPricingVersion, voucherSnapshot, totalAmount, discountAmount }, session) {
+    const version = expectedPricingVersion === 0 ? { $or: [{ pricingVersion: 0 }, { pricingVersion: { $exists: false } }] } : { pricingVersion: expectedPricingVersion };
+    return bookingModel.findOneAndUpdate({ _id: bookingId, status: BOOKING_STATUS.PENDING_PAYMENT, pricingLockedAt: { $exists: false }, ...version }, {
+      $set: { totalAmount, discountAmount, pricingVersion: expectedPricingVersion + 1, ...(voucherSnapshot ? { voucherSnapshot, voucherId: voucherSnapshot.voucherId } : {}) },
+      ...(!voucherSnapshot ? { $unset: { voucherSnapshot: 1, voucherId: 1 } } : {}),
+    }, { returnDocument: "after", session, runValidators: true }).lean();
+  },
+  lockPricing(bookingId, now, session) {
+    return bookingModel.findOneAndUpdate({ _id: bookingId, status: BOOKING_STATUS.PENDING_PAYMENT, pricingLockedAt: { $exists: false }, expiresAt: { $gt: now } }, { $set: { pricingLockedAt: now } }, { returnDocument: "after", session }).lean();
+  },
+
   markConfirmed({ bookingId, paymentId, confirmedAt }, session) {
     return bookingModel
       .findOneAndUpdate(
@@ -61,7 +72,7 @@ export const createBookingRepository = ({
             updatedAt: confirmedAt,
           },
         },
-        { new: true, session },
+        { returnDocument: "after", session },
       )
       .lean()
       .exec();
@@ -78,7 +89,7 @@ export const createBookingRepository = ({
             updatedAt: expiredAt,
           },
         },
-        { new: true, session },
+        { returnDocument: "after", session },
       )
       .lean()
       .exec();
