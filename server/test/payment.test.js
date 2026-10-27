@@ -34,7 +34,8 @@ test("Payment model and index definitions satisfy Payment aggregate and validato
     Payment.schema.path("method").enumValues,
     PAYMENT_ACCEPTED_METHOD_VALUES,
   );
-  assert.equal(PAYMENT_INDEXES.length, 5);
+  assert.equal(PAYMENT_INDEXES.length, 6);
+  assert.ok(PAYMENT_INDEXES.some(({ options }) => options.name === "idx_payment_provider_order_code"));
   assert.equal(PAYMENT_INDEXES[0].options.name, "uniq_payment_order");
   assert.equal(PAYMENT_INDEXES[0].options.unique, true);
   assert.equal(PAYMENT_INDEXES[1].options.name, "uniq_payment_booking");
@@ -475,7 +476,7 @@ test("13, 14, 15 & 16. HTTP routes support all 4 C14 payment methods, reloadable
   assert.equal(reloadRes.status, 200);
   assert.equal(reloadRes.body.data.booking.status, BOOKING_STATUS.CONFIRMED);
   assert.equal(reloadRes.body.data.payment.status, PAYMENT_STATUS.PAID);
-  assert.equal(reloadRes.body.data.payment.attemptCount, 4);
+  assert.equal(reloadRes.body.data.payment.attemptCount, PAYMENT_METHOD_VALUES.length);
   assert.equal(reloadRes.body.data.ticketIssuance.eligible, true);
   assert.equal(reloadRes.body.data.ticketIssuance.status, "ISSUED");
   assert.equal(reloadRes.body.data.ticketIssuance.ticketCount, 2);

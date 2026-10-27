@@ -12,6 +12,8 @@ export const objectId = () => new mongoose.Types.ObjectId().toString();
 export const createInMemoryHarness = ({
   initialNow = new Date("2026-10-22T07:00:00.000Z"),
   ticketRepository = createInMemoryTicketRepository(),
+  gateway,
+  clientUrl,
 } = {}) => {
   let currentNow = new Date(initialNow);
   const ownerId = objectId();
@@ -188,6 +190,14 @@ export const createInMemoryHarness = ({
       }
       return null;
     },
+    async findByProviderOrderCode(orderCode) {
+      for (const payment of payments.values()) {
+        if ((payment.attempts || []).some((attempt) => attempt.providerOrderCode === orderCode)) {
+          return payment;
+        }
+      }
+      return null;
+    },
     async findByAttemptIdempotencyKey(idempotencyKey) {
       for (const payment of payments.values()) {
         if (
@@ -245,6 +255,8 @@ export const createInMemoryHarness = ({
     bookingService,
     ticketPort: ticketService,
     now: () => new Date(currentNow),
+    ...(gateway ? { gateway } : {}),
+    ...(clientUrl ? { clientUrl } : {}),
   });
 
   const advanceTimeMs = (ms) => {
@@ -265,6 +277,7 @@ export const createInMemoryHarness = ({
     ticketService,
     ticketRepository,
     advanceTimeMs,
+    now: () => new Date(currentNow),
     getStats: () => ({
       holdConsumedCount,
       holdExpiredCount,

@@ -14,7 +14,7 @@ import {
 } from 'lucide-react'
 import { Link, useParams } from 'react-router'
 import { getApiErrorMessage } from '../../../lib/api/apiError'
-import { MockQrSvg } from '../../booking/components/MockPaymentModal'
+import QrCodeImage from '../../../components/ui/QrCode'
 import { getBookingTickets, getTicket } from '../api/ticketApi'
 import {
   formatScreeningDateTime,
@@ -126,10 +126,10 @@ function ETicketPage() {
 
         <section className="flex flex-col items-center px-6 py-7">
           {admissible ? (
-            <MockQrSvg
-              payload={ticket.qrCode}
+            <QrCodeImage
+              value={ticket.qrCode}
               size={232}
-              badgeLabel="E-TICKET"
+              label="E-TICKET"
               ariaLabel={`Admission QR for ticket ${ticket.ticketCode}`}
             />
           ) : (

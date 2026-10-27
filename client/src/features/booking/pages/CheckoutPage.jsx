@@ -27,8 +27,10 @@ import {
   getBookingPaymentDetails,
   initiatePayment,
   simulatePaymentAttempt,
+  verifyPaymentAttempt,
 } from '../api/paymentApi'
 import MockPaymentModal, { MockQrSvg } from '../components/MockPaymentModal'
+import QrCodeImage from '../../../components/ui/QrCode'
 import { restoreCheckout, submitBooking } from '../utils/checkoutFlow'
 import {
   clearCheckout,
@@ -38,6 +40,7 @@ import {
 import {
   buildPaymentAttemptKey,
   getPaymentMethodOption,
+  isBankTransferAttempt,
   PAYMENT_METHOD_OPTIONS,
   PAYMENT_METHODS,
 } from '../utils/mockQrCode'
@@ -76,8 +79,10 @@ function CheckoutSession() {
   const [attemptSeq, setAttemptSeq] = useState(1)
   const [modalOpen, setModalOpen] = useState(false)
   const [selectedMethod, setSelectedMethod] = useState(
-    PAYMENT_METHODS.MOMO_WALLET,
+    PAYMENT_METHODS.BANK_TRANSFER,
   )
+  const [verifying, setVerifying] = useState(false)
+  const verifyingRef = useRef(false)
   const [contactDetails, setContactDetails] = useState(() => ({
     fullName:
       account?.profile?.fullName ||
@@ -223,6 +228,33 @@ function CheckoutSession() {
     }
   }
 
+  // Shared by the simulation button and the payOS check: apply the server result and leave
+  // checkout once the payment is settled (confirmed or late-payment review).
+  const applyPaymentResult = (result) => {
+    setPaymentState(result.payment)
+    setActiveAttempt(result.activeAttempt)
+    if (result.booking) {
+      setBooking((prev) => ({
+        ...(prev || {}),
+        ...result.booking,
+      }))
+    }
+
+    const settled =
+      (result.booking?.status === 'CONFIRMED' &&
+        result.payment?.status === 'PAID') ||
+      result.outcome === 'EXPIRED_REVIEW_REQUIRED' ||
+      result.payment?.status === 'REVIEW_REQUIRED'
+    if (settled) {
+      setModalOpen(false)
+      clearCheckout(sessionStorage, account.id, showtimeId)
+      navigate(
+        `/booking/${showtimeId}/confirmation/${result.booking.bookingId}`,
+        { replace: true },
+      )
+    }
+  }
+
   const handleConfirmMockPaid = async () => {
     if (busyRef.current || !paymentState || !activeAttempt) return
     busyRef.current = true
@@ -236,45 +268,34 @@ function CheckoutSession() {
         outcome: 'SUCCESS',
         notificationKey: `ui-confirm:${activeAttempt.attemptId}`,
       })
-
-      setPaymentState(result.payment)
-      setActiveAttempt(result.activeAttempt)
-      if (result.booking) {
-        setBooking((prev) => ({
-          ...(prev || {}),
-          ...result.booking,
-        }))
-      }
-
-      if (
-        result.booking?.status === 'CONFIRMED' &&
-        result.payment?.status === 'PAID'
-      ) {
-        setModalOpen(false)
-        clearCheckout(sessionStorage, account.id, showtimeId)
-        navigate(
-          `/booking/${showtimeId}/confirmation/${result.booking.bookingId}`,
-          { replace: true },
-        )
-        return
-      }
-
-      if (
-        result.outcome === 'EXPIRED_REVIEW_REQUIRED' ||
-        result.payment?.status === 'REVIEW_REQUIRED'
-      ) {
-        setModalOpen(false)
-        clearCheckout(sessionStorage, account.id, showtimeId)
-        navigate(
-          `/booking/${showtimeId}/confirmation/${result.booking.bookingId}`,
-          { replace: true },
-        )
-      }
+      applyPaymentResult(result)
     } catch (error) {
       setModalError(messageFor(error))
     } finally {
       busyRef.current = false
       setBusy(false)
+    }
+  }
+
+  // payOS bank transfer: the server asks payOS and settles only on a verified PAID status.
+  // Silent calls come from the modal's polling and never surface transient errors.
+  const handleVerifyProvider = async ({ silent = false } = {}) => {
+    if (verifyingRef.current || busyRef.current || !paymentState || !activeAttempt) return
+    verifyingRef.current = true
+    setVerifying(true)
+    if (!silent) setModalError(null)
+
+    try {
+      const result = await verifyPaymentAttempt({
+        paymentId: paymentState.paymentId,
+        attemptId: activeAttempt.attemptId,
+      })
+      applyPaymentResult(result)
+    } catch (error) {
+      if (!silent) setModalError(messageFor(error))
+    } finally {
+      verifyingRef.current = false
+      setVerifying(false)
     }
   }
 
@@ -662,12 +683,12 @@ function CheckoutSession() {
                         Payment Method
                       </h2>
                       <p className="text-xs text-on-surface-variant">
-                        All methods run through F-Cinema Internal Mock Payment Gateway (No external API keys required)
+                        Bank transfer is a real VietQR payment through payOS. The other methods are demo-only (internal mock gateway).
                       </p>
                     </div>
                   </div>
                   <span className="rounded-full border border-secondary/30 bg-secondary/10 px-3 py-1 text-[10px] font-black uppercase tracking-wider text-secondary">
-                    Internal Mock Gateway
+                    payOS + Demo
                   </span>
                 </div>
 
@@ -731,18 +752,35 @@ function CheckoutSession() {
                         {selectedMethodMeta.gatewayTitle}
                       </div>
                       <p className="text-xs text-on-surface-variant">
-                        Click <strong className="text-white">Complete Payment</strong> in the Order Summary to generate your unique Mock QR Payment Attempt and confirm with{' '}
-                        <strong className="text-white">&ldquo;Simulate successful payment&rdquo;</strong>.
+                        {selectedMethod === PAYMENT_METHODS.BANK_TRANSFER ? (
+                          <>
+                            Click <strong className="text-white">Complete Payment</strong> to get a VietQR code for the exact amount, then scan it with your banking app. For demos you can still use{' '}
+                            <strong className="text-white">&ldquo;Simulate successful payment&rdquo;</strong>.
+                          </>
+                        ) : (
+                          <>
+                            Click <strong className="text-white">Complete Payment</strong> in the Order Summary to generate your unique Mock QR Payment Attempt and confirm with{' '}
+                            <strong className="text-white">&ldquo;Simulate successful payment&rdquo;</strong>.
+                          </>
+                        )}
                       </p>
                     </div>
                     {activeAttempt && (
                       <div className="flex items-center gap-3">
-                        <MockQrSvg
-                          payload={activeAttempt.qrPayload}
-                          size={72}
-                          badgeLabel={selectedMethodMeta.badge}
-                          ariaLabel="Active payment attempt QR preview"
-                        />
+                        {isBankTransferAttempt(activeAttempt) ? (
+                          <QrCodeImage
+                            value={activeAttempt.qrPayload}
+                            size={72}
+                            ariaLabel="Active bank transfer QR preview"
+                          />
+                        ) : (
+                          <MockQrSvg
+                            payload={activeAttempt.qrPayload}
+                            size={72}
+                            badgeLabel={selectedMethodMeta.badge}
+                            ariaLabel="Active payment attempt QR preview"
+                          />
+                        )}
                         <div className="text-xs">
                           <div className="font-mono font-bold text-white">
                             {activeAttempt.attemptId}
@@ -998,6 +1036,8 @@ function CheckoutSession() {
         onSimulateFailure={handleSimulateFailure}
         onCancelAttempt={handleCancelModalAttempt}
         onRetryNewAttempt={handleRetryNewAttempt}
+        onVerifyProvider={handleVerifyProvider}
+        verifying={verifying}
       />
     </main>
   )

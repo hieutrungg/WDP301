@@ -32,6 +32,15 @@ export const PAYMENT_INDEXES = Object.freeze([
     },
   },
   {
+    // Webhook lookup by payOS orderCode. Not unique: payOS itself rejects a reused orderCode,
+    // and a unique multikey index would collide on attempts that have no provider code.
+    fields: { "attempts.providerOrderCode": 1 },
+    options: {
+      sparse: true,
+      name: "idx_payment_provider_order_code",
+    },
+  },
+  {
     fields: { customerAccountId: 1, createdAt: -1 },
     options: {
       name: "idx_payment_customer_history",

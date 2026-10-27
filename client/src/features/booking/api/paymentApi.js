@@ -53,6 +53,14 @@ export async function simulatePaymentAttempt({
   return response.data.data
 }
 
+// Asks the server to check a payOS bank-transfer attempt; settles it when payOS reports PAID.
+export async function verifyPaymentAttempt({ paymentId, attemptId }) {
+  const response = await httpClient.post(
+    `/payments/${paymentId}/attempts/${attemptId}/verify`,
+  )
+  return response.data.data
+}
+
 export async function confirmCounterCash({ paymentId, attemptId, tenderedAmount }) {
   const response = await httpClient.post(
     `/payments/${paymentId}/attempts/${attemptId}/cash-confirm`,

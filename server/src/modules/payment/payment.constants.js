@@ -27,6 +27,7 @@ export const PAYMENT_ATTEMPT_STATUSES = Object.freeze(
 );
 
 export const PAYMENT_METHOD = Object.freeze({
+  BANK_TRANSFER: "BANK_TRANSFER",
   CASH: "CASH",
   MOMO_WALLET: "MOMO_WALLET",
   VNPAY_QR: "VNPAY_QR",
@@ -40,7 +41,21 @@ export const PAYMENT_METHOD_VALUES = Object.freeze(
 );
 export const PAYMENT_ACCEPTED_METHOD_VALUES = Object.freeze(Object.values(PAYMENT_METHOD));
 
+export const PAYMENT_PROVIDER = Object.freeze({
+  MOCK: "INTERNAL_MOCK_GATEWAY",
+  PAYOS: "PAYOS",
+});
+
 export const PAYMENT_METHOD_META = Object.freeze({
+  [PAYMENT_METHOD.BANK_TRANSFER]: Object.freeze({
+    id: PAYMENT_METHOD.BANK_TRANSFER,
+    label: "Bank transfer (VietQR)",
+    gatewayName: "payOS — VietQR bank transfer",
+    subtitle: "Scan with any Vietnamese banking app",
+    badge: "QR",
+    prefix: "PAYOS",
+    provider: "PAYOS",
+  }),
   [PAYMENT_METHOD.CASH]: Object.freeze({
     id: PAYMENT_METHOD.CASH,
     label: "Cash at counter",
@@ -102,6 +117,8 @@ export const PAYMENT_SIMULATION_OUTCOME_VALUES = PAYMENT_OUTCOMES;
 
 export const PAYMENT_RECONCILIATION_REASON = Object.freeze({
   LATE_PAYMENT_AFTER_EXPIRY: "LATE_PAYMENT_AFTER_EXPIRY",
+  // A second real transfer arrived after another attempt had already settled the booking.
+  DUPLICATE_PROVIDER_PAYMENT: "DUPLICATE_PROVIDER_PAYMENT",
 });
 
 export const PAYMENT_ERROR_CODE = Object.freeze({
@@ -124,6 +141,9 @@ export const PAYMENT_ERROR_CODE = Object.freeze({
   PAYMENT_AMOUNT_MISMATCH: "PAYMENT_AMOUNT_MISMATCH",
   AMOUNT_MISMATCH: "PAYMENT_AMOUNT_MISMATCH",
   MOCK_SIMULATION_DISABLED: "MOCK_SIMULATION_DISABLED",
+  PAYMENT_PROVIDER_UNAVAILABLE: "PAYMENT_PROVIDER_UNAVAILABLE",
+  PAYMENT_PROVIDER_ERROR: "PAYMENT_PROVIDER_ERROR",
+  INVALID_PROVIDER_SIGNATURE: "INVALID_PROVIDER_SIGNATURE",
 });
 
 export const PAYMENT_ERROR = PAYMENT_ERROR_CODE;

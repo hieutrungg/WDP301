@@ -8,7 +8,9 @@ import {
   getPaymentMethodOption,
   buildPaymentAttemptKey,
   generateDeterministicQrMatrix,
+  isBankTransferAttempt,
 } from '../src/features/booking/utils/mockQrCode.js'
+import QRCode from 'qrcode'
 
 const storageFixture = () => {
   const values = new Map()
@@ -93,11 +95,12 @@ test('Booking replay reads server status without locally confirming payment; mis
   })()
 })
 
-test('PAY-001 preserves all 4 C14 payment methods and generates deterministic mock QR matrices', () => {
-  assert.equal(PAYMENT_METHOD_OPTIONS.length, 4)
+test('PAY-001 lists payOS bank transfer first, keeps the 4 demo C14 methods and generates deterministic mock QR matrices', () => {
+  assert.equal(PAYMENT_METHOD_OPTIONS.length, 5)
   assert.deepEqual(
     PAYMENT_METHOD_OPTIONS.map((item) => item.id),
     [
+      PAYMENT_METHODS.BANK_TRANSFER,
       PAYMENT_METHODS.MOMO_WALLET,
       PAYMENT_METHODS.VNPAY_QR,
       PAYMENT_METHODS.CREDIT_DEBIT_CARD,
@@ -150,4 +153,16 @@ test('CON-102 confirmed stock/quote rejection enables editing; uncertain network
   }
   await assert.rejects(submitBooking({ attempt, hold, storage, createBooking: async () => { throw new Error('Network interrupted') } }))
   assert.equal(readCheckout(storage,attempt.ownerId,attempt.showtimeId).bookingRequested,true)
+})
+
+test('payOS bank-transfer attempts are recognised by provider and their VietQR payload encodes as a standard QR', () => {
+  assert.equal(isBankTransferAttempt({ provider: 'PAYOS' }), true)
+  assert.equal(isBankTransferAttempt({ provider: 'INTERNAL_MOCK_GATEWAY' }), false)
+  assert.equal(isBankTransferAttempt(null), false)
+  // Shape of a payOS VietQR (EMVCo) string: encodable by the same library the QrCode component uses.
+  const vietQr = '00020101021238570010A000000727012700069704220113VQRQ00000000208QRIBFTTA5303704540420005802VN62130809FC12345676304ABCD'
+  const qr = QRCode.create(vietQr, { errorCorrectionLevel: 'M' })
+  assert.ok(qr.modules.size >= 25)
+  // Finder pattern corner is dark in every standard QR.
+  assert.equal(Boolean(qr.modules.get(0, 0)), true)
 })

@@ -32,6 +32,14 @@ export const createPaymentRepository = ({
       .exec();
   },
 
+  findByProviderOrderCode(providerOrderCode, session) {
+    return paymentModel
+      .findOne({ "attempts.providerOrderCode": providerOrderCode })
+      .session(session ?? null)
+      .lean()
+      .exec();
+  },
+
   findByAttemptIdempotencyKey(idempotencyKey, session) {
     return paymentModel
       .findOne({ "attempts.idempotencyKey": idempotencyKey })

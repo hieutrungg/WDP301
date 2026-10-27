@@ -40,7 +40,7 @@ Refund and check-in modules are not wired by this task (other owners).
 
 - C15 `BookingConfirmationPage`: the demo preview stub is replaced by the real tickets (`GET /api/tickets/bookings/:bookingId`, fetched only once the details say `CONFIRMED` + `PAID`), with loading/error/issuing states. There is one row per seat linking to C17, plus an "Open E-Ticket" action.
 - C17 `/tickets/:ticketId` (`features/ticket/pages/ETicketPage.jsx`): fullscreen, outside the site shell, behind `ProtectedRoute`. It shows QR, ticket code, status, movie, age rating, cinema, room, date `dd/MM/yyyy` and 24-hour time (Asia/Ho_Chi_Minh, NFR 4.2.1), seat and type, with previous/next seat navigation. It has loading/error states. For `USED`/`INVALIDATED` there is no QR and the status is shown instead (UC22, BR-40). C15 uses the same date format and shows MSG19.
-- QR rendering reuses the existing `MockQrSvg` drawing from the real payload. It is **not a standards-compliant scannable QR**. A real QR needs a library (e.g. `qrcode`), and a `package.json` change needs owner approval. The ticket code is shown for manual entry.
+- QR is rendered by the shared `client/src/components/ui/QrCode.jsx` (standards-compliant, scannable; `qrcode` library approved 2026-10-27). The ticket code is also shown for manual entry.
 
 ## Changed files
 
