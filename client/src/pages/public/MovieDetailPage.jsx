@@ -11,6 +11,7 @@ import ErrorState from "../../components/common/ErrorState";
 import TrailerPlayerButton from "../../features/movie-showtime/components/TrailerPlayerButton";
 import { useMovie } from "../../features/movie-showtime/hooks/useMovie";
 import { buildMovieShowtimesPath } from "../../features/movie-showtime/utils/movieNavigation";
+import MovieReviews from "../../features/movie-showtime/components/MovieReviews";
 
 const releaseDateFormatter = new Intl.DateTimeFormat("en-GB", {
   day: "2-digit",
@@ -223,6 +224,7 @@ function MovieDetailPage() {
           </dl>
         </aside>
       </section>
+      <MovieReviews key={movie.id} movieId={movie.id} />
     </article>
   );
 }
