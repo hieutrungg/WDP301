@@ -7,6 +7,7 @@ import {
   BOOKING_STATUS,
 } from "./booking.constants.js";
 import { bookingRepository } from "./booking.repository.js";
+import { bookingPricingDto, assertVoucherBookingSnapshot } from "./booking-voucher.service.js";
 
 const error = (status, message, code) => new AppError(status, message, [], code);
 const objectIdString = (value) => value?.toString?.() ?? String(value);
@@ -42,6 +43,7 @@ const validatePriceSnapshot = (hold) => {
 };
 
 const serializeBooking = (booking, idempotent = false) => ({
+  ...bookingPricingDto(booking),
   bookingId: objectIdString(booking._id),
   status: booking.status,
   payableReference: booking.payableReference,
@@ -52,6 +54,7 @@ const serializeBooking = (booking, idempotent = false) => ({
 });
 
 const serializeDetailedBooking = (booking, { seatDetails = [] } = {}) => ({
+  ...bookingPricingDto(booking),
   bookingId: objectIdString(booking._id),
   bookingCode: booking.bookingCode,
   payableReference: booking.payableReference,
@@ -81,6 +84,7 @@ export const createBookingService = ({
   repository = bookingRepository,
   seatHoldPort,
   concessionPort,
+  promotionPort,
   showtimeReader,
   roomLayoutReader,
   clock = () => new Date(),
@@ -244,6 +248,10 @@ export const createBookingService = ({
     if (booking.status !== BOOKING_STATUS.PENDING_PAYMENT) throw transitionConflict();
     const hold = await seatHoldPort.expireHoldForBooking({ holdId: booking.holdId, now, session });
     if (hold?.status === "CONSUMED") throw transitionConflict();
+    if (booking.voucherSnapshot) {
+      if (!promotionPort) throw new TypeError("Promotion lifecycle port is required");
+      await promotionPort.releaseForClosedBooking({ reservationId: booking.voucherSnapshot.reservationId, now, session });
+    }
     if (booking.concessionFingerprint) {
       if (!concessionPort) throw new TypeError("Concession lifecycle port is required");
       await concessionPort.release({ bookingId: booking._id, now, session });
@@ -288,6 +296,7 @@ export const createBookingService = ({
       const booking = await load(session);
       if (booking.status === BOOKING_STATUS.CONFIRMED) return alreadyConfirmed(booking);
       if (booking.status === BOOKING_STATUS.EXPIRED) return expiredResult(booking);
+      assertVoucherBookingSnapshot(booking);
       if (
         booking.status !== BOOKING_STATUS.PENDING_PAYMENT ||
         !Number.isFinite(new Date(booking.expiresAt).getTime())
@@ -308,6 +317,10 @@ export const createBookingService = ({
       if (booking.concessionFingerprint) {
         if (!concessionPort) throw new TypeError("Concession lifecycle port is required");
         if (!await concessionPort.consume({ bookingId: booking._id, now: verifiedAt, session })) throw new HoldConsumptionRejected();
+      }
+      if (booking.voucherSnapshot) {
+        if (!promotionPort) throw new TypeError("Promotion lifecycle port is required");
+        if (!await promotionPort.consumeForConfirmedBooking({ bookingId: booking._id, reservationId: booking.voucherSnapshot.reservationId, paymentId, verifiedAt, session })) throw new HoldConsumptionRejected();
       }
       const confirmed = await repository.markConfirmed(
         { bookingId: booking._id, paymentId, confirmedAt: verifiedAt },

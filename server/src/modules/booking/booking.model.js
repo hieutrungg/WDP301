@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 import { BOOKING_STATUS, BOOKING_STATUSES } from "./booking.constants.js";
 import { BOOKING_INDEXES } from "./booking.indexes.js";
+import { voucherSnapshotSchema } from "../promotion/promotion.contract.js";
 
 const integerMoney = {
   type: Number,
@@ -65,6 +66,10 @@ const bookingSchema = new mongoose.Schema(
     concessionFingerprint: String,
     discountAmount: { ...integerMoney, default: 0 },
     totalAmount: integerMoney,
+    voucherId: { type: mongoose.Schema.Types.ObjectId, ref: "Voucher" },
+    voucherSnapshot: { type: voucherSnapshotSchema, default: undefined },
+    pricingVersion: { type: Number, min: 0, validate: Number.isSafeInteger },
+    pricingLockedAt: Date,
     status: {
       type: String,
       enum: BOOKING_STATUSES,

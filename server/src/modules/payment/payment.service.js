@@ -18,6 +18,7 @@ import {
 import { createMockPaymentGateway } from "./mock-payment-gateway.js";
 import { PAYOS_LINK_STATUS } from "./payos-gateway.js";
 import { summarizeTicketIssuance } from "../ticket/ticket.service.js";
+import { bookingPricingDto } from "../booking/booking-voucher.service.js";
 
 const paymentError = (status, message, code) =>
   new AppError(status, message, [], code);
@@ -103,6 +104,7 @@ const toBookingSummary = (booking) => {
 
   return {
     bookingId: String(booking._id || booking.bookingId),
+    ...bookingPricingDto(booking),
     bookingCode: booking.bookingCode || null,
     holdId: String(booking.holdId),
     showtimeId: String(booking.showtimeId),
@@ -261,10 +263,12 @@ export const createPaymentService = ({
         );
       }
 
-      const booking = await bookingService.getBookingForPayment({
+      let booking = await bookingService.getBookingForPayment({
         bookingId,
         ownerId,
       });
+      if (bookingService.lockPricingForPayment) booking = await bookingService.lockPricingForPayment({ bookingId, ownerId });
+      else if (booking.voucherSnapshot) throw new TypeError("Booking pricing lock is required for voucher payments");
 
       if (
         amount !== undefined &&
@@ -304,6 +308,10 @@ export const createPaymentService = ({
             );
           }
 
+          if (existingByKey.amount !== booking.totalAmount || (existingByKey.pricingVersion ?? 0) !== (booking.pricingVersion ?? 0)) {
+            throw paymentError(409, "Stored payment does not match the frozen booking price. Contact support.", PAYMENT_ERROR_CODE.PAYMENT_AMOUNT_MISMATCH);
+          }
+
           return {
             idempotent: true,
             booking: toBookingSummary(booking),
@@ -313,6 +321,9 @@ export const createPaymentService = ({
         }
 
         let payment = await paymentRepository.findByBookingId(booking._id);
+        if (payment && (payment.amount !== booking.totalAmount || (payment.pricingVersion ?? 0) !== (booking.pricingVersion ?? 0))) {
+          throw paymentError(409, "Stored payment does not match the frozen booking price. Contact support.", PAYMENT_ERROR_CODE.PAYMENT_AMOUNT_MISMATCH);
+        }
 
         if (
           payment?.status === PAYMENT_STATUS.PAID ||
@@ -373,6 +384,7 @@ export const createPaymentService = ({
             customerAccountId: booking.customerAccountId,
             method,
             amount: booking.totalAmount,
+            pricingVersion: booking.pricingVersion ?? 0,
             currency: PAYMENT_CURRENCY,
             status: PAYMENT_STATUS.PENDING,
             settlementAttemptId: null,

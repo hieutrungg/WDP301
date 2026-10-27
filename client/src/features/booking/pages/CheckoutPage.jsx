@@ -21,6 +21,8 @@ import { useSeatAvailability } from '../../seat-selection/hooks/useSeatAvailabil
 import { formatSeatMoney } from '../../seat-selection/utils/seatPricing'
 import { getApiErrorMessage } from '../../../lib/api/apiError'
 import ConcessionOrderSummary from '../components/ConcessionOrderSummary'
+import CheckoutVoucher from '../../promotions/components/CheckoutVoucher'
+import { applyVoucher, removeVoucher } from '../../promotions/api/promotionApi'
 import { cancelCheckout, createPendingBooking } from '../api/bookingApi'
 import {
   cancelPaymentAttempt,
@@ -98,6 +100,7 @@ function CheckoutSession() {
   const [modalError, setModalError] = useState(null)
   const [busy, setBusy] = useState(false)
   const busyRef = useRef(false)
+  const voucherRequest = useRef(null)
   const [requested, setRequested] = useState(Boolean(attempt?.bookingRequested))
 
   const availability = useSeatAvailability(showtimeId)
@@ -165,18 +168,26 @@ function CheckoutSession() {
         attemptSequence: sequenceToUse,
       }))
 
-    const initiated = await initiatePayment({
+    let initiated
+    try { initiated = await initiatePayment({
       bookingId: targetBooking.bookingId,
       method: methodToUse,
       idempotencyKey,
-      amount: targetBooking.amount ?? targetBooking.totalAmount,
+      amount: details.booking?.amount ?? targetBooking.amount ?? targetBooking.totalAmount,
       contactDetails: {
         fullName: contactDetails.fullName,
         email: contactDetails.email,
         phone: contactDetails.phone,
       },
-    })
+    }) } catch (error) {
+      try {
+        const latest = await getBookingPaymentDetails(targetBooking.bookingId)
+        setBooking(latest.booking); setPaymentState(latest.payment)
+      } catch { /* Preserve the original error; a later retry reloads the server lock. */ }
+      throw error
+    }
 
+    setBooking(prev => ({ ...prev, ...initiated.booking, pricingLocked: true }))
     setPaymentState(initiated.payment)
     setActiveAttempt(initiated.activeAttempt)
     setModalError(null)
@@ -389,6 +400,38 @@ function CheckoutSession() {
       busyRef.current = false
       setBusy(false)
     }
+  }
+
+  const changeVoucher = async code => {
+    if (busyRef.current || !hold || expired) return
+    busyRef.current = true; setBusy(true)
+    let target = currentBooking
+    try {
+      if (!target) {
+        setRequested(true)
+        target = await submitBooking({ attempt, hold, storage: sessionStorage, createBooking: createPendingBooking })
+        setBooking(target)
+      }
+      const signature = `${target.bookingId}:${code ?? '<REMOVE>'}`
+      if (voucherRequest.current?.signature !== signature) voucherRequest.current = { signature, input: { requestKey: crypto.randomUUID(), expectedPricingVersion: target.pricingVersion ?? 0, ...(code !== null ? { code } : {}) } }
+      const mutation = code === null ? removeVoucher : applyVoucher
+      const applied = await mutation(target.bookingId, voucherRequest.current.input)
+      if (!applied.idempotent) setBooking(previous => (previous?.pricingVersion ?? 0) > applied.pricingVersion ? previous : { ...target, ...previous, ...applied })
+      voucherRequest.current = null
+      try {
+        const latest = await getBookingPaymentDetails(target.bookingId)
+        setBooking(latest.booking); setPaymentState(latest.payment)
+      } catch (error) {
+        // Replayed command results are historical; only a fresh read can restore current state.
+        if (applied.idempotent) throw error
+      }
+    } catch (e) {
+      if (target) {
+        try { const latest = await getBookingPaymentDetails(target.bookingId); setBooking(latest.booking); setPaymentState(latest.payment) } catch { /* Keep input/key for a safe retry after uncertain response. */ }
+      }
+      if (e.response && e.response.status < 500) voucherRequest.current = null
+      throw e
+    } finally { busyRef.current = false; setBusy(false) }
   }
 
   if (!attempt) {
@@ -670,6 +713,7 @@ function CheckoutSession() {
               </div>
 
               <ConcessionOrderSummary order={foodOrder ? { ...foodOrder, totalAmount: foodAmount } : null} paid={confirmed} />
+              {account.roles?.some(role => role.name === 'CUSTOMER') && <CheckoutVoucher key={attempt.checkoutKey} booking={currentBooking} busy={busy} disabled={expired || confirmed || checkout.isFetching} onChange={changeVoucher} />}
               {editableFood && <Link to={`/booking/${showtimeId}/concessions`} className="inline-block text-sm text-secondary underline">Edit food selection or skip</Link>}
               {/* 03. Payment Method (All 4 C14 Payment Methods) */}
               <div className="rounded-2xl border border-white/10 bg-surface-container-low p-6">
@@ -913,7 +957,7 @@ function CheckoutSession() {
                   </div>
                   <div className="flex justify-between text-on-surface-variant">
                     <span>Voucher / Discount</span>
-                    <span className="font-mono text-emerald-400">0 ₫</span>
+                    <span className="font-mono text-emerald-400">−{formatSeatMoney(currentBooking?.discountAmount ?? 0)}</span>
                   </div>
                   <div className="flex justify-between text-on-surface-variant">
                     <span>Selected Gateway</span>

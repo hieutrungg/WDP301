@@ -54,7 +54,7 @@ const navItems = [
     to: "/manager/inventory",
     permission: "inventory.view",
   },
-  { label: "Promotions", icon: TicketPercent },
+  { label: "Promotions", icon: TicketPercent, to: "/manager/promotions" },
   { label: "Refunds", icon: ReceiptText, to: "/manager/refunds" },
   {
     label: "Staff Shifts",
@@ -147,6 +147,7 @@ function ManagerLayout() {
   const showtimePage = location.pathname.startsWith("/manager/showtimes");
   const inventoryPage = location.pathname.startsWith("/manager/inventory");
   let breadcrumb = ["Auditorium settings", "Configure room seat maps"];
+  if (location.pathname.startsWith("/manager/promotions")) breadcrumb = ["Commercial operations", "Promotion management"];
   if (showtimePage)
     breadcrumb = ["Schedule & programming", "Showtime management"];
   if (inventoryPage)

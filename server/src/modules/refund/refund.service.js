@@ -32,7 +32,12 @@ export const createRefundService = ({ repository, provider, clock = () => new Da
     if (await repository.findByBookingId(bookingId, REFUND_REQUEST_TYPE.CUSTOMER_REQUEST)) throw fail(409, "A refund request already exists for this booking", REFUND_ERROR.ALREADY_REQUESTED);
 
     const fulfillmentSnapshot = !data.order ? "NONE" : data.order.pickupStatus === "FULFILLED" ? "FULFILLED" : "NOT_FULFILLED";
-    const ticketAmount = data.booking.subtotal;
+    const discount = data.booking.discountAmount ?? 0;
+    const ticketAmount = data.booking.subtotal - discount;
+    const fullFoodAmount = data.order?.totalAmount ?? 0;
+    if (![data.booking.subtotal, discount, ticketAmount, fullFoodAmount, data.payment.amount].every(n => Number.isSafeInteger(n) && n >= 0) ||
+        ticketAmount + fullFoodAmount !== data.payment.amount ||
+        (discount > 0 && !data.booking.voucherSnapshot)) throw fail(409, "Booking/payment amounts require review before refund");
     const concessionAmount = fulfillmentSnapshot === "NOT_FULFILLED" ? (data.order?.totalAmount ?? 0) : 0;
     const refundAmount = ticketAmount + concessionAmount;
     const created = await repository.create({
