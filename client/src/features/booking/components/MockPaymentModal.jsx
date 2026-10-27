@@ -1,18 +1,37 @@
+import { useEffect, useRef } from 'react'
 import {
   AlertTriangle,
   CheckCircle2,
   Clock3,
+  ExternalLink,
+  Landmark,
   LoaderCircle,
   QrCode,
   RefreshCcw,
   ShieldAlert,
   X,
 } from 'lucide-react'
+import QrCodeImage from '../../../components/ui/QrCode'
 import { formatSeatMoney } from '../../seat-selection/utils/seatPricing'
 import {
   generateDeterministicQrMatrix,
   getPaymentMethodOption,
+  isBankTransferAttempt,
 } from '../utils/mockQrCode'
+
+// How often an open bank-transfer modal asks the server to check payOS.
+const PROVIDER_POLL_MS = 4000
+
+const BANK_NAMES = Object.freeze({
+  970422: 'MB Bank',
+  970436: 'Vietcombank',
+  970415: 'VietinBank',
+  970418: 'BIDV',
+  970407: 'Techcombank',
+  970416: 'ACB',
+  970432: 'VPBank',
+  970423: 'TPBank',
+})
 
 // SRS 5.3 messages for the UC30 payment states.
 const MSG14_SEAT_HOLD_EXPIRED = 'Your seat hold has expired. Please select your seats again.'
@@ -74,13 +93,38 @@ function MockPaymentModal({
   onSimulateFailure,
   onCancelAttempt,
   onRetryNewAttempt,
+  onVerifyProvider,
+  verifying = false,
 }) {
+  const isBankTransfer = isBankTransferAttempt(activeAttempt)
+  const isBookingExpired =
+    booking?.status === 'EXPIRED' || payment?.status === 'REVIEW_REQUIRED'
+  const shouldPoll =
+    Boolean(open && payment) &&
+    isBankTransfer &&
+    activeAttempt?.status === 'PENDING' &&
+    !isBookingExpired
+
+  // Keep the latest callback without restarting the interval on every parent re-render.
+  const verifyRef = useRef(onVerifyProvider)
+  useEffect(() => {
+    verifyRef.current = onVerifyProvider
+  })
+  useEffect(() => {
+    if (!shouldPoll) return undefined
+    const timer = window.setInterval(
+      () => verifyRef.current?.({ silent: true }),
+      PROVIDER_POLL_MS,
+    )
+    return () => window.clearInterval(timer)
+  }, [shouldPoll, activeAttempt?.attemptId])
+
   if (!open || !payment || !activeAttempt) return null
 
   const methodOption = getPaymentMethodOption(activeAttempt.method)
   const isAttemptFailed = activeAttempt.status === 'FAILED'
-  const isBookingExpired =
-    booking?.status === 'EXPIRED' || payment?.status === 'REVIEW_REQUIRED'
+  const bank = activeAttempt.instruction?.bankAccount
+  const checkoutUrl = activeAttempt.instruction?.checkoutUrl
   const minutes = String(Math.floor(remainingSeconds / 60)).padStart(2, '0')
   const seconds = String(remainingSeconds % 60).padStart(2, '0')
 
@@ -94,16 +138,23 @@ function MockPaymentModal({
       <div className="relative max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-white/15 bg-[#1b1b1d] p-6 text-on-surface shadow-2xl sm:p-8">
         <div className="flex flex-wrap items-start justify-between gap-4 border-b border-white/10 pb-5">
           <div>
-            <div className="inline-flex items-center gap-2 rounded-full border border-secondary/40 bg-secondary/15 px-3 py-1 text-[11px] font-black uppercase tracking-widest text-secondary">
-              <QrCode className="size-3.5" />
-              {activeAttempt.instruction?.disclaimer ||
-                'DEMO PAYMENT — NOT A REAL TRANSACTION'}
-            </div>
+            {isBankTransfer ? (
+              <div className="inline-flex items-center gap-2 rounded-full border border-emerald-500/40 bg-emerald-500/15 px-3 py-1 text-[11px] font-black uppercase tracking-widest text-emerald-300">
+                <Landmark className="size-3.5" />
+                Real bank transfer • payOS
+              </div>
+            ) : (
+              <div className="inline-flex items-center gap-2 rounded-full border border-secondary/40 bg-secondary/15 px-3 py-1 text-[11px] font-black uppercase tracking-widest text-secondary">
+                <QrCode className="size-3.5" />
+                {activeAttempt.instruction?.disclaimer ||
+                  'DEMO PAYMENT — NOT A REAL TRANSACTION'}
+              </div>
+            )}
             <h2
               id="mock-payment-modal-title"
               className="mt-3 font-heading text-2xl font-black tracking-tight text-white"
             >
-              F-Cinema Mock QR Checkout
+              {isBankTransfer ? 'F-Cinema Bank Transfer' : 'F-Cinema Mock QR Checkout'}
             </h2>
             <p className="mt-1 text-xs text-on-surface-variant">
               {methodOption.gatewayTitle} • Attempt #{activeAttempt.attemptNumber}
@@ -191,18 +242,46 @@ function MockPaymentModal({
 
         <div className="mt-6 grid gap-6 md:grid-cols-[240px_minmax(0,1fr)] md:items-center">
           <div className="flex flex-col items-center justify-center rounded-2xl border border-white/10 bg-[#131315] p-5 text-center">
-            <MockQrSvg
-              payload={activeAttempt.qrPayload}
-              badgeLabel={methodOption.badge}
-              ariaLabel={`Mock QR for ${methodOption.label} attempt ${activeAttempt.attemptId}`}
-            />
-            <span className="mt-3 rounded-full bg-white/5 px-3 py-1 font-mono text-[10px] text-on-surface-variant">
+            {isBankTransfer ? (
+              <QrCodeImage
+                value={activeAttempt.qrPayload}
+                size={200}
+                label="VietQR"
+                ariaLabel={`VietQR bank transfer for ${formatSeatMoney(activeAttempt.amount)}`}
+              />
+            ) : (
+              <MockQrSvg
+                payload={activeAttempt.qrPayload}
+                badgeLabel={methodOption.badge}
+                ariaLabel={`Mock QR for ${methodOption.label} attempt ${activeAttempt.attemptId}`}
+              />
+            )}
+            <span className="mt-4 rounded-full bg-white/5 px-3 py-1 font-mono text-[10px] text-on-surface-variant">
               {activeAttempt.gatewayTransactionRef}
             </span>
-            <p className="mt-2 text-[11px] leading-relaxed text-on-surface-variant">
-              Use the mock action{' '}
-              <strong className="text-white">&ldquo;Simulate successful payment&rdquo;</strong> below to request payment verification.
-            </p>
+            {isBankTransfer ? (
+              <>
+                <p className="mt-2 text-[11px] leading-relaxed text-on-surface-variant">
+                  Scan with your banking app. This page confirms automatically when payOS receives the transfer.
+                </p>
+                {checkoutUrl && (
+                  <a
+                    href={checkoutUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-2 inline-flex items-center gap-1 text-[11px] font-bold text-secondary underline"
+                  >
+                    Open payOS payment page
+                    <ExternalLink className="size-3" />
+                  </a>
+                )}
+              </>
+            ) : (
+              <p className="mt-2 text-[11px] leading-relaxed text-on-surface-variant">
+                Use the mock action{' '}
+                <strong className="text-white">&ldquo;Simulate successful payment&rdquo;</strong> below to request payment verification.
+              </p>
+            )}
           </div>
 
           <div className="space-y-4">
@@ -222,6 +301,30 @@ function MockPaymentModal({
               </div>
 
               <div className="mt-3 space-y-2.5 text-xs">
+                {isBankTransfer && bank && (
+                  <>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-on-surface-variant">Bank</span>
+                      <span className="font-bold text-white">
+                        {BANK_NAMES[bank.bin] || `BIN ${bank.bin}`}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-on-surface-variant">Account number</span>
+                      <span className="font-mono font-bold text-white">{bank.accountNumber}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-on-surface-variant">Account name</span>
+                      <span className="text-right font-bold text-white">{bank.accountName}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-on-surface-variant">Transfer content</span>
+                      <span className="rounded bg-emerald-500/15 px-2 py-0.5 font-mono font-bold text-emerald-300">
+                        {activeAttempt.instruction?.transferContent}
+                      </span>
+                    </div>
+                  </>
+                )}
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-on-surface-variant">Booking Reference</span>
                   <span className="font-mono font-bold text-white">
@@ -253,7 +356,7 @@ function MockPaymentModal({
 
             <div className="rounded-xl border border-white/5 bg-white/[0.02] p-4">
               <p className="text-[11px] font-bold uppercase tracking-widest text-secondary">
-                Mock payment instructions
+                {isBankTransfer ? 'How to pay' : 'Mock payment instructions'}
               </p>
               <ol className="mt-2 list-inside list-decimal space-y-1 text-xs text-on-surface-variant">
                 {methodOption.instructions.map((step) => (
@@ -261,6 +364,26 @@ function MockPaymentModal({
                 ))}
               </ol>
             </div>
+
+            {shouldPoll && (
+              <div
+                role="status"
+                className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs text-emerald-200"
+              >
+                <span className="inline-flex items-center gap-2">
+                  <LoaderCircle className="size-4 animate-spin" />
+                  Waiting for your transfer… checking with payOS
+                </span>
+                <button
+                  type="button"
+                  onClick={() => onVerifyProvider?.({ silent: false })}
+                  disabled={busy || verifying}
+                  className="rounded-lg border border-emerald-400/40 px-3 py-1.5 font-bold text-white disabled:opacity-45"
+                >
+                  {verifying ? 'Checking…' : "I've transferred — check now"}
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
@@ -307,6 +430,11 @@ function MockPaymentModal({
             </button>
           )}
         </div>
+        {isBankTransfer && activeAttempt.status === 'PENDING' && (
+          <p className="mt-3 text-right text-[10px] text-on-surface-variant">
+            Simulation buttons are for demos and debugging only: they settle locally without moving money and close the payOS link.
+          </p>
+        )}
       </div>
     </div>
   )

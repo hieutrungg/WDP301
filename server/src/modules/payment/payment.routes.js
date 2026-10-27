@@ -48,6 +48,12 @@ export const createPaymentRouter = (
 ) => {
   const router = Router();
 
+  // Public: payOS calls this server-to-server. The checksum signature is the authentication;
+  // settlement is then re-checked against the payOS API before any state changes.
+  if (controller.payosWebhook) {
+    router.post("/providers/payos/webhook", controller.payosWebhook);
+  }
+
   router.use(requireAuth);
 
   router.get("/me/bookings", controller.listMyBookings);
@@ -95,6 +101,18 @@ export const createPaymentRouter = (
     }),
     controller.cancelAttempt,
   );
+
+  // Owner asks the server to check a bank-transfer attempt with payOS (polling from C14/C15).
+  if (controller.verifyProviderAttempt) {
+    router.post(
+      "/:paymentId/attempts/:attemptId/verify",
+      validate(paymentAttemptParamsSchema, {
+        source: "params",
+        code: PAYMENT_ERROR_CODE.INVALID_PAYMENT,
+      }),
+      controller.verifyProviderAttempt,
+    );
+  }
 
   router.post(
     "/:paymentId/attempts/:attemptId/simulate",

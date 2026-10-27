@@ -60,7 +60,31 @@ export const createPaymentController = (service) => ({
         notificationKey: req.body?.notificationKey,
         failureReason: req.body?.failureReason,
         actorOwnerId: req.auth.accountId,
+        simulated: true,
       });
+      res.status(200).json({ success: true, data });
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  verifyProviderAttempt: async (req, res, next) => {
+    try {
+      const { paymentId, attemptId } = req.validated?.params ?? req.params;
+      const data = await service.verifyProviderAttempt({
+        paymentId,
+        attemptId,
+        ownerId: req.auth.accountId,
+      });
+      res.status(200).json({ success: true, data });
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  payosWebhook: async (req, res, next) => {
+    try {
+      const data = await service.handlePayosWebhook(req.body);
       res.status(200).json({ success: true, data });
     } catch (error) {
       next(error);

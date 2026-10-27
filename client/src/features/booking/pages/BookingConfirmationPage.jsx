@@ -23,7 +23,7 @@ import { Link, useParams } from 'react-router'
 import { getApiErrorMessage } from '../../../lib/api/apiError'
 import { formatSeatMoney } from '../../seat-selection/utils/seatPricing'
 import { getBookingPaymentDetails } from '../api/paymentApi'
-import { MockQrSvg } from '../components/MockPaymentModal'
+import QrCodeImage from '../../../components/ui/QrCode'
 import { getPaymentMethodOption } from '../utils/mockQrCode'
 import { getBookingTickets } from '../../ticket/api/ticketApi'
 import {
@@ -88,10 +88,10 @@ function IssuedTicketsStub({ ticketsQuery }) {
     <>
       <div className="my-5 flex flex-col items-center">
         {isTicketAdmissible(primary) ? (
-          <MockQrSvg
-            payload={primary.qrCode}
+          <QrCodeImage
+            value={primary.qrCode}
             size={168}
-            badgeLabel="E-TICKET"
+            label="E-TICKET"
             ariaLabel={`Admission QR for seat ${primary.seat.label}`}
           />
         ) : (

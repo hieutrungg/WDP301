@@ -47,6 +47,14 @@ const paymentAttemptSchema = new mongoose.Schema(
       enum: PAYMENT_ATTEMPT_STATUSES,
     },
     gatewayTransactionRef: { type: String, required: true, trim: true },
+    // payOS orderCode for BANK_TRANSFER attempts; absent for mock attempts.
+    providerOrderCode: {
+      type: Number,
+      validate: {
+        validator: (value) => value === undefined || Number.isSafeInteger(value),
+        message: "Provider order code must be a safe integer",
+      },
+    },
     qrPayload: { type: String, required: true },
     instruction: {
       type: mongoose.Schema.Types.Mixed,

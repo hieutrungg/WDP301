@@ -1,11 +1,30 @@
 export const PAYMENT_METHODS = Object.freeze({
+  BANK_TRANSFER: 'BANK_TRANSFER',
   MOMO_WALLET: 'MOMO_WALLET',
   VNPAY_QR: 'VNPAY_QR',
   CREDIT_DEBIT_CARD: 'CREDIT_DEBIT_CARD',
   ZALOPAY_APPLE_PAY: 'ZALOPAY_APPLE_PAY',
 })
 
+// The server reports `provider: 'PAYOS'` on attempts that go through real payOS bank transfer;
+// every other attempt is the internal mock gateway.
+export const isBankTransferAttempt = (attempt) => attempt?.provider === 'PAYOS'
+
 export const PAYMENT_METHOD_OPTIONS = Object.freeze([
+  {
+    id: PAYMENT_METHODS.BANK_TRANSFER,
+    label: 'Bank transfer (VietQR)',
+    subtitle: 'payOS • Any Vietnamese banking app',
+    gatewayTitle: 'payOS — VietQR Bank Transfer',
+    badge: 'QR',
+    badgeBg: 'bg-[#0A7C3E]',
+    badgeText: 'text-white',
+    instructions: [
+      'Open your banking app and scan the VietQR code.',
+      'Keep the exact amount and transfer content shown below.',
+      'The page confirms automatically once payOS reports the transfer.',
+    ],
+  },
   {
     id: PAYMENT_METHODS.MOMO_WALLET,
     label: 'MoMo E-Wallet',

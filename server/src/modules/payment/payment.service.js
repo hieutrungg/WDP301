@@ -10,11 +10,13 @@ import {
   PAYMENT_ERROR_CODE,
   PAYMENT_ACCEPTED_METHOD_VALUES,
   PAYMENT_MESSAGE,
+  PAYMENT_PROVIDER,
   PAYMENT_RECONCILIATION_REASON,
   PAYMENT_SIMULATION_OUTCOME,
   PAYMENT_STATUS,
 } from "./payment.constants.js";
 import { createMockPaymentGateway } from "./mock-payment-gateway.js";
+import { PAYOS_LINK_STATUS } from "./payos-gateway.js";
 import { summarizeTicketIssuance } from "../ticket/ticket.service.js";
 
 const paymentError = (status, message, code) =>
@@ -146,7 +148,25 @@ export const createPaymentService = ({
   gateway = createMockPaymentGateway(),
   ticketPort = null,
   now = () => new Date(),
+  clientUrl = () => process.env.CLIENT_URL || "http://localhost:5173",
+  providerCheckIntervalMs = 2000,
 }) => {
+  const isProviderAttempt = (attempt) => attempt?.provider === PAYMENT_PROVIDER.PAYOS;
+
+  // A provider link that can no longer settle locally (superseded, cancelled, simulated) is
+  // cancelled at payOS too, so the customer cannot pay it later. Best effort: payOS may already
+  // have expired or paid it, and that must not fail the local transition.
+  const releaseProviderAttempt = async (attempt, reason) => {
+    if (!isProviderAttempt(attempt) || typeof gateway.cancelAttempt !== "function") return;
+    try {
+      await gateway.cancelAttempt(attempt, reason);
+    } catch (error) {
+      console.error(`payOS link ${attempt.providerOrderCode} not cancelled:`, error.message);
+    }
+  };
+
+  const lastProviderCheck = new Map();
+
   // Payment is already settled when this runs, so an issuance failure must not turn the verified
   // payment into an error. The next read of the booking retries through resolveTicketIssuance.
   const issueTicketsAfterSettlement = async (payment) => {
@@ -381,7 +401,8 @@ export const createPaymentService = ({
 
         const attemptId = buildAttemptId(currentNow);
         const attemptNumber = priorAttempts.length + 1;
-        const instruction = gateway.createAttemptInstruction({
+        const baseUrl = String(clientUrl()).replace(/\/+$/, "");
+        const instruction = await gateway.createAttemptInstruction({
           paymentId: payment._id,
           attemptId,
           payableReference: booking.payableReference,
@@ -389,6 +410,9 @@ export const createPaymentService = ({
           amount: booking.totalAmount,
           currency: PAYMENT_CURRENCY,
           expiresAt: booking.expiresAt,
+          // payOS redirects: success lands on C15 (which re-verifies), cancel back on C14.
+          returnUrl: `${baseUrl}/bookings/${String(booking._id)}/confirmation`,
+          cancelUrl: `${baseUrl}/booking/${String(booking.showtimeId)}/checkout`,
         });
 
         const newAttempt = {
@@ -401,6 +425,9 @@ export const createPaymentService = ({
           currency: PAYMENT_CURRENCY,
           status: PAYMENT_ATTEMPT_STATUS.PENDING,
           gatewayTransactionRef: instruction.gatewayTransactionRef,
+          ...(instruction.providerOrderCode
+            ? { providerOrderCode: instruction.providerOrderCode }
+            : {}),
           qrPayload: instruction.qrPayload,
           instruction,
           failureReason: null,
@@ -424,6 +451,13 @@ export const createPaymentService = ({
           },
           attempts: nextAttempts,
         });
+
+        const superseded = (payment.attempts || []).filter(
+          (item) => item.status === PAYMENT_ATTEMPT_STATUS.PENDING,
+        );
+        for (const item of superseded) {
+          await releaseProviderAttempt(item, "SUPERSEDED_BY_NEW_ATTEMPT");
+        }
 
         return {
           idempotent: false,
@@ -487,6 +521,7 @@ export const createPaymentService = ({
           status: PAYMENT_STATUS.PENDING,
           attempts: updatedAttempts,
         });
+        await releaseProviderAttempt(attempt, updatedAttempt.failureReason);
 
         return {
           idempotent: false,
@@ -496,384 +531,630 @@ export const createPaymentService = ({
       });
     },
 
-    handlePaymentNotification: async ({
-      paymentId,
-      attemptId,
-      outcome,
-      notificationKey,
-      failureReason,
-      actorOwnerId,
-      requiredMethod,
-      tenderedAmount,
-    }) => {
-      const initialPayment = await paymentRepository.findById(paymentId);
-      ensurePaymentOwnership(initialPayment, actorOwnerId);
+    handlePaymentNotification: (command) => handlePaymentNotification(command),
+    verifyProviderAttempt: (command) => verifyProviderAttempt(command),
+    getBookingPaymentDetails: (query) => getBookingPaymentDetails(query),
+    listCustomerBookingPayments: (query) => listCustomerBookingPayments(query),
 
-      return withPaymentLock(initialPayment.bookingId, async () => {
-        const currentNow = now();
-        const payment = await paymentRepository.findById(paymentId);
-        ensurePaymentOwnership(payment, actorOwnerId);
+    // payOS webhook: the signature proves origin; settlement still goes through the same
+    // provider status check so webhook and polling share one path.
+    handlePayosWebhook: async (body) => {
+      const data = gateway.verifyProviderWebhook(body);
+      const orderCode = Number(data.orderCode);
+      const payment = Number.isSafeInteger(orderCode)
+        ? await paymentRepository.findByProviderOrderCode?.(orderCode)
+        : null;
+      // payOS sends a test event when the webhook URL is registered; acknowledge unknown codes.
+      if (!payment) return { acknowledged: true, matched: false };
+      const attempt = payment.attempts.find((item) => item.providerOrderCode === orderCode);
+      const result = await verifyProviderAttempt({
+        paymentId: payment._id,
+        attemptId: attempt.attemptId,
+        force: true,
+      });
+      return { acknowledged: true, matched: true, paymentStatus: result.payment?.status ?? null };
+    },
+  };
 
-        const attemptIndex = (payment.attempts || []).findIndex(
-          (item) => item.attemptId === attemptId,
+  async function verifyProviderAttempt({ paymentId, attemptId, ownerId, force = false }) {
+    const payment = await paymentRepository.findById(paymentId);
+    ensurePaymentOwnership(payment, ownerId);
+    const attempt = (payment.attempts || []).find((item) => item.attemptId === attemptId);
+    if (!attempt) {
+      throw paymentError(404, "Payment attempt not found", PAYMENT_ERROR_CODE.PAYMENT_ATTEMPT_NOT_FOUND);
+    }
+    if (!isProviderAttempt(attempt)) {
+      throw paymentError(409, "This payment attempt is not handled by payOS", PAYMENT_ERROR_CODE.INVALID_PAYMENT);
+    }
+
+    const current = async (providerStatus) => ({
+      providerStatus,
+      booking: toBookingSummary(
+        await bookingService.getBookingForPayment({
+          bookingId: payment.bookingId,
+          ownerId: payment.customerAccountId,
+        }),
+      ),
+      payment: toPaymentDto(payment),
+      activeAttempt: toAttemptDto(attempt),
+    });
+
+    // Settled by this attempt already: nothing to ask payOS.
+    if (attempt.status === PAYMENT_ATTEMPT_STATUS.SUCCEEDED || attempt.status === PAYMENT_ATTEMPT_STATUS.LATE_SUCCEEDED) {
+      return current(null);
+    }
+    // Polling guard so a tight client loop cannot hammer the provider.
+    const lastCheck = lastProviderCheck.get(attemptId) ?? 0;
+    if (!force && now().getTime() - lastCheck < providerCheckIntervalMs) {
+      return current(null);
+    }
+    lastProviderCheck.set(attemptId, now().getTime());
+
+    const status = await gateway.getAttemptStatus(attempt);
+    const orderCode = attempt.providerOrderCode;
+
+    if (status.status === PAYOS_LINK_STATUS.PAID) {
+      if (status.amountPaid < attempt.amount) {
+        // Never settle less than the authoritative booking amount; leave it for reconciliation.
+        console.error(`payOS order ${orderCode} paid ${status.amountPaid}, expected ${attempt.amount}`);
+        return current(status.status);
+      }
+      const result = await handlePaymentNotification({
+        paymentId: payment._id,
+        attemptId,
+        outcome: PAYMENT_SIMULATION_OUTCOME.SUCCESS,
+        notificationKey: `payos:${orderCode}:PAID`,
+        providerVerified: true,
+        providerEvidence: {
+          provider: PAYMENT_PROVIDER.PAYOS,
+          orderCode,
+          amountPaid: status.amountPaid,
+          transactions: status.transactions,
+          verifiedAt: now().toISOString(),
+        },
+      });
+      return { ...result, providerStatus: status.status };
+    }
+
+    if (attempt.status === PAYMENT_ATTEMPT_STATUS.PENDING) {
+      if (status.status === PAYOS_LINK_STATUS.CANCELLED) {
+        const result = await handlePaymentNotification({
+          paymentId: payment._id,
+          attemptId,
+          outcome: PAYMENT_SIMULATION_OUTCOME.FAILED,
+          notificationKey: `payos:${orderCode}:CANCELLED`,
+          failureReason: "PAYOS_LINK_CANCELLED",
+        });
+        return { ...result, providerStatus: status.status };
+      }
+      if (status.status === PAYOS_LINK_STATUS.EXPIRED) {
+        const result = await handlePaymentNotification({
+          paymentId: payment._id,
+          attemptId,
+          outcome: PAYMENT_SIMULATION_OUTCOME.EXPIRED,
+          notificationKey: `payos:${orderCode}:EXPIRED`,
+          failureReason: "PAYOS_LINK_EXPIRED",
+        });
+        return { ...result, providerStatus: status.status };
+      }
+    }
+
+    // PENDING / PROCESSING: still waiting for the bank transfer.
+    return current(status.status);
+  }
+
+  async function handlePaymentNotification({
+    paymentId,
+    attemptId,
+    outcome,
+    notificationKey,
+    failureReason,
+    actorOwnerId,
+    requiredMethod,
+    tenderedAmount,
+    simulated = false,
+    providerVerified = false,
+    providerEvidence = null,
+  }) {
+    const initialPayment = await paymentRepository.findById(paymentId);
+    ensurePaymentOwnership(initialPayment, actorOwnerId);
+
+    return withPaymentLock(initialPayment.bookingId, async () => {
+      const currentNow = now();
+      const payment = await paymentRepository.findById(paymentId);
+      ensurePaymentOwnership(payment, actorOwnerId);
+
+      const attemptIndex = (payment.attempts || []).findIndex(
+        (item) => item.attemptId === attemptId,
+      );
+      if (attemptIndex === -1) {
+        throw paymentError(
+          404,
+          "Payment attempt not found",
+          PAYMENT_ERROR_CODE.PAYMENT_ATTEMPT_NOT_FOUND,
         );
-        if (attemptIndex === -1) {
-          throw paymentError(
-            404,
-            "Payment attempt not found",
-            PAYMENT_ERROR_CODE.PAYMENT_ATTEMPT_NOT_FOUND,
-          );
-        }
+      }
 
-        const attempt = payment.attempts[attemptIndex];
-        if (requiredMethod && attempt.method !== requiredMethod) {
-          throw paymentError(409, "This payment attempt is not a counter cash payment", PAYMENT_ERROR_CODE.INVALID_PAYMENT);
-        }
-        if (requiredMethod === "CASH" && (!Number.isSafeInteger(tenderedAmount) || tenderedAmount < payment.amount)) {
-          throw paymentError(400, "Cash received is less than the amount due", PAYMENT_ERROR_CODE.PAYMENT_AMOUNT_MISMATCH);
-        }
-        const effectiveNotificationKey =
-          notificationKey || `${attemptId}:${outcome}`;
+      const attempt = payment.attempts[attemptIndex];
+      if (requiredMethod && attempt.method !== requiredMethod) {
+        throw paymentError(409, "This payment attempt is not a counter cash payment", PAYMENT_ERROR_CODE.INVALID_PAYMENT);
+      }
+      if (requiredMethod === "CASH" && (!Number.isSafeInteger(tenderedAmount) || tenderedAmount < payment.amount)) {
+        throw paymentError(400, "Cash received is less than the amount due", PAYMENT_ERROR_CODE.PAYMENT_AMOUNT_MISMATCH);
+      }
+      const effectiveNotificationKey =
+        notificationKey || `${attemptId}:${outcome}`;
 
-        const resolveCurrentBooking = async () =>
-          bookingService.getBookingForPayment({
-            bookingId: payment.bookingId,
-            ownerId: payment.customerAccountId,
-          });
+      const resolveCurrentBooking = async () =>
+        bookingService.getBookingForPayment({
+          bookingId: payment.bookingId,
+          ownerId: payment.customerAccountId,
+        });
 
-        if (
-          (payment.processedNotificationKeys || []).includes(
-            effectiveNotificationKey,
-          )
-        ) {
-          // A replayed callback creates no new tickets; it only completes an interrupted issuance.
-          await issueTicketsAfterSettlement(payment);
+      if (
+        (payment.processedNotificationKeys || []).includes(
+          effectiveNotificationKey,
+        )
+      ) {
+        // A replayed callback creates no new tickets; it only completes an interrupted issuance.
+        await issueTicketsAfterSettlement(payment);
+        const currentBooking = await resolveCurrentBooking();
+        const currentOutcome =
+          payment.status === PAYMENT_STATUS.PAID
+            ? BOOKING_CONFIRMATION_OUTCOME.CONFIRMED
+            : payment.status === PAYMENT_STATUS.REVIEW_REQUIRED
+              ? BOOKING_CONFIRMATION_OUTCOME.EXPIRED_REVIEW_REQUIRED
+              : outcome;
+
+        return {
+          idempotent: true,
+          duplicateNotification: true,
+          outcome: currentOutcome,
+          booking: toBookingSummary(currentBooking),
+          payment: toPaymentDto(payment),
+          activeAttempt: toAttemptDto(attempt),
+        };
+      }
+
+      if (outcome === PAYMENT_SIMULATION_OUTCOME.SUCCESS) {
+        if (payment.status === PAYMENT_STATUS.PAID) {
           const currentBooking = await resolveCurrentBooking();
-          const currentOutcome =
-            payment.status === PAYMENT_STATUS.PAID
-              ? BOOKING_CONFIRMATION_OUTCOME.CONFIRMED
-              : payment.status === PAYMENT_STATUS.REVIEW_REQUIRED
-                ? BOOKING_CONFIRMATION_OUTCOME.EXPIRED_REVIEW_REQUIRED
-                : outcome;
+          const nextKeys = Array.from(
+            new Set([
+              ...(payment.processedNotificationKeys || []),
+              effectiveNotificationKey,
+            ]),
+          );
+          // Real money arrived on a second provider link after another attempt already settled:
+          // keep the booking as is and flag the extra transfer for manual refund.
+          const isDuplicateProviderPayment =
+            providerVerified && payment.settlementAttemptId !== attempt.attemptId;
+          const savedPayment = await paymentRepository.saveState(payment._id, {
+            processedNotificationKeys: nextKeys,
+            ...(isDuplicateProviderPayment
+              ? {
+                  reconciliationReason:
+                    PAYMENT_RECONCILIATION_REASON.DUPLICATE_PROVIDER_PAYMENT,
+                  gatewayResponse: {
+                    ...(payment.gatewayResponse || {}),
+                    duplicateProviderPayments: [
+                      ...(payment.gatewayResponse?.duplicateProviderPayments || []),
+                      { attemptId, ...providerEvidence },
+                    ],
+                  },
+                }
+              : {}),
+          });
+          await issueTicketsAfterSettlement(savedPayment);
 
           return {
             idempotent: true,
             duplicateNotification: true,
-            outcome: currentOutcome,
+            alreadySettled: payment.settlementAttemptId !== attempt.attemptId,
+            outcome: BOOKING_CONFIRMATION_OUTCOME.CONFIRMED,
+            booking: toBookingSummary(currentBooking),
+            payment: toPaymentDto(savedPayment),
+            activeAttempt: toAttemptDto(
+              (savedPayment.attempts || []).find(
+                (item) => item.attemptId === attemptId,
+              ),
+            ),
+          };
+        }
+
+        if (
+          payment.status === PAYMENT_STATUS.REVIEW_REQUIRED &&
+          attempt.status === PAYMENT_ATTEMPT_STATUS.LATE_SUCCEEDED
+        ) {
+          const currentBooking = await resolveCurrentBooking();
+          return {
+            idempotent: true,
+            duplicateNotification: true,
+            outcome: BOOKING_CONFIRMATION_OUTCOME.EXPIRED_REVIEW_REQUIRED,
             booking: toBookingSummary(currentBooking),
             payment: toPaymentDto(payment),
             activeAttempt: toAttemptDto(attempt),
           };
         }
 
-        if (outcome === PAYMENT_SIMULATION_OUTCOME.SUCCESS) {
-          if (payment.status === PAYMENT_STATUS.PAID) {
-            const currentBooking = await resolveCurrentBooking();
-            const nextKeys = Array.from(
-              new Set([
-                ...(payment.processedNotificationKeys || []),
-                effectiveNotificationKey,
-              ]),
-            );
-            const savedPayment = await paymentRepository.saveState(payment._id, {
-              processedNotificationKeys: nextKeys,
-            });
-            await issueTicketsAfterSettlement(savedPayment);
-
-            return {
-              idempotent: true,
-              duplicateNotification: true,
-              alreadySettled: payment.settlementAttemptId !== attempt.attemptId,
-              outcome: BOOKING_CONFIRMATION_OUTCOME.CONFIRMED,
-              booking: toBookingSummary(currentBooking),
-              payment: toPaymentDto(savedPayment),
-              activeAttempt: toAttemptDto(
-                (savedPayment.attempts || []).find(
-                  (item) => item.attemptId === attemptId,
-                ),
-              ),
-            };
-          }
-
-          if (
-            payment.status === PAYMENT_STATUS.REVIEW_REQUIRED &&
-            attempt.status === PAYMENT_ATTEMPT_STATUS.LATE_SUCCEEDED
-          ) {
-            const currentBooking = await resolveCurrentBooking();
-            return {
-              idempotent: true,
-              duplicateNotification: true,
-              outcome: BOOKING_CONFIRMATION_OUTCOME.EXPIRED_REVIEW_REQUIRED,
-              booking: toBookingSummary(currentBooking),
-              payment: toPaymentDto(payment),
-              activeAttempt: toAttemptDto(attempt),
-            };
-          }
-
-          if (attempt.status !== PAYMENT_ATTEMPT_STATUS.PENDING) {
-            throw paymentError(
-              409,
-              "Only a pending payment attempt can be settled",
-              PAYMENT_ERROR_CODE.PAYMENT_ATTEMPT_NOT_PENDING,
-            );
-          }
-
-          const confirmation =
-            await bookingService.confirmBookingAfterVerifiedPayment({
-              bookingId: payment.bookingId,
-              paymentId: payment._id,
-              verifiedAt: currentNow,
-            });
-
-          const nextKeys = Array.from(
-            new Set([
-              ...(payment.processedNotificationKeys || []),
-              effectiveNotificationKey,
-            ]),
+        // A payOS-verified transfer is money already received, so it may settle an attempt that
+        // was locally cancelled, superseded or expired; the Booking port still decides between
+        // confirmation and late-payment review.
+        const reopenable =
+          providerVerified &&
+          [
+            PAYMENT_ATTEMPT_STATUS.CANCELLED,
+            PAYMENT_ATTEMPT_STATUS.FAILED,
+            PAYMENT_ATTEMPT_STATUS.EXPIRED,
+          ].includes(attempt.status);
+        if (attempt.status !== PAYMENT_ATTEMPT_STATUS.PENDING && !reopenable) {
+          throw paymentError(
+            409,
+            "Only a pending payment attempt can be settled",
+            PAYMENT_ERROR_CODE.PAYMENT_ATTEMPT_NOT_PENDING,
           );
+        }
 
-          if (
-            confirmation.outcome === BOOKING_CONFIRMATION_OUTCOME.CONFIRMED ||
-            confirmation.outcome ===
-              BOOKING_CONFIRMATION_OUTCOME.ALREADY_CONFIRMED
-          ) {
-            const updatedAttempt = {
-              ...attempt,
-              status: PAYMENT_ATTEMPT_STATUS.SUCCEEDED,
-              completedAt: currentNow,
-              notificationKey: effectiveNotificationKey,
-              failureReason: null,
-            };
-
-            const updatedAttempts = payment.attempts.map((item, idx) => {
-              if (idx === attemptIndex) {
-                return updatedAttempt;
-              }
-              if (item.status === PAYMENT_ATTEMPT_STATUS.PENDING) {
-                return {
-                  ...item,
-                  status: PAYMENT_ATTEMPT_STATUS.CANCELLED,
-                  completedAt: currentNow,
-                  failureReason: "SETTLED_BY_ANOTHER_ATTEMPT",
-                };
-              }
-              return item;
-            });
-
-            const updatedPayment = await paymentRepository.saveState(
-              payment._id,
-              {
-                status: PAYMENT_STATUS.PAID,
-                method: attempt.method,
-                paidAt: currentNow,
-                settlementAttemptId: attempt.attemptId,
-                settlementReference: attempt.gatewayTransactionRef,
-                reconciliationReason: null,
-                gatewayTransactionId: attempt.gatewayTransactionRef,
-                gatewayResponse: {
-                  ...(payment.gatewayResponse || {}),
-                  settledAttemptId: attempt.attemptId,
-                  settlementReference: attempt.gatewayTransactionRef,
-                  settledAt: currentNow.toISOString(),
-                },
-                attempts: updatedAttempts,
-                processedNotificationKeys: nextKeys,
-              },
-            );
-            await issueTicketsAfterSettlement(updatedPayment);
-
-            return {
-              idempotent: Boolean(
-                confirmation.outcome ===
-                  BOOKING_CONFIRMATION_OUTCOME.ALREADY_CONFIRMED,
-              ),
-              duplicateNotification: false,
-              outcome: BOOKING_CONFIRMATION_OUTCOME.CONFIRMED,
-              booking: toBookingSummary(confirmation.booking),
-              payment: toPaymentDto(updatedPayment),
-              activeAttempt: toAttemptDto(updatedAttempt),
-            };
-          }
-
-          const lateAttempt = {
-            ...attempt,
-            status: PAYMENT_ATTEMPT_STATUS.LATE_SUCCEEDED,
-            completedAt: currentNow,
-            notificationKey: effectiveNotificationKey,
-            failureReason:
-              PAYMENT_RECONCILIATION_REASON.LATE_PAYMENT_AFTER_EXPIRY,
-          };
-
-          const updatedAttempts = [...payment.attempts];
-          updatedAttempts[attemptIndex] = lateAttempt;
-
-          const updatedPayment = await paymentRepository.saveState(payment._id, {
-            status: PAYMENT_STATUS.REVIEW_REQUIRED,
-            method: attempt.method,
-            paidAt: currentNow,
-            settlementAttemptId: attempt.attemptId,
-            settlementReference: attempt.gatewayTransactionRef,
-            reconciliationReason:
-              PAYMENT_RECONCILIATION_REASON.LATE_PAYMENT_AFTER_EXPIRY,
-            gatewayTransactionId: attempt.gatewayTransactionRef,
-            gatewayResponse: {
-              ...(payment.gatewayResponse || {}),
-              lateSettlementAttemptId: attempt.attemptId,
-              reconciliationReason:
-                PAYMENT_RECONCILIATION_REASON.LATE_PAYMENT_AFTER_EXPIRY,
-              lateSettledAt: currentNow.toISOString(),
-            },
-            attempts: updatedAttempts,
-            processedNotificationKeys: nextKeys,
+        const confirmation =
+          await bookingService.confirmBookingAfterVerifiedPayment({
+            bookingId: payment.bookingId,
+            paymentId: payment._id,
+            verifiedAt: currentNow,
           });
 
+        const nextKeys = Array.from(
+          new Set([
+            ...(payment.processedNotificationKeys || []),
+            effectiveNotificationKey,
+          ]),
+        );
+
+        if (
+          confirmation.outcome === BOOKING_CONFIRMATION_OUTCOME.CONFIRMED ||
+          confirmation.outcome ===
+            BOOKING_CONFIRMATION_OUTCOME.ALREADY_CONFIRMED
+        ) {
+          const updatedAttempt = {
+            ...attempt,
+            status: PAYMENT_ATTEMPT_STATUS.SUCCEEDED,
+            completedAt: currentNow,
+            notificationKey: effectiveNotificationKey,
+            failureReason: null,
+          };
+
+          const updatedAttempts = payment.attempts.map((item, idx) => {
+            if (idx === attemptIndex) {
+              return updatedAttempt;
+            }
+            if (item.status === PAYMENT_ATTEMPT_STATUS.PENDING) {
+              return {
+                ...item,
+                status: PAYMENT_ATTEMPT_STATUS.CANCELLED,
+                completedAt: currentNow,
+                failureReason: "SETTLED_BY_ANOTHER_ATTEMPT",
+              };
+            }
+            return item;
+          });
+
+          const updatedPayment = await paymentRepository.saveState(
+            payment._id,
+            {
+              status: PAYMENT_STATUS.PAID,
+              method: attempt.method,
+              paidAt: currentNow,
+              settlementAttemptId: attempt.attemptId,
+              settlementReference: attempt.gatewayTransactionRef,
+              reconciliationReason: null,
+              gatewayTransactionId: attempt.gatewayTransactionRef,
+              gatewayResponse: {
+                ...(payment.gatewayResponse || {}),
+                settledAttemptId: attempt.attemptId,
+                settlementReference: attempt.gatewayTransactionRef,
+                settledAt: currentNow.toISOString(),
+                ...(providerEvidence ? { providerSettlement: providerEvidence } : {}),
+                ...(simulated ? { simulatedSettlement: true } : {}),
+              },
+              attempts: updatedAttempts,
+              processedNotificationKeys: nextKeys,
+            },
+          );
+          await issueTicketsAfterSettlement(updatedPayment);
+          // A demo "simulate success" on a payOS attempt closes the real link so it cannot be
+          // paid afterwards. Other pending links of this payment are closed too.
+          if (simulated) await releaseProviderAttempt(attempt, "SETTLED_BY_SIMULATION");
+          for (const item of payment.attempts) {
+            if (item.attemptId !== attempt.attemptId && item.status === PAYMENT_ATTEMPT_STATUS.PENDING) {
+              await releaseProviderAttempt(item, "SETTLED_BY_ANOTHER_ATTEMPT");
+            }
+          }
+
           return {
-            idempotent: false,
+            idempotent: Boolean(
+              confirmation.outcome ===
+                BOOKING_CONFIRMATION_OUTCOME.ALREADY_CONFIRMED,
+            ),
             duplicateNotification: false,
-            outcome: BOOKING_CONFIRMATION_OUTCOME.EXPIRED_REVIEW_REQUIRED,
+            outcome: BOOKING_CONFIRMATION_OUTCOME.CONFIRMED,
             booking: toBookingSummary(confirmation.booking),
             payment: toPaymentDto(updatedPayment),
-            activeAttempt: toAttemptDto(lateAttempt),
+            activeAttempt: toAttemptDto(updatedAttempt),
           };
         }
 
-        if (outcome === PAYMENT_SIMULATION_OUTCOME.FAILED) {
-          const currentBooking = await resolveCurrentBooking();
+        const lateAttempt = {
+          ...attempt,
+          status: PAYMENT_ATTEMPT_STATUS.LATE_SUCCEEDED,
+          completedAt: currentNow,
+          notificationKey: effectiveNotificationKey,
+          failureReason:
+            PAYMENT_RECONCILIATION_REASON.LATE_PAYMENT_AFTER_EXPIRY,
+        };
 
-          if (payment.status === PAYMENT_STATUS.PAID) {
-            return {
-              idempotent: true,
-              duplicateNotification: true,
-              outcome: BOOKING_CONFIRMATION_OUTCOME.CONFIRMED,
-              booking: toBookingSummary(currentBooking),
-              payment: toPaymentDto(payment),
-              activeAttempt: toAttemptDto(attempt),
-            };
-          }
+        const updatedAttempts = [...payment.attempts];
+        updatedAttempts[attemptIndex] = lateAttempt;
 
-          if (attempt.status === PAYMENT_ATTEMPT_STATUS.FAILED) {
-            return {
-              idempotent: true,
-              duplicateNotification: true,
-              outcome: PAYMENT_SIMULATION_OUTCOME.FAILED,
-              booking: toBookingSummary(currentBooking),
-              payment: toPaymentDto(payment),
-              activeAttempt: toAttemptDto(attempt),
-            };
-          }
+        const updatedPayment = await paymentRepository.saveState(payment._id, {
+          status: PAYMENT_STATUS.REVIEW_REQUIRED,
+          method: attempt.method,
+          paidAt: currentNow,
+          settlementAttemptId: attempt.attemptId,
+          settlementReference: attempt.gatewayTransactionRef,
+          reconciliationReason:
+            PAYMENT_RECONCILIATION_REASON.LATE_PAYMENT_AFTER_EXPIRY,
+          gatewayTransactionId: attempt.gatewayTransactionRef,
+          gatewayResponse: {
+            ...(payment.gatewayResponse || {}),
+            lateSettlementAttemptId: attempt.attemptId,
+            reconciliationReason:
+              PAYMENT_RECONCILIATION_REASON.LATE_PAYMENT_AFTER_EXPIRY,
+            lateSettledAt: currentNow.toISOString(),
+            ...(providerEvidence ? { providerSettlement: providerEvidence } : {}),
+          },
+          attempts: updatedAttempts,
+          processedNotificationKeys: nextKeys,
+        });
 
-          if (attempt.status !== PAYMENT_ATTEMPT_STATUS.PENDING) {
-            throw paymentError(
-              409,
-              "Only a pending payment attempt can transition to failed",
-              PAYMENT_ERROR_CODE.PAYMENT_ATTEMPT_NOT_PENDING,
-            );
-          }
+        return {
+          idempotent: false,
+          duplicateNotification: false,
+          outcome: BOOKING_CONFIRMATION_OUTCOME.EXPIRED_REVIEW_REQUIRED,
+          booking: toBookingSummary(confirmation.booking),
+          payment: toPaymentDto(updatedPayment),
+          activeAttempt: toAttemptDto(lateAttempt),
+        };
+      }
 
-          const isBookingExpired =
-            currentBooking.status === BOOKING_STATUS.EXPIRED ||
-            new Date(currentBooking.expiresAt).getTime() <=
-              currentNow.getTime();
+      if (outcome === PAYMENT_SIMULATION_OUTCOME.FAILED) {
+        const currentBooking = await resolveCurrentBooking();
 
-          const failedAttempt = {
-            ...attempt,
-            status: PAYMENT_ATTEMPT_STATUS.FAILED,
-            completedAt: currentNow,
-            notificationKey: effectiveNotificationKey,
-            failureReason: failureReason || "MOCK_PAYMENT_DECLINED",
-          };
-          const updatedAttempts = [...payment.attempts];
-          updatedAttempts[attemptIndex] = failedAttempt;
-
-          const nextKeys = Array.from(
-            new Set([
-              ...(payment.processedNotificationKeys || []),
-              effectiveNotificationKey,
-            ]),
-          );
-
-          const updatedPayment = await paymentRepository.saveState(payment._id, {
-            status: isBookingExpired
-              ? PAYMENT_STATUS.EXPIRED
-              : PAYMENT_STATUS.FAILED,
-            attempts: updatedAttempts,
-            processedNotificationKeys: nextKeys,
-          });
-
+        if (payment.status === PAYMENT_STATUS.PAID) {
           return {
-            idempotent: false,
-            duplicateNotification: false,
+            idempotent: true,
+            duplicateNotification: true,
+            outcome: BOOKING_CONFIRMATION_OUTCOME.CONFIRMED,
+            booking: toBookingSummary(currentBooking),
+            payment: toPaymentDto(payment),
+            activeAttempt: toAttemptDto(attempt),
+          };
+        }
+
+        if (attempt.status === PAYMENT_ATTEMPT_STATUS.FAILED) {
+          return {
+            idempotent: true,
+            duplicateNotification: true,
             outcome: PAYMENT_SIMULATION_OUTCOME.FAILED,
             booking: toBookingSummary(currentBooking),
-            payment: toPaymentDto(updatedPayment),
-            activeAttempt: toAttemptDto(failedAttempt),
+            payment: toPaymentDto(payment),
+            activeAttempt: toAttemptDto(attempt),
           };
         }
 
-        if (outcome === PAYMENT_SIMULATION_OUTCOME.EXPIRED) {
-          const currentBooking = await resolveCurrentBooking();
-          const expiredAttempt = {
-            ...attempt,
-            status: PAYMENT_ATTEMPT_STATUS.EXPIRED,
-            completedAt: currentNow,
-            notificationKey: effectiveNotificationKey,
-            failureReason: failureReason || "PAYMENT_ATTEMPT_EXPIRED",
-          };
-          const updatedAttempts = [...payment.attempts];
-          updatedAttempts[attemptIndex] = expiredAttempt;
-
-          const nextKeys = Array.from(
-            new Set([
-              ...(payment.processedNotificationKeys || []),
-              effectiveNotificationKey,
-            ]),
+        if (attempt.status !== PAYMENT_ATTEMPT_STATUS.PENDING) {
+          throw paymentError(
+            409,
+            "Only a pending payment attempt can transition to failed",
+            PAYMENT_ERROR_CODE.PAYMENT_ATTEMPT_NOT_PENDING,
           );
-
-          const updatedPayment = await paymentRepository.saveState(payment._id, {
-            status: PAYMENT_STATUS.EXPIRED,
-            attempts: updatedAttempts,
-            processedNotificationKeys: nextKeys,
-          });
-
-          return {
-            idempotent: false,
-            duplicateNotification: false,
-            outcome: PAYMENT_SIMULATION_OUTCOME.EXPIRED,
-            booking: toBookingSummary(currentBooking),
-            payment: toPaymentDto(updatedPayment),
-            activeAttempt: toAttemptDto(expiredAttempt),
-          };
         }
 
-        throw paymentError(
-          400,
-          "Unsupported payment notification outcome",
-          PAYMENT_ERROR_CODE.INVALID_PAYMENT,
+        const isBookingExpired =
+          currentBooking.status === BOOKING_STATUS.EXPIRED ||
+          new Date(currentBooking.expiresAt).getTime() <=
+            currentNow.getTime();
+
+        const failedAttempt = {
+          ...attempt,
+          status: PAYMENT_ATTEMPT_STATUS.FAILED,
+          completedAt: currentNow,
+          notificationKey: effectiveNotificationKey,
+          failureReason: failureReason || "MOCK_PAYMENT_DECLINED",
+        };
+        const updatedAttempts = [...payment.attempts];
+        updatedAttempts[attemptIndex] = failedAttempt;
+
+        const nextKeys = Array.from(
+          new Set([
+            ...(payment.processedNotificationKeys || []),
+            effectiveNotificationKey,
+          ]),
         );
-      });
-    },
 
-    getBookingPaymentDetails: async ({ bookingId, ownerId }) => {
-      const currentNow = now();
-      const details = await bookingService.getCustomerBookingDetails({
-        bookingId,
-        ownerId,
-      });
+        const updatedPayment = await paymentRepository.saveState(payment._id, {
+          status: isBookingExpired
+            ? PAYMENT_STATUS.EXPIRED
+            : PAYMENT_STATUS.FAILED,
+          attempts: updatedAttempts,
+          processedNotificationKeys: nextKeys,
+        });
+        if (simulated) await releaseProviderAttempt(attempt, "FAILED_BY_SIMULATION");
 
+        return {
+          idempotent: false,
+          duplicateNotification: false,
+          outcome: PAYMENT_SIMULATION_OUTCOME.FAILED,
+          booking: toBookingSummary(currentBooking),
+          payment: toPaymentDto(updatedPayment),
+          activeAttempt: toAttemptDto(failedAttempt),
+        };
+      }
+
+      if (outcome === PAYMENT_SIMULATION_OUTCOME.EXPIRED) {
+        const currentBooking = await resolveCurrentBooking();
+        const expiredAttempt = {
+          ...attempt,
+          status: PAYMENT_ATTEMPT_STATUS.EXPIRED,
+          completedAt: currentNow,
+          notificationKey: effectiveNotificationKey,
+          failureReason: failureReason || "PAYMENT_ATTEMPT_EXPIRED",
+        };
+        const updatedAttempts = [...payment.attempts];
+        updatedAttempts[attemptIndex] = expiredAttempt;
+
+        const nextKeys = Array.from(
+          new Set([
+            ...(payment.processedNotificationKeys || []),
+            effectiveNotificationKey,
+          ]),
+        );
+
+        const updatedPayment = await paymentRepository.saveState(payment._id, {
+          status: PAYMENT_STATUS.EXPIRED,
+          attempts: updatedAttempts,
+          processedNotificationKeys: nextKeys,
+        });
+
+        return {
+          idempotent: false,
+          duplicateNotification: false,
+          outcome: PAYMENT_SIMULATION_OUTCOME.EXPIRED,
+          booking: toBookingSummary(currentBooking),
+          payment: toPaymentDto(updatedPayment),
+          activeAttempt: toAttemptDto(expiredAttempt),
+        };
+      }
+
+      throw paymentError(
+        400,
+        "Unsupported payment notification outcome",
+        PAYMENT_ERROR_CODE.INVALID_PAYMENT,
+      );
+    });
+  }
+
+  async function getBookingPaymentDetails({ bookingId, ownerId }) {
+    const currentNow = now();
+    let details = await bookingService.getCustomerBookingDetails({
+      bookingId,
+      ownerId,
+    });
+
+    let payment = await paymentRepository.findByBookingId(
+      details.booking.bookingId,
+    );
+
+    // Returning from the payOS page lands on C15: ask payOS before rendering, so a completed
+    // bank transfer settles here even without a webhook (local development).
+    const pendingProviderAttempt = (payment?.attempts || []).find(
+      (item) => isProviderAttempt(item) && item.status === PAYMENT_ATTEMPT_STATUS.PENDING,
+    );
+    if (pendingProviderAttempt && payment.status !== PAYMENT_STATUS.PAID) {
+      try {
+        await verifyProviderAttempt({
+          paymentId: payment._id,
+          attemptId: pendingProviderAttempt.attemptId,
+          ownerId,
+        });
+      } catch (error) {
+        console.error(`payOS check for booking ${bookingId} failed:`, error.message);
+      }
+      details = await bookingService.getCustomerBookingDetails({ bookingId, ownerId });
+      payment = await paymentRepository.findByBookingId(details.booking.bookingId);
+    }
+
+    const isBookingExpiredByClock =
+      details.booking.status === BOOKING_STATUS.EXPIRED ||
+      (details.booking.status === BOOKING_STATUS.PENDING_PAYMENT &&
+      new Date(details.booking.expiresAt).getTime() <= currentNow.getTime());
+
+    if (
+      isBookingExpiredByClock &&
+      payment &&
+      payment.status !== PAYMENT_STATUS.PAID &&
+      payment.status !== PAYMENT_STATUS.REVIEW_REQUIRED
+    ) {
+      const updatedAttempts = (payment.attempts || []).map((item) =>
+        item.status === PAYMENT_ATTEMPT_STATUS.PENDING
+          ? {
+              ...item,
+              status: PAYMENT_ATTEMPT_STATUS.EXPIRED,
+              completedAt: currentNow,
+              failureReason: "BOOKING_EXPIRED",
+            }
+          : item,
+      );
+      payment = await paymentRepository.saveState(payment._id, {
+        status: PAYMENT_STATUS.EXPIRED,
+        attempts: updatedAttempts,
+      }, { status: payment.status, updatedAt: payment.updatedAt }) ?? await paymentRepository.findByBookingId(details.booking.bookingId);
+    }
+
+    const effectiveBooking = isBookingExpiredByClock
+      ? {
+          ...details.booking,
+          status: BOOKING_STATUS.EXPIRED,
+        }
+      : details.booking;
+
+    const latestAttempt = pickLatestAttempt(payment);
+
+    return {
+      ...details,
+      booking: effectiveBooking,
+      seats: effectiveBooking.seats || [],
+      payment: toPaymentDto(payment),
+      activeAttempt: toAttemptDto(latestAttempt),
+      ticketIssuance: await resolveTicketIssuance(effectiveBooking, payment),
+    };
+  }
+
+  async function listCustomerBookingPayments({ ownerId, limit = 50 }) {
+    if (!bookingService.listCustomerBookings) {
+      return {
+        items: [],
+        summary: {
+          totalBookings: 0,
+          confirmedTicketsCount: 0,
+          pendingCount: 0,
+          expiredOrReviewCount: 0,
+        },
+      };
+    }
+
+    const currentNow = now();
+    const bookingDetailsList = await bookingService.listCustomerBookings({
+      ownerId,
+      limit,
+    });
+
+    const items = [];
+    for (const detail of bookingDetailsList) {
       let payment = await paymentRepository.findByBookingId(
-        details.booking.bookingId,
+        detail.booking.bookingId,
       );
 
-      const isBookingExpiredByClock =
-        details.booking.status === BOOKING_STATUS.EXPIRED ||
-        (details.booking.status === BOOKING_STATUS.PENDING_PAYMENT &&
-        new Date(details.booking.expiresAt).getTime() <= currentNow.getTime());
+      const isBookingExpired =
+        detail.booking.status === BOOKING_STATUS.EXPIRED ||
+        (detail.booking.status === BOOKING_STATUS.PENDING_PAYMENT &&
+          new Date(detail.booking.expiresAt).getTime() <=
+            currentNow.getTime());
 
       if (
-        isBookingExpiredByClock &&
+        isBookingExpired &&
         payment &&
         payment.status !== PAYMENT_STATUS.PAID &&
-        payment.status !== PAYMENT_STATUS.REVIEW_REQUIRED
+        payment.status !== PAYMENT_STATUS.REVIEW_REQUIRED &&
+        payment.status !== PAYMENT_STATUS.EXPIRED
       ) {
         const updatedAttempts = (payment.attempts || []).map((item) =>
           item.status === PAYMENT_ATTEMPT_STATUS.PENDING
@@ -888,118 +1169,44 @@ export const createPaymentService = ({
         payment = await paymentRepository.saveState(payment._id, {
           status: PAYMENT_STATUS.EXPIRED,
           attempts: updatedAttempts,
-        }, { status: payment.status, updatedAt: payment.updatedAt }) ?? await paymentRepository.findByBookingId(details.booking.bookingId);
+        }, { status: payment.status, updatedAt: payment.updatedAt }) ?? await paymentRepository.findByBookingId(detail.booking.bookingId);
       }
-
-      const effectiveBooking = isBookingExpiredByClock
-        ? {
-            ...details.booking,
-            status: BOOKING_STATUS.EXPIRED,
-          }
-        : details.booking;
 
       const latestAttempt = pickLatestAttempt(payment);
-
-      return {
-        ...details,
-        booking: effectiveBooking,
-        seats: effectiveBooking.seats || [],
+      items.push({
+        ...detail,
+        booking: detail.booking,
+        seats: detail.booking.seats || [],
         payment: toPaymentDto(payment),
         activeAttempt: toAttemptDto(latestAttempt),
-        ticketIssuance: await resolveTicketIssuance(effectiveBooking, payment),
-      };
-    },
-
-    listCustomerBookingPayments: async ({ ownerId, limit = 50 }) => {
-      if (!bookingService.listCustomerBookings) {
-        return {
-          items: [],
-          summary: {
-            totalBookings: 0,
-            confirmedTicketsCount: 0,
-            pendingCount: 0,
-            expiredOrReviewCount: 0,
-          },
-        };
-      }
-
-      const currentNow = now();
-      const bookingDetailsList = await bookingService.listCustomerBookings({
-        ownerId,
-        limit,
+        ticketIssuance: await resolveTicketIssuance(detail.booking, payment),
       });
+    }
 
-      const items = [];
-      for (const detail of bookingDetailsList) {
-        let payment = await paymentRepository.findByBookingId(
-          detail.booking.bookingId,
-        );
+    const confirmedTicketsCount = items.filter(
+      (item) =>
+        item.booking.status === BOOKING_STATUS.CONFIRMED &&
+        item.payment?.status === PAYMENT_STATUS.PAID,
+    ).length;
 
-        const isBookingExpired =
-          detail.booking.status === BOOKING_STATUS.EXPIRED ||
-          (detail.booking.status === BOOKING_STATUS.PENDING_PAYMENT &&
-            new Date(detail.booking.expiresAt).getTime() <=
-              currentNow.getTime());
+    const pendingCount = items.filter(
+      (item) => item.booking.status === BOOKING_STATUS.PENDING_PAYMENT,
+    ).length;
 
-        if (
-          isBookingExpired &&
-          payment &&
-          payment.status !== PAYMENT_STATUS.PAID &&
-          payment.status !== PAYMENT_STATUS.REVIEW_REQUIRED &&
-          payment.status !== PAYMENT_STATUS.EXPIRED
-        ) {
-          const updatedAttempts = (payment.attempts || []).map((item) =>
-            item.status === PAYMENT_ATTEMPT_STATUS.PENDING
-              ? {
-                  ...item,
-                  status: PAYMENT_ATTEMPT_STATUS.EXPIRED,
-                  completedAt: currentNow,
-                  failureReason: "BOOKING_EXPIRED",
-                }
-              : item,
-          );
-          payment = await paymentRepository.saveState(payment._id, {
-            status: PAYMENT_STATUS.EXPIRED,
-            attempts: updatedAttempts,
-          }, { status: payment.status, updatedAt: payment.updatedAt }) ?? await paymentRepository.findByBookingId(detail.booking.bookingId);
-        }
+    const expiredOrReviewCount = items.filter(
+      (item) =>
+        item.booking.status === BOOKING_STATUS.EXPIRED ||
+        item.payment?.status === PAYMENT_STATUS.REVIEW_REQUIRED,
+    ).length;
 
-        const latestAttempt = pickLatestAttempt(payment);
-        items.push({
-          ...detail,
-          booking: detail.booking,
-          seats: detail.booking.seats || [],
-          payment: toPaymentDto(payment),
-          activeAttempt: toAttemptDto(latestAttempt),
-          ticketIssuance: await resolveTicketIssuance(detail.booking, payment),
-        });
-      }
-
-      const confirmedTicketsCount = items.filter(
-        (item) =>
-          item.booking.status === BOOKING_STATUS.CONFIRMED &&
-          item.payment?.status === PAYMENT_STATUS.PAID,
-      ).length;
-
-      const pendingCount = items.filter(
-        (item) => item.booking.status === BOOKING_STATUS.PENDING_PAYMENT,
-      ).length;
-
-      const expiredOrReviewCount = items.filter(
-        (item) =>
-          item.booking.status === BOOKING_STATUS.EXPIRED ||
-          item.payment?.status === PAYMENT_STATUS.REVIEW_REQUIRED,
-      ).length;
-
-      return {
-        items,
-        summary: {
-          totalBookings: items.length,
-          confirmedTicketsCount,
-          pendingCount,
-          expiredOrReviewCount,
-        },
-      };
-    },
-  };
+    return {
+      items,
+      summary: {
+        totalBookings: items.length,
+        confirmedTicketsCount,
+        pendingCount,
+        expiredOrReviewCount,
+      },
+    };
+  }
 };
