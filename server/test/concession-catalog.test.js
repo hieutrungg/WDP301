@@ -84,7 +84,7 @@ test("new Combo read model maps existing collection without automatic DDL", asyn
   assert.equal(Combo.schema.options.autoCreate, false);
   assert.equal(Combo.schema.options.autoIndex, false);
   assert.equal(Combo.schema.path("isPublic"), undefined);
-  assert.equal(Combo.schema.path("imageUrl"), undefined);
+  assert.ok(Combo.schema.path("imageUrl"));
   const base = {
     name: "Duo",
     price: 0,

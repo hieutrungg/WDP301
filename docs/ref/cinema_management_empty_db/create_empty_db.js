@@ -469,6 +469,12 @@ if (!appdb.getCollectionNames().includes("movie_reviews")) {
       "customerAccountId": {
         "bsonType": "objectId"
       },
+      "channel": {
+        "enum": ["ONLINE", "COUNTER"]
+      },
+      "createdByStaffId": {
+        "bsonType": "objectId"
+      },
       "rating": {
         "bsonType": [
           "int",
@@ -499,6 +505,12 @@ if (!appdb.getCollectionNames().includes("movie_reviews")) {
         "bsonType": "objectId"
       },
       "customerAccountId": {
+        "bsonType": "objectId"
+      },
+      "channel": {
+        "enum": ["ONLINE", "COUNTER"]
+      },
+      "createdByStaffId": {
         "bsonType": "objectId"
       },
       "rating": {
@@ -1661,6 +1673,9 @@ if (!appdb.getCollectionNames().includes("combos")) {
       "description": {
         "bsonType": "string"
       },
+      "imageUrl": {
+        "bsonType": "string"
+      },
       "price": {
         "bsonType": [
           "int",
@@ -1705,6 +1720,9 @@ if (!appdb.getCollectionNames().includes("combos")) {
         "bsonType": "string"
       },
       "description": {
+        "bsonType": "string"
+      },
+      "imageUrl": {
         "bsonType": "string"
       },
       "price": {

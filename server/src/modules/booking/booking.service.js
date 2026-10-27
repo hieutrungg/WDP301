@@ -7,28 +7,45 @@ import {
   BOOKING_STATUS,
 } from "./booking.constants.js";
 import { bookingRepository } from "./booking.repository.js";
-import { bookingPricingDto, assertVoucherBookingSnapshot } from "./booking-voucher.service.js";
+import {
+  bookingPricingDto,
+  assertVoucherBookingSnapshot,
+} from "./booking-voucher.service.js";
 
-const error = (status, message, code) => new AppError(status, message, [], code);
+const error = (status, message, code) =>
+  new AppError(status, message, [], code);
 const objectIdString = (value) => value?.toString?.() ?? String(value);
 const sortedIds = (values) => values.map(objectIdString).sort();
 const sameIds = (left, right) =>
-  left.length === right.length && sortedIds(left).every((value, index) => value === sortedIds(right)[index]);
+  left.length === right.length &&
+  sortedIds(left).every((value, index) => value === sortedIds(right)[index]);
 
 const generateReference = (prefix) =>
   `${prefix}-${Date.now().toString(36).toUpperCase()}-${randomBytes(5).toString("hex").toUpperCase()}`;
 
 const validatePriceSnapshot = (hold) => {
   const quote = hold.priceSnapshot;
-  if (quote?.currency !== "VND" || !Number.isSafeInteger(quote.totalAmount)) return null;
-  if (!Array.isArray(quote.lines) || !sameIds(hold.seatIds ?? [], quote.lines.map(({ seatId }) => seatId))) {
+  if (quote?.currency !== "VND" || !Number.isSafeInteger(quote.totalAmount))
+    return null;
+  if (
+    !Array.isArray(quote.lines) ||
+    !sameIds(
+      hold.seatIds ?? [],
+      quote.lines.map(({ seatId }) => seatId),
+    )
+  ) {
     return null;
   }
 
   const prices = new Map();
   for (const line of quote.lines) {
     const seatId = objectIdString(line.seatId);
-    if (prices.has(seatId) || !Number.isSafeInteger(line.unitPrice) || line.unitPrice < 0) return null;
+    if (
+      prices.has(seatId) ||
+      !Number.isSafeInteger(line.unitPrice) ||
+      line.unitPrice < 0
+    )
+      return null;
     prices.set(seatId, line.unitPrice);
   }
 
@@ -37,9 +54,15 @@ const validatePriceSnapshot = (hold) => {
     unitPrice: prices.get(objectIdString(seatId)),
   }));
   const subtotal = seatLines.reduce((sum, line) => sum + line.unitPrice, 0);
-  if (!Number.isSafeInteger(subtotal) || subtotal !== quote.totalAmount) return null;
+  if (!Number.isSafeInteger(subtotal) || subtotal !== quote.totalAmount)
+    return null;
 
-  return { currency: quote.currency, seatLines, subtotal, quoteId: quote.quoteId };
+  return {
+    currency: quote.currency,
+    seatLines,
+    subtotal,
+    quoteId: quote.quoteId,
+  };
 };
 
 const serializeBooking = (booking, idempotent = false) => ({
@@ -67,17 +90,28 @@ const serializeDetailedBooking = (booking, { seatDetails = [] } = {}) => ({
     unitPrice: line.unitPrice,
   })),
   seats: seatDetails,
-  ...(booking.concessionFingerprint ? { ticketAmount: booking.subtotal, concessionAmount: booking.concessionAmount } : {}),
+  ...(booking.concessionFingerprint
+    ? {
+        ticketAmount: booking.subtotal,
+        concessionAmount: booking.concessionAmount,
+      }
+    : {}),
   currency: booking.currency,
   subtotal: booking.subtotal,
   discountAmount: booking.discountAmount ?? 0,
   amount: booking.totalAmount,
   totalAmount: booking.totalAmount,
   status: booking.status,
-  bookingTime: booking.bookingTime ? new Date(booking.bookingTime).toISOString() : null,
+  bookingTime: booking.bookingTime
+    ? new Date(booking.bookingTime).toISOString()
+    : null,
   expiresAt: new Date(booking.expiresAt).toISOString(),
-  confirmedAt: booking.confirmedAt ? new Date(booking.confirmedAt).toISOString() : null,
-  expiredAt: booking.expiredAt ? new Date(booking.expiredAt).toISOString() : null,
+  confirmedAt: booking.confirmedAt
+    ? new Date(booking.confirmedAt).toISOString()
+    : null,
+  expiredAt: booking.expiredAt
+    ? new Date(booking.expiredAt).toISOString()
+    : null,
 });
 
 export const createBookingService = ({
@@ -99,7 +133,8 @@ export const createBookingService = ({
   const describeBooking = async (booking, idempotent, session) => {
     const data = serializeBooking(booking, idempotent);
     if (booking.concessionFingerprint) {
-      if (!concessionPort) throw new TypeError("Concession lifecycle port is required");
+      if (!concessionPort)
+        throw new TypeError("Concession lifecycle port is required");
       data.ticketAmount = booking.subtotal;
       data.concessionAmount = booking.concessionAmount;
       data.concessionOrder = await concessionPort.read(booking._id, session);
@@ -113,21 +148,34 @@ export const createBookingService = ({
     priceQuoteReference,
     requestKey,
     concessionSelection,
+    channel = "ONLINE",
+    createdByStaffId,
   }) => {
-    if (concessionSelection && !concessionPort) throw new TypeError("Concession checkout port is required");
-    const fingerprint = concessionSelection ? concessionPort.fingerprint(concessionSelection) : undefined;
+    if (concessionSelection && !concessionPort)
+      throw new TypeError("Concession checkout port is required");
+    const fingerprint = concessionSelection
+      ? concessionPort.fingerprint(concessionSelection)
+      : undefined;
     if (concessionSelection) {
       await concessionPort.assertReady();
-      if (concessionPort.prepare && !await repository.findByCustomerRequestKey(ownerId, requestKey)) {
+      if (
+        concessionPort.prepare &&
+        !(await repository.findByCustomerRequestKey(ownerId, requestKey))
+      ) {
         await concessionPort.prepare({ ownerId, holdId });
       }
     }
     const now = clock();
-    const runInTransaction = repository.withTransaction?.bind(repository) ?? ((work) => work());
+    const runInTransaction =
+      repository.withTransaction?.bind(repository) ?? ((work) => work());
 
     try {
       return await runInTransaction(async (session) => {
-        const existing = await repository.findByCustomerRequestKey(ownerId, requestKey, session);
+        const existing = await repository.findByCustomerRequestKey(
+          ownerId,
+          requestKey,
+          session,
+        );
         if (existing) {
           if (objectIdString(existing.holdId) !== objectIdString(holdId)) {
             throw error(
@@ -136,20 +184,41 @@ export const createBookingService = ({
               BOOKING_ERROR.REQUEST_KEY_REUSED,
             );
           }
-          if (existing.concessionFingerprint !== fingerprint) throw error(409, "This checkout key already has a different food selection", "CONCESSION_REQUEST_KEY_REUSED");
+          if (existing.concessionFingerprint !== fingerprint)
+            throw error(
+              409,
+              "This checkout key already has a different food selection",
+              "CONCESSION_REQUEST_KEY_REUSED",
+            );
           return describeBooking(existing, true, session);
         }
 
-        const hold = await seatHoldPort.getLiveHoldForBooking({ holdId, ownerId, now, session });
-        if (!hold || objectIdString(hold.ownerId) !== objectIdString(ownerId) || hold.status !== "ACTIVE") {
-          throw error(409, "Seat hold is not available for booking", BOOKING_ERROR.HOLD_NOT_AVAILABLE);
+        const hold = await seatHoldPort.getLiveHoldForBooking({
+          holdId,
+          ownerId,
+          now,
+          session,
+        });
+        if (
+          !hold ||
+          objectIdString(hold.ownerId) !== objectIdString(ownerId) ||
+          hold.status !== "ACTIVE"
+        ) {
+          throw error(
+            409,
+            "Seat hold is not available for booking",
+            BOOKING_ERROR.HOLD_NOT_AVAILABLE,
+          );
         }
         if (new Date(hold.expiresAt).getTime() <= now.getTime()) {
           throw error(409, "Seat hold has expired", BOOKING_ERROR.HOLD_EXPIRED);
         }
 
         const price = validatePriceSnapshot(hold);
-        if (!price || (priceQuoteReference && priceQuoteReference !== price.quoteId)) {
+        if (
+          !price ||
+          (priceQuoteReference && priceQuoteReference !== price.quoteId)
+        ) {
           throw error(
             409,
             "Seat hold does not contain a valid server-side price snapshot",
@@ -163,9 +232,17 @@ export const createBookingService = ({
           payableReference: payableReferenceFactory(),
           requestKey,
           customerAccountId: new mongoose.Types.ObjectId(ownerId),
+          channel,
+          ...(createdByStaffId
+            ? {
+                createdByStaffId: new mongoose.Types.ObjectId(createdByStaffId),
+              }
+            : {}),
           holdId: new mongoose.Types.ObjectId(holdId),
           showtimeId: new mongoose.Types.ObjectId(hold.showtimeId),
-          seatIds: hold.seatIds.map((seatId) => new mongoose.Types.ObjectId(seatId)),
+          seatIds: hold.seatIds.map(
+            (seatId) => new mongoose.Types.ObjectId(seatId),
+          ),
           seatLines: price.seatLines,
           ...(price.quoteId ? { priceQuoteReference: price.quoteId } : {}),
           currency: price.currency,
@@ -178,11 +255,22 @@ export const createBookingService = ({
         };
 
         if (concessionSelection) {
-          const food = await concessionPort.createPending({ bookingId: input._id, ownerId, hold, selection: concessionSelection, session });
+          const food = await concessionPort.createPending({
+            bookingId: input._id,
+            ownerId,
+            hold,
+            selection: concessionSelection,
+            session,
+          });
           input.concessionAmount = food.amount;
           input.concessionFingerprint = fingerprint;
           input.totalAmount = input.subtotal + food.amount;
-          if (!Number.isSafeInteger(input.totalAmount)) throw error(409, "Invalid checkout total", BOOKING_ERROR.INVALID_PRICE_SNAPSHOT);
+          if (!Number.isSafeInteger(input.totalAmount))
+            throw error(
+              409,
+              "Invalid checkout total",
+              BOOKING_ERROR.INVALID_PRICE_SNAPSHOT,
+            );
         }
         const booking = await repository.createPending(input, session);
         return describeBooking(booking, false, session);
@@ -192,22 +280,38 @@ export const createBookingService = ({
       const concurrent =
         (await repository.findByCustomerRequestKey(ownerId, requestKey)) ??
         (await repository.findByHoldId(holdId));
-      if (concurrent && objectIdString(concurrent.holdId) !== objectIdString(holdId)) {
+      if (
+        concurrent &&
+        objectIdString(concurrent.holdId) !== objectIdString(holdId)
+      ) {
         throw error(
           409,
           "This booking request key was already used for another seat hold",
           BOOKING_ERROR.REQUEST_KEY_REUSED,
         );
       }
-      if (concurrent && objectIdString(concurrent.holdId) === objectIdString(holdId)) {
-        if (concurrent.concessionFingerprint !== fingerprint) throw error(409, "This checkout key already has a different food selection", "CONCESSION_REQUEST_KEY_REUSED");
+      if (
+        concurrent &&
+        objectIdString(concurrent.holdId) === objectIdString(holdId)
+      ) {
+        if (concurrent.concessionFingerprint !== fingerprint)
+          throw error(
+            409,
+            "This checkout key already has a different food selection",
+            "CONCESSION_REQUEST_KEY_REUSED",
+          );
         return describeBooking(concurrent, true);
       }
       throw cause;
     }
   };
 
-  const getBookingForPayment = async ({ bookingId, payableReference, ownerId, session } = {}) => {
+  const getBookingForPayment = async ({
+    bookingId,
+    payableReference,
+    ownerId,
+    session,
+  } = {}) => {
     const booking = bookingId
       ? await repository.findById?.(bookingId, session)
       : await repository.findByPayableReference?.(payableReference, session);
@@ -216,8 +320,15 @@ export const createBookingService = ({
       throw error(404, "Booking not found", BOOKING_ERROR.BOOKING_NOT_FOUND);
     }
 
-    if (ownerId && objectIdString(booking.customerAccountId) !== objectIdString(ownerId)) {
-      throw error(403, "You do not have access to this booking", BOOKING_ERROR.BOOKING_FORBIDDEN);
+    if (
+      ownerId &&
+      objectIdString(booking.customerAccountId) !== objectIdString(ownerId)
+    ) {
+      throw error(
+        403,
+        "You do not have access to this booking",
+        BOOKING_ERROR.BOOKING_FORBIDDEN,
+      );
     }
 
     return booking;
@@ -232,35 +343,56 @@ export const createBookingService = ({
     );
 
   const requireTransitionPorts = () => {
-    for (const name of ["withTransaction", "findById", "markConfirmed", "markExpired"]) {
+    for (const name of [
+      "withTransaction",
+      "findById",
+      "markConfirmed",
+      "markExpired",
+    ]) {
       if (typeof repository[name] !== "function") {
-        throw new TypeError(`Booking repository.${name} is required for lifecycle transitions`);
+        throw new TypeError(
+          `Booking repository.${name} is required for lifecycle transitions`,
+        );
       }
     }
     for (const name of ["consumeHoldForBooking", "expireHoldForBooking"]) {
       if (typeof seatHoldPort[name] !== "function") {
-        throw new TypeError(`seatHoldPort.${name} is required for lifecycle transitions`);
+        throw new TypeError(
+          `seatHoldPort.${name} is required for lifecycle transitions`,
+        );
       }
     }
   };
 
   const expireInTransaction = async (booking, now, session) => {
-    if (booking.status !== BOOKING_STATUS.PENDING_PAYMENT) throw transitionConflict();
-    const hold = await seatHoldPort.expireHoldForBooking({ holdId: booking.holdId, now, session });
+    if (booking.status !== BOOKING_STATUS.PENDING_PAYMENT)
+      throw transitionConflict();
+    const hold = await seatHoldPort.expireHoldForBooking({
+      holdId: booking.holdId,
+      now,
+      session,
+    });
     if (hold?.status === "CONSUMED") throw transitionConflict();
     if (booking.voucherSnapshot) {
-      if (!promotionPort) throw new TypeError("Promotion lifecycle port is required");
-      await promotionPort.releaseForClosedBooking({ reservationId: booking.voucherSnapshot.reservationId, now, session });
+      if (!promotionPort)
+        throw new TypeError("Promotion lifecycle port is required");
+      await promotionPort.releaseForClosedBooking({
+        reservationId: booking.voucherSnapshot.reservationId,
+        now,
+        session,
+      });
     }
     if (booking.concessionFingerprint) {
-      if (!concessionPort) throw new TypeError("Concession lifecycle port is required");
+      if (!concessionPort)
+        throw new TypeError("Concession lifecycle port is required");
       await concessionPort.release({ bookingId: booking._id, now, session });
     }
     const expired = await repository.markExpired(
       { bookingId: booking._id, expiredAt: now },
       session,
     );
-    if (!expired || expired.status !== BOOKING_STATUS.EXPIRED) throw transitionConflict();
+    if (!expired || expired.status !== BOOKING_STATUS.EXPIRED)
+      throw transitionConflict();
     return expired;
   };
 
@@ -268,7 +400,9 @@ export const createBookingService = ({
   // transaction before expiring/releasing the hold in a fresh transaction through its owner port.
   class HoldConsumptionRejected extends Error {
     constructor() {
-      super("Seat consumption was rejected; abort the transaction before releasing the hold");
+      super(
+        "Seat consumption was rejected; abort the transaction before releasing the hold",
+      );
       this.name = "HoldConsumptionRejected";
     }
   }
@@ -281,28 +415,45 @@ export const createBookingService = ({
     session: externalSession,
   }) => {
     requireTransitionPorts();
-    if (!mongoose.isValidObjectId(paymentId) || !Number.isFinite(new Date(verifiedAt).getTime())) {
-      throw new TypeError("A verified payment ID and valid verification time are required");
+    if (
+      !mongoose.isValidObjectId(paymentId) ||
+      !Number.isFinite(new Date(verifiedAt).getTime())
+    ) {
+      throw new TypeError(
+        "A verified payment ID and valid verification time are required",
+      );
     }
-    const result = (outcome, booking) => ({ outcome, booking: serializeDetailedBooking(booking) });
-    const load = (session) => getBookingForPayment({ bookingId, payableReference, session });
+    const result = (outcome, booking) => ({
+      outcome,
+      booking: serializeDetailedBooking(booking),
+    });
+    const load = (session) =>
+      getBookingForPayment({ bookingId, payableReference, session });
     const alreadyConfirmed = (booking) => {
-      if (objectIdString(booking.paymentId) !== objectIdString(paymentId)) throw transitionConflict();
+      if (objectIdString(booking.paymentId) !== objectIdString(paymentId))
+        throw transitionConflict();
       return result(BOOKING_CONFIRMATION_OUTCOME.ALREADY_CONFIRMED, booking);
     };
     const expiredResult = (booking) =>
       result(BOOKING_CONFIRMATION_OUTCOME.EXPIRED_REVIEW_REQUIRED, booking);
     const run = async (session) => {
       const booking = await load(session);
-      if (booking.status === BOOKING_STATUS.CONFIRMED) return alreadyConfirmed(booking);
-      if (booking.status === BOOKING_STATUS.EXPIRED) return expiredResult(booking);
+      if (booking.status === BOOKING_STATUS.CONFIRMED)
+        return alreadyConfirmed(booking);
+      if (booking.status === BOOKING_STATUS.EXPIRED)
+        return expiredResult(booking);
       assertVoucherBookingSnapshot(booking);
       if (
         booking.status !== BOOKING_STATUS.PENDING_PAYMENT ||
         !Number.isFinite(new Date(booking.expiresAt).getTime())
-      ) throw transitionConflict();
-      if (new Date(booking.expiresAt).getTime() <= new Date(verifiedAt).getTime()) {
-        return expiredResult(await expireInTransaction(booking, verifiedAt, session));
+      )
+        throw transitionConflict();
+      if (
+        new Date(booking.expiresAt).getTime() <= new Date(verifiedAt).getTime()
+      ) {
+        return expiredResult(
+          await expireInTransaction(booking, verifiedAt, session),
+        );
       }
       const holdResult = await seatHoldPort.consumeHoldForBooking({
         holdId: booking.holdId,
@@ -312,21 +463,41 @@ export const createBookingService = ({
         verifiedAt,
         session,
       });
-      if (holdResult?.outcome === "EXPIRED") throw new HoldConsumptionRejected();
+      if (holdResult?.outcome === "EXPIRED")
+        throw new HoldConsumptionRejected();
       if (holdResult?.outcome !== "CONSUMED") throw transitionConflict();
       if (booking.concessionFingerprint) {
-        if (!concessionPort) throw new TypeError("Concession lifecycle port is required");
-        if (!await concessionPort.consume({ bookingId: booking._id, now: verifiedAt, session })) throw new HoldConsumptionRejected();
+        if (!concessionPort)
+          throw new TypeError("Concession lifecycle port is required");
+        if (
+          !(await concessionPort.consume({
+            bookingId: booking._id,
+            now: verifiedAt,
+            session,
+          }))
+        )
+          throw new HoldConsumptionRejected();
       }
       if (booking.voucherSnapshot) {
-        if (!promotionPort) throw new TypeError("Promotion lifecycle port is required");
-        if (!await promotionPort.consumeForConfirmedBooking({ bookingId: booking._id, reservationId: booking.voucherSnapshot.reservationId, paymentId, verifiedAt, session })) throw new HoldConsumptionRejected();
+        if (!promotionPort)
+          throw new TypeError("Promotion lifecycle port is required");
+        if (
+          !(await promotionPort.consumeForConfirmedBooking({
+            bookingId: booking._id,
+            reservationId: booking.voucherSnapshot.reservationId,
+            paymentId,
+            verifiedAt,
+            session,
+          }))
+        )
+          throw new HoldConsumptionRejected();
       }
       const confirmed = await repository.markConfirmed(
         { bookingId: booking._id, paymentId, confirmedAt: verifiedAt },
         session,
       );
-      if (!confirmed || confirmed.status !== BOOKING_STATUS.CONFIRMED) throw transitionConflict();
+      if (!confirmed || confirmed.status !== BOOKING_STATUS.CONFIRMED)
+        throw transitionConflict();
       return result(BOOKING_CONFIRMATION_OUTCOME.CONFIRMED, confirmed);
     };
     if (externalSession != null) {
@@ -340,9 +511,13 @@ export const createBookingService = ({
       if (!(cause instanceof HoldConsumptionRejected)) throw cause;
       return repository.withTransaction(async (session) => {
         const booking = await load(session);
-        if (booking.status === BOOKING_STATUS.CONFIRMED) return alreadyConfirmed(booking);
-        if (booking.status === BOOKING_STATUS.EXPIRED) return expiredResult(booking);
-        return expiredResult(await expireInTransaction(booking, verifiedAt, session));
+        if (booking.status === BOOKING_STATUS.CONFIRMED)
+          return alreadyConfirmed(booking);
+        if (booking.status === BOOKING_STATUS.EXPIRED)
+          return expiredResult(booking);
+        return expiredResult(
+          await expireInTransaction(booking, verifiedAt, session),
+        );
       });
     }
   };
@@ -356,11 +531,16 @@ export const createBookingService = ({
     ) {
       requireTransitionPorts();
       booking = await repository.withTransaction(async (session) => {
-        const current = await getBookingForPayment({ bookingId, ownerId, session });
+        const current = await getBookingForPayment({
+          bookingId,
+          ownerId,
+          session,
+        });
         if (
           current.status !== BOOKING_STATUS.PENDING_PAYMENT ||
           new Date(current.expiresAt).getTime() > now.getTime()
-        ) return current;
+        )
+          return current;
         return expireInTransaction(current, now, session);
       });
     }
@@ -430,7 +610,8 @@ export const createBookingService = ({
 
     const details = serializeDetailedBooking(booking, { seatDetails });
     if (booking.concessionFingerprint) {
-      if (!concessionPort) throw new TypeError("Concession lifecycle port is required");
+      if (!concessionPort)
+        throw new TypeError("Concession lifecycle port is required");
       details.concessionOrder = await concessionPort.read(booking._id);
     }
     return { booking: details, showtime };
@@ -438,11 +619,19 @@ export const createBookingService = ({
 
   const cancelPendingCheckout = async ({ bookingId, ownerId }) => {
     requireTransitionPorts();
-    return repository.withTransaction(async session => {
-      const booking = await getBookingForPayment({ bookingId, ownerId, session });
-      if (booking.status === BOOKING_STATUS.CONFIRMED) throw transitionConflict();
-      if (booking.status === BOOKING_STATUS.EXPIRED) return serializeDetailedBooking(booking);
-      return serializeDetailedBooking(await expireInTransaction(booking, clock(), session));
+    return repository.withTransaction(async (session) => {
+      const booking = await getBookingForPayment({
+        bookingId,
+        ownerId,
+        session,
+      });
+      if (booking.status === BOOKING_STATUS.CONFIRMED)
+        throw transitionConflict();
+      if (booking.status === BOOKING_STATUS.EXPIRED)
+        return serializeDetailedBooking(booking);
+      return serializeDetailedBooking(
+        await expireInTransaction(booking, clock(), session),
+      );
     });
   };
 

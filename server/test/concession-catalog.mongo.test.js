@@ -140,6 +140,7 @@ test(
         name: key,
         status: "ACTIVE",
         price: 50000,
+        imageUrl: "https://example.com/combo.png",
         items: recipe,
         supplier: "private",
         internal: "private",
@@ -437,7 +438,7 @@ test(
             b.body.data.items.map((row) => row.quantity),
             [1, 2],
           );
-          assert.equal(b.body.data.imageUrl, null);
+          assert.equal(b.body.data.imageUrl, "https://example.com/combo.png");
           const free = await get(`/combos/${ids.freeCombo}?branchId=${ids.b}`);
           assert.equal(free.body.data.isSpecialOffer, true);
           assert.equal(free.body.data.price, 0);

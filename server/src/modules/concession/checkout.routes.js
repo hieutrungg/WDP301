@@ -1,9 +1,6 @@
 import { Router } from "express";
 import { requireAuth } from "../../middlewares/authMiddleware.js";
-import {
-  requirePermission,
-  requireRole,
-} from "../../middlewares/permissionMiddleware.js";
+import { requireBookingActor } from "../booking/booking-actor.middleware.js";
 import { validate } from "../../middlewares/validateMiddleware.js";
 import { concessionQuoteSchema } from "./checkout.validation.js";
 
@@ -12,8 +9,7 @@ export const createConcessionCheckoutRouter = (service) => {
   router.post(
     "/quote",
     requireAuth,
-    requirePermission("booking.create"),
-    requireRole("CUSTOMER", "STAFF"),
+    requireBookingActor,
     validate(concessionQuoteSchema, { code: "INVALID_CONCESSION_SELECTION" }),
     async (req, res, next) => {
       try {

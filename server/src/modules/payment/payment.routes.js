@@ -1,9 +1,9 @@
 import { Router } from "express";
 import { env } from "../../config/env.js";
 import { requireAuth } from "../../middlewares/authMiddleware.js";
-import { requirePermission, requireRole } from "../../middlewares/permissionMiddleware.js";
 import { validate } from "../../middlewares/validateMiddleware.js";
 import { AppError } from "../../utils/AppError.js";
+import { requireCounterTicketActor } from "../booking/booking-actor.middleware.js";
 import { PAYMENT_ERROR_CODE, PAYMENT_METHOD } from "./payment.constants.js";
 import {
   bookingPaymentParamsSchema,
@@ -14,21 +14,21 @@ import {
   simulatePaymentNotificationSchema,
 } from "./payment.validation.js";
 
-export const requireNonProductionSimulationGate = (
-  getNodeEnv = () => process.env.NODE_ENV ?? env.nodeEnv,
-) => (req, _res, next) => {
-  if (String(getNodeEnv()).toLowerCase() === "production") {
-    return next(
-      new AppError(
-        404,
-        "Mock payment simulation endpoint is disabled in production",
-        [],
-        PAYMENT_ERROR_CODE.MOCK_SIMULATION_DISABLED,
-      ),
-    );
-  }
-  return next();
-};
+export const requireNonProductionSimulationGate =
+  (getNodeEnv = () => process.env.NODE_ENV ?? env.nodeEnv) =>
+  (req, _res, next) => {
+    if (String(getNodeEnv()).toLowerCase() === "production") {
+      return next(
+        new AppError(
+          404,
+          "Mock payment simulation endpoint is disabled in production",
+          [],
+          PAYMENT_ERROR_CODE.MOCK_SIMULATION_DISABLED,
+        ),
+      );
+    }
+    return next();
+  };
 
 // Cash is a counter-only capability. Keep the shared initiation route for the
 // common Payment lifecycle, but enforce the staff boundary before validation
@@ -36,16 +36,10 @@ export const requireNonProductionSimulationGate = (
 export const requireCounterCashActor = (req, res, next) => {
   if (req.body?.method !== PAYMENT_METHOD.CASH) return next();
 
-  return requirePermission("booking.create")(req, res, (permissionError) => {
-    if (permissionError) return next(permissionError);
-    return requireRole("STAFF")(req, res, next);
-  });
+  return requireCounterTicketActor(req, res, next);
 };
 
-export const createPaymentRouter = (
-  controller,
-  { getNodeEnv } = {},
-) => {
+export const createPaymentRouter = (controller, { getNodeEnv } = {}) => {
   const router = Router();
 
   // Public: payOS calls this server-to-server. The checksum signature is the authentication;
@@ -61,8 +55,7 @@ export const createPaymentRouter = (
   if (controller.confirmCounterCash) {
     router.post(
       "/:paymentId/attempts/:attemptId/cash-confirm",
-      requirePermission("booking.create"),
-      requireRole("STAFF"),
+      requireCounterTicketActor,
       validate(paymentAttemptParamsSchema, {
         source: "params",
         code: PAYMENT_ERROR_CODE.INVALID_PAYMENT,
@@ -77,7 +70,9 @@ export const createPaymentRouter = (
   router.post(
     "/",
     requireCounterCashActor,
-    validate(initiatePaymentSchema, { code: PAYMENT_ERROR_CODE.INVALID_PAYMENT }),
+    validate(initiatePaymentSchema, {
+      code: PAYMENT_ERROR_CODE.INVALID_PAYMENT,
+    }),
     controller.initiate,
   );
 

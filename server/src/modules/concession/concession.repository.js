@@ -23,6 +23,7 @@ const projection = {
   _id: 1,
   name: 1,
   description: 1,
+  imageUrl: 1,
   items: 1,
   price: {
     $convert: { input: "$price", to: "double", onError: null, onNull: null },

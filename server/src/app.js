@@ -31,6 +31,7 @@ import { notFound } from "./middlewares/notFoundMiddleware.js";
 import { errorHandler } from "./middlewares/errorMiddleware.js";
 import { env } from "./config/env.js";
 import { promotionRoutes } from "./modules/promotion/promotion.routes.js";
+import staffDashboardRoutes from "./modules/staff-dashboard/staff-dashboard.routes.js";
 
 const app = express();
 
@@ -66,6 +67,7 @@ app.use("/api/seat-holds", seatHoldRoutes);
 app.use("/api/inventory", inventoryRoutes);
 app.use("/api", concessionRoutes);
 app.use("/api/staff-shifts", staffShiftRoutes);
+app.use("/api/staff-dashboard", staffDashboardRoutes);
 app.use("/api/bookings", bookingRoutes);
 app.use("/api/bookings", bookingVoucherRoutes);
 app.use("/api", promotionRoutes);

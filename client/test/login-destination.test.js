@@ -13,16 +13,21 @@ test("INT-FE-001 preserves role priority and never resumes a different role work
   for (const [role, home] of [
     ["ADMIN", "/admin"],
     ["MANAGER", "/manager"],
-    ["STAFF", "/staff"],
+    ["STAFF", "/staff/dashboard"],
     ["CUSTOMER", "/"],
   ]) {
     assert.equal(getLoginDestination(account(role)), home);
+    const workspacePrefix = {
+      ADMIN: "/admin",
+      MANAGER: "/manager",
+      STAFF: "/staff",
+    }[role];
     for (const other of [
       "/admin/rooms",
       "/manager/rooms",
       "/staff/inventory",
     ]) {
-      if (!other.startsWith(`${home}/`) || home === "/")
+      if (!workspacePrefix || !other.startsWith(`${workspacePrefix}/`))
         assert.equal(getLoginDestination(account(role), other), home);
     }
   }

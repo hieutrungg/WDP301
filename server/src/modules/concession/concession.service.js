@@ -144,7 +144,7 @@ const serializeCombos = async (items, branchId) => {
       id: item._id.toString(),
       name: textOrNull(item.name),
       description: textOrNull(item.description),
-      imageUrl: null,
+      imageUrl: textOrNull(item.imageUrl),
       price: item.price,
       branchId,
       available:

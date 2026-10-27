@@ -1,7 +1,7 @@
 import mongoose from "mongoose";
 
 // Read model of the existing documented `combos` collection. No DDL or writes on import.
-// No isPublic, description-on-Concession, image field, index or separate combo stock is added.
+// No isPublic, description-on-Concession, index or separate combo stock is added.
 const componentSchema = new mongoose.Schema(
   {
     concessionId: {
@@ -23,6 +23,7 @@ const comboSchema = new mongoose.Schema(
   {
     name: { type: String, required: true },
     description: String,
+    imageUrl: { type: String, trim: true },
     price: { type: Number, min: 0, validate: Number.isSafeInteger },
     status: { type: String, required: true, enum: ["ACTIVE", "INACTIVE"] },
     items: {

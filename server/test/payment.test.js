@@ -34,8 +34,9 @@ test("Payment model and index definitions satisfy Payment aggregate and validato
     Payment.schema.path("method").enumValues,
     PAYMENT_ACCEPTED_METHOD_VALUES,
   );
-  assert.equal(PAYMENT_INDEXES.length, 6);
+  assert.equal(PAYMENT_INDEXES.length, 7);
   assert.ok(PAYMENT_INDEXES.some(({ options }) => options.name === "idx_payment_provider_order_code"));
+  assert.ok(PAYMENT_INDEXES.some(({ options }) => options.name === "idx_payment_revenue_paid_at"));
   assert.equal(PAYMENT_INDEXES[0].options.name, "uniq_payment_order");
   assert.equal(PAYMENT_INDEXES[0].options.unique, true);
   assert.equal(PAYMENT_INDEXES[1].options.name, "uniq_payment_booking");

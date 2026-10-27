@@ -31,6 +31,16 @@ const bookingSchema = new mongoose.Schema(
       required: true,
       ref: "Account",
     },
+    channel: {
+      type: String,
+      enum: ["ONLINE", "COUNTER"],
+      required: true,
+      default: "ONLINE",
+    },
+    createdByStaffId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Account",
+    },
     holdId: {
       type: mongoose.Schema.Types.ObjectId,
       required: true,
@@ -85,7 +95,10 @@ const bookingSchema = new mongoose.Schema(
       ref: "Payment",
     },
     refundedAt: Date,
-    refundRequestId: { type: mongoose.Schema.Types.ObjectId, ref: "RefundRequest" },
+    refundRequestId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "RefundRequest",
+    },
   },
   {
     collection: "bookings",

@@ -1,46 +1,46 @@
-import { ArrowLeft, Compass, House, ShieldAlert } from 'lucide-react'
-import { Link, useLocation, useNavigate } from 'react-router'
-import AppLogo from '../../components/common/AppLogo'
-import { useAuth } from '../../features/auth/hooks/useAuth'
+import { ArrowLeft, Compass, House, ShieldAlert } from "lucide-react";
+import { Link, useLocation, useNavigate } from "react-router";
+import AppLogo from "../../components/common/AppLogo";
+import { useAuth } from "../../features/auth/hooks/useAuth";
 import {
   getHighestPriorityRole,
   getRoleWorkspaceMeta,
-} from '../../features/auth/utils/loginDestination'
+} from "../../features/auth/utils/loginDestination";
 
 const WORKSPACE_LANDING_PATHS = {
-  '/admin': new Set(['/admin', '/admin/branches']),
-  '/manager': new Set(['/manager', '/manager/showtimes']),
-  '/staff': new Set(['/staff', '/staff/pos']),
-  '/': new Set(['/']),
-}
+  "/admin": new Set(["/admin", "/admin/branches"]),
+  "/manager": new Set(["/manager", "/manager/showtimes"]),
+  "/staff/dashboard": new Set(["/staff", "/staff/dashboard"]),
+  "/": new Set(["/"]),
+};
 
 function ForbiddenPage({ standalone = false }) {
-  const { account, isAuthenticated } = useAuth()
-  const location = useLocation()
-  const navigate = useNavigate()
+  const { account, isAuthenticated } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
 
-  const primaryRole = getHighestPriorityRole(account)
-  const workspace = getRoleWorkspaceMeta(account)
+  const primaryRole = getHighestPriorityRole(account);
+  const workspace = getRoleWorkspaceMeta(account);
   const isAlreadyAtWorkspace = Boolean(
     WORKSPACE_LANDING_PATHS[workspace.path]?.has(location.pathname),
-  )
+  );
 
-  const primaryDestination = isAlreadyAtWorkspace ? '/' : workspace.path
-  const primaryLabel = isAlreadyAtWorkspace ? 'Back to Home' : workspace.label
+  const primaryDestination = isAlreadyAtWorkspace ? "/" : workspace.path;
+  const primaryLabel = isAlreadyAtWorkspace ? "Back to Home" : workspace.label;
 
   const handleGoBack = () => {
     if (window.history.length > 1) {
-      navigate(-1)
-      return
+      navigate(-1);
+      return;
     }
-    navigate('/', { replace: true })
-  }
+    navigate("/", { replace: true });
+  };
 
   return (
     <section
       aria-labelledby="forbidden-page-title"
       className={`flex w-full items-center justify-center bg-background px-4 py-12 text-on-surface sm:px-6 lg:px-8 ${
-        standalone ? 'min-h-screen' : 'min-h-[calc(100vh-9rem)]'
+        standalone ? "min-h-screen" : "min-h-[calc(100vh-9rem)]"
       }`}
     >
       <div className="w-full max-w-xl rounded-2xl border border-white/10 bg-surface-container-low p-6 shadow-2xl sm:p-10">
@@ -78,8 +78,9 @@ function ForbiddenPage({ standalone = false }) {
           </h1>
 
           <p className="mt-3 text-sm leading-6 text-on-surface-variant sm:text-base">
-            Your current account does not have the required role or permission to access this area.
-            Your session remains active and you can safely return to an authorized workspace.
+            Your current account does not have the required role or permission
+            to access this area. Your session remains active and you can safely
+            return to an authorized workspace.
           </p>
 
           <div className="mt-8 flex w-full flex-col gap-3 sm:flex-row sm:items-center">
@@ -88,7 +89,7 @@ function ForbiddenPage({ standalone = false }) {
               replace
               className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-primary-container px-5 text-sm font-bold text-white shadow-crimson transition hover:opacity-95"
             >
-              {primaryDestination === '/' ? (
+              {primaryDestination === "/" ? (
                 <House className="size-4" aria-hidden="true" />
               ) : (
                 <Compass className="size-4" aria-hidden="true" />
@@ -96,7 +97,7 @@ function ForbiddenPage({ standalone = false }) {
               {primaryLabel}
             </Link>
 
-            {primaryDestination !== '/' && (
+            {primaryDestination !== "/" && (
               <Link
                 to="/"
                 replace
@@ -119,7 +120,7 @@ function ForbiddenPage({ standalone = false }) {
         </div>
       </div>
     </section>
-  )
+  );
 }
 
-export default ForbiddenPage
+export default ForbiddenPage;

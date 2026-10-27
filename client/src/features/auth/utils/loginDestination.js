@@ -1,58 +1,61 @@
-export const ROLE_PRIORITY = ['ADMIN', 'MANAGER', 'STAFF', 'CUSTOMER']
+export const ROLE_PRIORITY = ["ADMIN", "MANAGER", "STAFF", "CUSTOMER"];
 
 const ROLE_HOME = [
-  { role: 'ADMIN', path: '/admin' },
-  { role: 'MANAGER', path: '/manager' },
-  { role: 'STAFF', path: '/staff' },
-  { role: 'CUSTOMER', path: '/' },
-]
+  { role: "ADMIN", path: "/admin" },
+  { role: "MANAGER", path: "/manager" },
+  { role: "STAFF", path: "/staff/dashboard" },
+  { role: "CUSTOMER", path: "/" },
+];
 
 const NON_DESTINATION_PATHS = new Set([
-  '/login',
-  '/register',
-  '/verify-email',
-  '/forgot-password',
-  '/403',
-])
+  "/login",
+  "/register",
+  "/verify-email",
+  "/forgot-password",
+  "/403",
+]);
 
 const ROLE_PREFIX_RULES = [
-  { prefix: '/admin', role: 'ADMIN' },
-  { prefix: '/manager', role: 'MANAGER' },
-  { prefix: '/staff', role: 'STAFF' },
-]
+  { prefix: "/admin", role: "ADMIN" },
+  { prefix: "/manager", role: "MANAGER" },
+  { prefix: "/staff", role: "STAFF" },
+];
 
 export function getAccountRoleNames(account) {
   return new Set(
     (account?.roles ?? [])
-      .map((item) => (typeof item === 'string' ? item : item?.name))
+      .map((item) => (typeof item === "string" ? item : item?.name))
       .filter(Boolean),
-  )
+  );
 }
 
 export function getAccountPermissionNames(account) {
   return new Set(
     (account?.permissions ?? [])
-      .map((item) => (typeof item === 'string' ? item : item?.name))
+      .map((item) => (typeof item === "string" ? item : item?.name))
       .filter(Boolean),
-  )
+  );
 }
 
 export function getHighestPriorityRole(account) {
-  const roleNames = getAccountRoleNames(account)
-  return ROLE_PRIORITY.find((role) => roleNames.has(role)) || null
+  const roleNames = getAccountRoleNames(account);
+  return ROLE_PRIORITY.find((role) => roleNames.has(role)) || null;
 }
 
 export function hasRequiredRole(account, requiredRole) {
-  if (!requiredRole || (Array.isArray(requiredRole) && requiredRole.length === 0)) {
-    return true
+  if (
+    !requiredRole ||
+    (Array.isArray(requiredRole) && requiredRole.length === 0)
+  ) {
+    return true;
   }
 
-  const roleNames = getAccountRoleNames(account)
+  const roleNames = getAccountRoleNames(account);
   if (Array.isArray(requiredRole)) {
-    return requiredRole.some((role) => roleNames.has(role))
+    return requiredRole.some((role) => roleNames.has(role));
   }
 
-  return roleNames.has(requiredRole)
+  return roleNames.has(requiredRole);
 }
 
 export function hasRequiredPermission(account, requiredPermission) {
@@ -60,89 +63,107 @@ export function hasRequiredPermission(account, requiredPermission) {
     !requiredPermission ||
     (Array.isArray(requiredPermission) && requiredPermission.length === 0)
   ) {
-    return true
+    return true;
   }
 
-  const permissionNames = getAccountPermissionNames(account)
+  const permissionNames = getAccountPermissionNames(account);
   if (Array.isArray(requiredPermission)) {
-    return requiredPermission.every((permission) => permissionNames.has(permission))
+    return requiredPermission.every((permission) =>
+      permissionNames.has(permission),
+    );
   }
 
-  return permissionNames.has(requiredPermission)
+  return permissionNames.has(requiredPermission);
 }
 
 export function getRoleHomePath(account) {
-  const highestRole = getHighestPriorityRole(account)
-  const matched = ROLE_HOME.find(({ role }) => role === highestRole)
-  return matched ? matched.path : '/'
+  const highestRole = getHighestPriorityRole(account);
+  const matched = ROLE_HOME.find(({ role }) => role === highestRole);
+  return matched ? matched.path : "/";
 }
 
 export function getRoleWorkspaceMeta(account) {
-  const roleNames = getAccountRoleNames(account)
-  const permissionNames = getAccountPermissionNames(account)
+  const roleNames = getAccountRoleNames(account);
+  const permissionNames = getAccountPermissionNames(account);
 
-  if (roleNames.has('ADMIN') && permissionNames.has('branch.manage')) {
-    return { role: 'ADMIN', path: '/admin', label: 'Back to Admin Console' }
+  if (roleNames.has("ADMIN") && permissionNames.has("branch.manage")) {
+    return { role: "ADMIN", path: "/admin", label: "Back to Admin Console" };
   }
 
-  if (roleNames.has('MANAGER')) {
-    return { role: 'MANAGER', path: '/manager', label: 'Back to Manager Workspace' }
+  if (roleNames.has("MANAGER")) {
+    return {
+      role: "MANAGER",
+      path: "/manager",
+      label: "Back to Manager Workspace",
+    };
   }
 
-  if (roleNames.has('STAFF')) {
-    return { role: 'STAFF', path: '/staff', label: 'Back to Staff Workspace' }
+  if (roleNames.has("STAFF")) {
+    return {
+      role: "STAFF",
+      path: "/staff/dashboard",
+      label: "Back to Staff Workspace",
+    };
   }
 
   return {
-    role: roleNames.has('CUSTOMER') ? 'CUSTOMER' : null,
-    path: '/',
-    label: 'Back to Home',
-  }
+    role: roleNames.has("CUSTOMER") ? "CUSTOMER" : null,
+    path: "/",
+    label: "Back to Home",
+  };
 }
 
 function matchesPrefix(pathname, prefix) {
-  return pathname === prefix || pathname.startsWith(`${prefix}/`)
+  return pathname === prefix || pathname.startsWith(`${prefix}/`);
 }
 
 export function getLoginDestination(account, requestedPath) {
-  const roleNames = getAccountRoleNames(account)
-  const homePath = getRoleHomePath(account)
+  const roleNames = getAccountRoleNames(account);
+  const homePath = getRoleHomePath(account);
   const requested =
-    typeof requestedPath === 'string'
+    typeof requestedPath === "string"
       ? requestedPath.trim()
-      : `${requestedPath?.pathname || ''}${requestedPath?.search || ''}${requestedPath?.hash || ''}`
+      : `${requestedPath?.pathname || ""}${requestedPath?.search || ""}${requestedPath?.hash || ""}`;
 
   if (
-    !requested.startsWith('/') ||
-    requested.startsWith('//') ||
-    requested.includes('\\') ||
-    Array.from(requested).some((character) => character.charCodeAt(0) <= 32 || character.charCodeAt(0) === 127)
+    !requested.startsWith("/") ||
+    requested.startsWith("//") ||
+    requested.includes("\\") ||
+    Array.from(requested).some(
+      (character) =>
+        character.charCodeAt(0) <= 32 || character.charCodeAt(0) === 127,
+    )
   ) {
-    return homePath
+    return homePath;
   }
 
-  let destination
+  let destination;
   try {
-    destination = new URL(requested, 'https://f-cinema.invalid')
+    destination = new URL(requested, "https://f-cinema.invalid");
   } catch {
-    return homePath
+    return homePath;
   }
-  const pathname = destination.pathname
-  if (destination.origin !== 'https://f-cinema.invalid' || pathname.startsWith('//')) return homePath
-  if (NON_DESTINATION_PATHS.has(pathname.replace(/\/+$/, '') || '/')) return homePath
-  const normalizedPath = `${pathname}${destination.search}${destination.hash}`
+  const pathname = destination.pathname;
+  if (
+    destination.origin !== "https://f-cinema.invalid" ||
+    pathname.startsWith("//")
+  )
+    return homePath;
+  if (NON_DESTINATION_PATHS.has(pathname.replace(/\/+$/, "") || "/"))
+    return homePath;
+  const normalizedPath = `${pathname}${destination.search}${destination.hash}`;
 
   const matchedRolePrefix = ROLE_PREFIX_RULES.find(({ prefix }) =>
     matchesPrefix(pathname, prefix),
-  )
+  );
 
   if (matchedRolePrefix) {
-    return roleNames.has(matchedRolePrefix.role) ? normalizedPath : homePath
+    return roleNames.has(matchedRolePrefix.role) ? normalizedPath : homePath;
   }
 
-  if (homePath !== '/') {
-    return matchesPrefix(pathname, homePath) ? normalizedPath : homePath
+  if (homePath !== "/") {
+    return matchesPrefix(pathname, homePath) ? normalizedPath : homePath;
   }
 
-  return normalizedPath
+  return normalizedPath;
 }

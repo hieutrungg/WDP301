@@ -261,13 +261,15 @@ Trạng thái đặt chỗ theo thời gian thực của từng ghế trong mỗ
 ---
 
 ### 2.11. `bookings`
-Giao dịch đặt vé do khách hàng tạo.
+Giao dịch đặt vé online hoặc tại quầy.
 
 | Trường (Field) | Kiểu dữ liệu | Quan hệ / Ghi chú |
 | :--- | :--- | :--- |
 | `_id` | `ObjectId` | Khóa chính (Primary Key) |
 | `bookingCode` | `string` | Mã đặt vé công khai, **unique** |
 | `customerAccountId` | `ObjectId` | Tham chiếu đến `accounts._id` (khách hàng đặt vé) |
+| `channel` | `string` | Nguồn tạo đơn: `ONLINE` hoặc `COUNTER` |
+| `createdByStaffId` | `ObjectId` | Tham chiếu đến `accounts._id` của Staff tạo đơn tại quầy; không có ở đơn online |
 | `showtimeId` | `ObjectId` | Tham chiếu đến `showtimes._id` |
 | `seatIds` | `Array<ObjectId>` | Tham chiếu đến `rooms.seats._id` (ghế nhúng) |
 | `voucherId` | `ObjectId` | Tham chiếu đến `vouchers._id` (nếu có áp dụng) |
@@ -432,6 +434,7 @@ Gói combo bắp nước. Thành phần combo được **nhúng** dưới dạng
 | `_id` | `ObjectId` | Khóa chính (Primary Key) |
 | `name` | `string` | Tên combo |
 | `description` | `string` | Mô tả combo |
+| `imageUrl` | `string` | Đường dẫn ảnh đại diện combo |
 | `price` | `number` | Giá bán combo |
 | `status` | `string` | Trạng thái kinh doanh |
 | `items` | `Array<Object>` (embedded) | Danh sách sản phẩm trong combo |
@@ -654,6 +657,8 @@ erDiagram
         ObjectId _id PK
         string bookingCode UK
         ObjectId customerAccountId FK
+        string channel
+        ObjectId createdByStaffId FK
         ObjectId showtimeId FK
         Array seatIds FK
         ObjectId voucherId FK
@@ -756,6 +761,7 @@ erDiagram
     combos {
         ObjectId _id PK
         string name
+        string imageUrl
         number price
         string status
     }

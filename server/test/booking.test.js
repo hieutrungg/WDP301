@@ -107,6 +107,12 @@ test("Booking model stores the approved lifecycle and per-seat price snapshots",
     Booking.schema.path("status").defaultValue,
     BOOKING_STATUS.PENDING_PAYMENT,
   );
+  assert.deepEqual(Booking.schema.path("channel").enumValues, [
+    "ONLINE",
+    "COUNTER",
+  ]);
+  assert.equal(Booking.schema.path("channel").defaultValue, "ONLINE");
+  assert.equal(Booking.schema.path("createdByStaffId").options.ref, "Account");
   const indexes = new Map(
     Booking.schema
       .indexes()
@@ -133,7 +139,13 @@ test("BOOK-009 migration creates the same backward-compatible indexes as the mod
     collection(name) {
       assert.equal(name, "bookings");
       return {
-        listIndexes() { return { async toArray() { return []; } }; },
+        listIndexes() {
+          return {
+            async toArray() {
+              return [];
+            },
+          };
+        },
         async createIndex(fields, options) {
           calls.push({ fields, options });
           return options.name;
@@ -247,7 +259,8 @@ test("concurrent request-key reuse for a different hold returns the same 409 as 
       ownerId: fixture.ownerId,
       requestKey: "concurrent-booking-key",
     }),
-    (error) => error.statusCode === 409 && error.code === "BOOKING_REQUEST_KEY_REUSED",
+    (error) =>
+      error.statusCode === 409 && error.code === "BOOKING_REQUEST_KEY_REUSED",
   );
 });
 
@@ -268,8 +281,12 @@ test("a duplicate-key race for the same hold recovers the winning booking", asyn
 
 test("an unrelated duplicate-key error is not reported as a request-key conflict", async () => {
   const fixture = makeFixture();
-  const duplicate = Object.assign(new Error("duplicate booking code"), { code: 11000 });
-  fixture.repository.createPending = async () => { throw duplicate; };
+  const duplicate = Object.assign(new Error("duplicate booking code"), {
+    code: 11000,
+  });
+  fixture.repository.createPending = async () => {
+    throw duplicate;
+  };
   await assert.rejects(
     fixture.service.createPendingBookingFromHold({
       holdId: fixture.holdId,
@@ -361,6 +378,45 @@ test("Booking HTTP controller derives the customer from auth context", async () 
     holdId,
     requestKey: "booking-request-http",
     ownerId,
+    channel: "ONLINE",
   });
   assert.equal(response.statusCode, 201);
+});
+
+test("Booking HTTP controller records the authenticated Staff counter source", async () => {
+  const staffId = objectId();
+  const calls = [];
+  const controller = createBookingController({
+    async createPendingBookingFromHold(command) {
+      calls.push(command);
+      return { bookingId: objectId(), idempotent: false };
+    },
+  });
+  const response = {
+    status(code) {
+      assert.equal(code, 201);
+      return this;
+    },
+    json() {
+      return this;
+    },
+  };
+
+  await controller.createPending(
+    {
+      auth: {
+        accountId: staffId,
+        account: { roles: [{ name: "STAFF" }] },
+      },
+      body: { holdId: objectId(), requestKey: "counter-booking-http" },
+    },
+    response,
+    (error) => {
+      throw error;
+    },
+  );
+
+  assert.equal(calls[0].ownerId, staffId);
+  assert.equal(calls[0].channel, "COUNTER");
+  assert.equal(calls[0].createdByStaffId, staffId);
 });
