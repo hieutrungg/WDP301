@@ -1203,9 +1203,11 @@ function ManagerShowtimesPage() {
                 {cancellingShowtime.movie.title}
               </strong>{" "}
               at {timeFormatter.format(new Date(cancellingShowtime.startAt))} in{" "}
-              {cancellingShowtime.room.roomName}? This keeps the record for
-              history. Sessions with active holds or bookings cannot be
-              cancelled here.
+              {cancellingShowtime.room.roomName}? The showtime will be
+              cancelled immediately. Unpaid bookings and holds will expire;
+              paid bookings will be refunded automatically where possible.
+              Cash refunds will wait for manager confirmation after payment
+              outside the system.
             </p>
             <div className="mt-5 flex justify-end gap-2">
               <button
@@ -1222,8 +1224,13 @@ function ManagerShowtimesPage() {
                 onClick={async () => {
                   setCancelling(true);
                   try {
-                    await cancelManagerShowtime(cancellingShowtime.id);
-                    toast.success("Showtime cancelled.");
+                    const result = await cancelManagerShowtime(cancellingShowtime.id);
+                    const summary = result?.refunds;
+                    if (summary?.failed || summary?.awaitingManual) {
+                      toast.warning(`Showtime cancelled. ${summary.failed} refund(s) need retry and ${summary.awaitingManual} cash refund(s) await confirmation.`);
+                    } else {
+                      toast.success(`Showtime cancelled. ${summary?.refunded ?? 0} refund(s) completed.`);
+                    }
                     setCancellingShowtime(null);
                     setRefreshToken((value) => value + 1);
                   } catch (requestError) {

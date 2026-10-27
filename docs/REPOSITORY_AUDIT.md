@@ -101,8 +101,7 @@ Tại thời điểm bắt đầu audit:
 
 ### SRS internal conflicts
 
-- `CMS_UC43 - Export Revenue Reports` lại mô tả “Deep Movie Performance Analysis”, ranking theo Movie ID; không mô tả export.
-- `CMS_UC44 - Analyze Movie Sales` lại mô tả dashboard KPI tổng quan. UC43/UC44 đang bị đảo semantic so với tên và Use Case List.
+- REP-101 review against the current supplied SRS (2026-10-27) confirms that UC43 is Export Revenue Reports and UC44 is Analyze Movie Sales. The section headings, Use Case List, and detailed `CMS_UC43`/`CMS_UC44` tables agree. The earlier audit observation that their detailed bodies were swapped is superseded; see `docs/REP-101-UC43-44-MAPPING.md`.
 - `CMS_UC49` tham chiếu `BR-57`, `BR-58`, `BR-59`, nhưng bảng Business Rules hiện kết thúc ở `BR-56`.
 - `CMS_UC19` tự động đưa paid sales vào refund queue nhưng refund policy, authority, retry/failure state chưa đủ approved.
 - SRS đã có `BR-54` hold mặc định 10 phút, `BR-55` atomic all-or-nothing và `BR-56` payment idempotency; tuy nhiên owner context cho biết review mới khoảng P0-04, nên các rule này phải được coi là draft chưa approved.

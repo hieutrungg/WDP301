@@ -4,6 +4,7 @@ import { createSeatAvailabilityService } from "../booking/seat-availability.serv
 import { movieService } from "../movie/movie.service.js";
 import { findBookableShowtimeById } from "./showtime.repository.js";
 import * as roomService from "../room/room.service.js";
+import { refundService } from "../refund/refund.module.js";
 import {
   ticketPricingService,
   TicketPricingUnavailableError,
@@ -15,7 +16,6 @@ import {
 } from "./showtime.constants.js";
 import {
   createDraftShowtime,
-  cancelPublishedShowtime,
   deleteDraftShowtime,
   findShowtimeById,
   findManagerShowtimes,
@@ -25,6 +25,7 @@ import {
   publishShowtime,
   updatePublishedShowtimeTime,
 } from "./showtime.repository.js";
+import { cancelShowtimeWithSales } from "./showtime-cancellation.repository.js";
 
 const getVietnamDateRange = (date) => {
   if (!date) return undefined;
@@ -292,27 +293,31 @@ export const createShowtimeRescheduler =
 
 export const rescheduleShowtime = createShowtimeRescheduler();
 
-export const createShowtimeCanceller = ({
-  assertEditable = assertEditableShowtime,
-  updateUnclaimed = seatAvailability.updateUnclaimedShowtime,
-  cancel = cancelPublishedShowtime,
-} = {}) => async ({ showtimeId }, now = new Date()) => {
-  const showtime = await assertEditable(showtimeId, now);
-  const cancelled = await updateUnclaimed({
-    showtimeId,
-    roomId: showtime.roomId,
-    roomLayoutVersion: showtime.roomLayoutVersion,
-    now,
-    commit: (session) => cancel({ showtimeId, now, session }),
-  });
-  if (!cancelled) {
+export const createShowtimeCanceller = () => async ({ showtimeId, managerId }, now = new Date()) => {
+  const result = await cancelShowtimeWithSales({ showtimeId, managerId, now });
+  if (result.missing) {
+    throw showtimeError(404, "Showtime not found", SHOWTIME_ERROR.SHOWTIME_NOT_FOUND);
+  }
+  if (result.notCancellable) {
     throw showtimeError(
       409,
       "This showtime can no longer be cancelled",
       SHOWTIME_ERROR.SHOWTIME_NOT_EDITABLE,
     );
   }
-  return { id: cancelled._id.toString(), status: cancelled.status };
+  const processed = await refundService.processShowtimeCancellationRefunds(result.refunds, result.managerId);
+  return {
+    id: result.showtimeId,
+    status: result.status,
+    refunds: {
+      total: processed.length,
+      refunded: processed.filter((item) => item.status === "REFUNDED").length,
+      failed: processed.filter((item) => item.status === "FAILED").length,
+      awaitingManual: processed.filter((item) => item.paymentMethod === "CASH" && ["REQUESTED", "FAILED"].includes(item.status)).length,
+      processing: processed.filter((item) => item.status === "PROCESSING").length,
+      items: processed,
+    },
+  };
 };
 
 export const cancelShowtime = createShowtimeCanceller();

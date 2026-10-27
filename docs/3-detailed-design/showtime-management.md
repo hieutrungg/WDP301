@@ -19,12 +19,12 @@ Supports creating, modifying, listing, publishing, and canceling showtimes. A sc
 - Store instants in UTC and interpret date filters in `Asia/Ho_Chi_Minh` before converting them to a UTC range.
 - Same-Room intervals use `[startAt, endAt)`: overlap is rejected, while a next Showtime may start exactly at the prior `endAt`.
 - Publish requires eligible Movie, active Branch/Room, future time, no overlap, and a valid Room layout. Publishing records `roomLayoutVersion` and initializes Showtime-scoped availability.
-- A published Showtime may be edited or cancelled only before it starts and while no active SeatHold, Booking, Payment, or Ticket exists.
-- Cancellation with sales/transactions remains blocked until the Refund contract is approved.
+- A published Showtime may be edited only before it starts and while no active SeatHold, Booking, Payment, or Ticket exists.
+- An upcoming published Showtime may be cancelled with pending/paid transactions under the owner-approved SHOW-103 flow: cancel immediately, expire unpaid bookings and release holds, then refund paid bookings. Failed refunds remain retryable; cash awaits Manager confirmation after an outside-system return. See `docs/SHOW-103-IMPLEMENTATION.md`.
 
 ## Responsibilities and Relationships
 
 `ShowtimeManagementService` loads reference data through ports, asks `ScheduleConflictPolicy`, changes the `Showtime` aggregate, and persists it. `SalesStatusPort` protects sold showtimes without importing Ticket infrastructure. `SeatAvailabilityInitializer` creates per-showtime availability from the room layout after publication.
 
-Deferred Design Question: cancellation with sold tickets and automatic/manual refund behavior remain outside this approved contract.
+Deferred integration: customer notifications and authoritative Ticket check-in/invalidation remain outside this implementation until their module contracts are approved.
 

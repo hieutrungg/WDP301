@@ -43,6 +43,8 @@ import CounterConcessionPosPage from '../../features/concessions/pages/CounterCo
 import NotFoundPage from '../../pages/public/NotFoundPage'
 import CustomerRefundsPage from '../../features/refund/pages/CustomerRefundsPage'
 import ManagerRefundsPage from '../../features/refund/pages/ManagerRefundsPage'
+import ManagerDashboardPage from '../../features/manager-dashboard/pages/ManagerDashboardPage'
+import RevenueReportsPage from '../../features/manager-reports/pages/RevenueReportsPage'
 
 function ScrollToTop() {
   const { pathname } = useLocation()
@@ -142,7 +144,13 @@ export function AppRoutes() {
         <Route path="manager" element={<ProtectedRoute />}>
           <Route element={<PermissionRoute role="MANAGER" />}>
             <Route element={<ManagerLayout />}>
-              <Route index element={<Navigate to="showtimes" replace />} />
+              <Route index element={<Navigate to="dashboard" replace />} />
+              <Route element={<PermissionRoute permission="analytics.view" />}>
+                <Route path="dashboard" element={<ManagerDashboardPage />} />
+              </Route>
+              <Route element={<PermissionRoute permission="report.view" />}>
+                <Route path="reports/revenue" element={<RevenueReportsPage />} />
+              </Route>
               <Route path="showtimes" element={<ManagerShowtimesPage />} />
               <Route path="refunds" element={<ManagerRefundsPage />} />
               <Route element={<MovieManagementAccess />}>

@@ -243,6 +243,8 @@ export const createPaymentService = ({
   };
 
   return {
+    getSuccessfulRevenueTotals: ({ fromAt, toAt, session } = {}) =>
+      paymentRepository.aggregateSuccessfulRevenue({ fromAt, toAt, session }),
     initiatePayment: async ({
       bookingId,
       ownerId,

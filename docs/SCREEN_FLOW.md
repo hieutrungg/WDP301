@@ -79,7 +79,7 @@ Counter sales must reuse the same booking, payment, ticket and promotion service
 ## 4. Manager operations
 
 ```text
-G03 Sign In -> role guard -> Manager Dashboard & Analytics
+G03 Sign In -> role guard -> Manager Dashboard & Analytics (`/manager/dashboard`; default `/manager` destination)
   +-> Movie Management
   |   +-> Add New Movie
   |   +-> Update Movie
@@ -130,7 +130,7 @@ Role changes, account-status changes and branch-status changes need immutable au
 | --- | --- |
 | Public/customer | `/`, `/movies`, `/movies/:id`, `/showtimes`, `/booking/*`, `/account/*`, `/rewards/*` |
 | Staff | `/staff`, `/staff/pos/*`, `/staff/tickets/scan`, `/staff/inventory/*` |
-| Manager | `/manager`, `/manager/movies/*`, `/manager/showtimes/*`, `/manager/promotions/*`, `/manager/reports/*` |
+| Manager | `/manager/dashboard`, `/manager/movies/*`, `/manager/showtimes/*`, `/manager/promotions/*`, `/manager/reports/*` (`/manager` redirects to dashboard) |
 | Administrator | `/admin`, `/admin/accounts/*`, `/admin/roles/*`, `/admin/branches/*` |
 
 Use separate layout shells and route guards for customer, staff, manager and administrator surfaces. Authorization must also be enforced by the server; client-side route guards are navigation aids, not a security boundary.

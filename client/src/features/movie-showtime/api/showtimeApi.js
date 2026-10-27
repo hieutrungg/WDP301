@@ -7,8 +7,17 @@ export { getPublicCinemas }
 export async function getPublicShowtimes(params, signal) {
   const { movieId, ...query } = params
   const path = movieId ? `/movies/${movieId}/showtimes` : '/showtimes'
-  const response = await httpClient.get(path, { params: query, signal })
-  return { items: response.data.data, meta: response.data.meta }
+  const firstPage = await httpClient.get(path, { params: { ...query, page: 1 }, signal })
+  const totalPages = firstPage.data.meta?.totalPages ?? 1
+  const rest = await Promise.all(
+    Array.from({ length: Math.max(0, totalPages - 1) }, (_, index) =>
+      httpClient.get(path, { params: { ...query, page: index + 2 }, signal }),
+    ),
+  )
+  return {
+    items: [firstPage, ...rest].flatMap((response) => response.data.data ?? []),
+    meta: firstPage.data.meta,
+  }
 }
 
 export async function getPublicShowtime(showtimeId, signal) {
