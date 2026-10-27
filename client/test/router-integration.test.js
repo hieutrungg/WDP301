@@ -64,7 +64,9 @@ test("INT-FE-001 public catalog and unknown links resolve to real pages", () => 
 });
 test("INT-FE-001 Staff menu mounts only inside the Staff role shell", () => {
   const html = render("/staff/concessions", actor("STAFF"));
-  assert.match(html, /Concession Menu/);
+  // The sidebar also says "Sell Concessions", so match the POS page heading itself.
+  assert.match(html, /Counter F&amp;B POS/);
+  assert.match(html, /<h1[^>]*>Sell Concessions<\/h1>/);
   assert.doesNotMatch(html, /404.*Page not found/);
   assert.match(render("/staff/concessions", actor("CUSTOMER")), /403/);
 });
@@ -145,3 +147,11 @@ test('CON-102 food selection is a real Customer route with Staff and Guest guard
   assert.doesNotMatch(render(path), /Select seats first/)
   assert.match(render(path,actor('STAFF')), /Access denied|403|permission/i)
 })
+
+test("TICKET-001 C17 fullscreen E-Ticket requires a session and renders outside the site shell", () => {
+  const path = "/tickets/333333333333333333333333";
+  const customer = render(path, actor("CUSTOMER"));
+  assert.match(customer, /Loading your E-Ticket/);
+  assert.doesNotMatch(customer, /404.*Page not found/);
+  assert.doesNotMatch(render(path), /Loading your E-Ticket/);
+});

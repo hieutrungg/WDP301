@@ -34,6 +34,7 @@ import ConcessionSelectionPage from '../../features/booking/pages/ConcessionSele
 import CheckoutPage from '../../features/booking/pages/CheckoutPage'
 import BookingConfirmationPage from '../../features/booking/pages/BookingConfirmationPage'
 import CustomerBookingsPage from '../../features/booking/pages/CustomerBookingsPage'
+import ETicketPage from '../../features/ticket/pages/ETicketPage'
 import StockInPage from '../../features/inventory/pages/StockInPage'
 import StockLevelsPage from '../../features/inventory/pages/StockLevelsPage'
 import StaffShiftsPage from '../../features/staff-shifts/pages/StaffShiftsPage'
@@ -96,6 +97,11 @@ export function AppRoutes() {
             <Route path="profile/change-password" element={<ChangePasswordPage />} />
           </Route>
           <Route path="*" element={<NotFoundPage />} />
+        </Route>
+
+        {/* C17 Fullscreen E-Ticket: no site chrome. UX guard only; the API enforces ownership. */}
+        <Route path="tickets" element={<ProtectedRoute />}>
+          <Route path=":ticketId" element={<ETicketPage />} />
         </Route>
 
         {/* Staff surface has its own shell, like admin/manager. UX guard only; the API enforces

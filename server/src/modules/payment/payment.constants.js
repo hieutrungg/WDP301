@@ -127,3 +127,11 @@ export const PAYMENT_ERROR_CODE = Object.freeze({
 });
 
 export const PAYMENT_ERROR = PAYMENT_ERROR_CODE;
+
+// SRS 5.3 standard messages used by the UC30 payment flow. Messages are display text only;
+// clients must branch on `code`.
+export const PAYMENT_MESSAGE = Object.freeze({
+  MSG14_SEAT_HOLD_EXPIRED: "Your seat hold has expired. Please select your seats again.",
+  MSG18_PAYMENT_FAILED: "Payment failed. Please try again.",
+  MSG19_BOOKING_CONFIRMED: "Booking confirmed successfully.",
+});

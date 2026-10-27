@@ -25,6 +25,113 @@ import { formatSeatMoney } from '../../seat-selection/utils/seatPricing'
 import { getBookingPaymentDetails } from '../api/paymentApi'
 import { MockQrSvg } from '../components/MockPaymentModal'
 import { getPaymentMethodOption } from '../utils/mockQrCode'
+import { getBookingTickets } from '../../ticket/api/ticketApi'
+import {
+  formatVnDateTime,
+  getTicketStatusMeta,
+  isTicketAdmissible,
+} from '../../ticket/utils/ticketPresentation'
+
+// SRS 5.3 messages shown on the C15 result.
+const MSG19_BOOKING_CONFIRMED = 'Booking confirmed successfully.'
+const MSG14_SEAT_HOLD_EXPIRED = 'Your seat hold has expired. Please select your seats again.'
+
+// C15 ticket stub: real TICKET-001 tickets. Payment details are loaded first; that read also
+// completes any interrupted issuance on the server, so tickets are fetched only after PAID.
+function IssuedTicketsStub({ ticketsQuery }) {
+  if (ticketsQuery.isPending) {
+    return (
+      <div role="status" className="flex flex-1 flex-col items-center justify-center gap-3 py-10 text-xs text-on-surface-variant">
+        <LoaderCircle className="size-6 animate-spin text-primary" />
+        Loading your E-Tickets…
+      </div>
+    )
+  }
+
+  if (ticketsQuery.isError) {
+    return (
+      <div role="alert" className="my-6 w-full rounded-xl border border-error/40 bg-error/10 p-4 text-left text-xs text-on-surface-variant">
+        <strong className="block text-error">Could not load E-Tickets</strong>
+        {getApiErrorMessage(ticketsQuery.error)}
+        <button
+          type="button"
+          onClick={() => ticketsQuery.refetch()}
+          className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-[11px] font-bold uppercase text-white"
+        >
+          <RefreshCcw className="size-3.5" />
+          Retry
+        </button>
+      </div>
+    )
+  }
+
+  const tickets = ticketsQuery.data?.tickets ?? []
+  if (tickets.length === 0) {
+    return (
+      <div className="my-6 w-full rounded-xl border border-secondary/30 bg-secondary/10 p-4 text-left text-xs text-on-surface-variant">
+        <strong className="block text-secondary">E-Tickets are being issued</strong>
+        Your payment is verified. Ticket issuance has not completed yet; refresh in a moment.
+        <button
+          type="button"
+          onClick={() => ticketsQuery.refetch()}
+          className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-white/15 bg-surface-container px-3 py-1.5 text-[11px] font-bold uppercase text-white"
+        >
+          <RefreshCcw className="size-3.5" />
+          Refresh
+        </button>
+      </div>
+    )
+  }
+
+  const [primary] = tickets
+  return (
+    <>
+      <div className="my-5 flex flex-col items-center">
+        {isTicketAdmissible(primary) ? (
+          <MockQrSvg
+            payload={primary.qrCode}
+            size={168}
+            badgeLabel="E-TICKET"
+            ariaLabel={`Admission QR for seat ${primary.seat.label}`}
+          />
+        ) : (
+          <div className="flex size-[200px] items-center justify-center rounded-2xl border border-white/10 bg-surface-container-low p-4 text-xs text-on-surface-variant">
+            {getTicketStatusMeta(primary.status).label}
+          </div>
+        )}
+        <span className="mt-3 block text-[10px] uppercase tracking-widest text-on-surface-variant">
+          Seat {primary.seat.label} • Ticket code
+        </span>
+        <span className="font-heading text-base font-black tracking-widest text-secondary">
+          {primary.ticketCode}
+        </span>
+      </div>
+
+      <ul className="w-full space-y-2 text-left" aria-label="E-Tickets in this booking">
+        {tickets.map((ticket) => {
+          const meta = getTicketStatusMeta(ticket.status)
+          return (
+            <li key={ticket.ticketId}>
+              <Link
+                to={`/tickets/${ticket.ticketId}`}
+                className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-[#131315]/80 px-3 py-2.5 transition hover:border-primary/50"
+              >
+                <span>
+                  <span className="block font-heading text-sm font-extrabold text-white">Seat {ticket.seat.label}</span>
+                  <span className="font-mono text-[11px] text-on-surface-variant">{ticket.ticketCode}</span>
+                </span>
+                <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase ${meta.tone}`}>
+                  {meta.label}
+                </span>
+              </Link>
+            </li>
+          )
+        })}
+      </ul>
+      <p className="mt-3 text-[11px] text-on-surface-variant">Open a ticket for its fullscreen QR at the entrance.</p>
+    </>
+  )
+}
 
 function BookingConfirmationPage() {
   const { showtimeId, bookingId } = useParams()
@@ -36,6 +143,17 @@ function BookingConfirmationPage() {
     retry: false,
     staleTime: 0,
     queryFn: () => getBookingPaymentDetails(bookingId),
+  })
+
+  const ticketsQuery = useQuery({
+    queryKey: ['booking-tickets', bookingId],
+    enabled:
+      Boolean(bookingId) &&
+      detailsQuery.data?.booking?.status === 'CONFIRMED' &&
+      detailsQuery.data?.payment?.status === 'PAID',
+    retry: false,
+    staleTime: 0,
+    queryFn: () => getBookingTickets(bookingId),
   })
 
   if (detailsQuery.isPending) {
@@ -98,7 +216,6 @@ function BookingConfirmationPage() {
   const payment = data?.payment
   const showtime = data?.showtime
   const seats = data?.seats?.length ? data.seats : booking?.seats || []
-  const ticketIssuance = data?.ticketIssuance
 
   const isConfirmedAndPaid =
     booking?.status === 'CONFIRMED' && payment?.status === 'PAID'
@@ -175,8 +292,11 @@ function BookingConfirmationPage() {
               <h1 className="font-heading text-3xl font-black tracking-tight text-white sm:text-5xl">
                 Booking Confirmed!
               </h1>
-              <p className="mt-2 max-w-xl text-sm text-on-surface-variant sm:text-base">
-                Your seats are locked and confirmed. Below is your reservation summary and E-Ticket preview.
+              <p role="status" className="mt-2 font-semibold text-emerald-300">
+                {MSG19_BOOKING_CONFIRMED}
+              </p>
+              <p className="mt-1 max-w-xl text-sm text-on-surface-variant sm:text-base">
+                Your seats are locked and confirmed. Below is your reservation summary and your E-Tickets.
               </p>
 
               <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
@@ -267,11 +387,7 @@ function BookingConfirmationPage() {
                         Screening Date &amp; Time
                       </div>
                       <p className="mt-1 font-heading text-sm font-bold text-white">
-                        {showtime?.startAt
-                          ? new Date(showtime.startAt).toLocaleString('en-GB', {
-                              timeZone: 'Asia/Ho_Chi_Minh',
-                            })
-                          : 'Scheduled Showtime'}
+                        {formatVnDateTime(showtime?.startAt, 'Scheduled Showtime')}
                       </p>
                       <p className="mt-0.5 text-[11px] text-emerald-400">
                         Vietnam Time (GMT+7)
@@ -330,57 +446,26 @@ function BookingConfirmationPage() {
                           Settled At
                         </span>
                         <span className="mt-0.5 block text-xs font-medium text-on-surface-variant">
-                          {payment.paidAt
-                            ? new Date(payment.paidAt).toLocaleString('en-GB', {
-                                timeZone: 'Asia/Ho_Chi_Minh',
-                              })
-                            : 'Verified'}
+                          {formatVnDateTime(payment.paidAt, 'Verified')}
                         </span>
                       </div>
                     </div>
                   </div>
                 </div>
 
-                {/* Right 4 Cols: E-Ticket Preview QR Stub (Clearly Separated from Payment QR) */}
-                <div className="flex flex-col items-center justify-between bg-[#131315]/60 p-6 text-center sm:p-8 lg:col-span-4">
+                {/* Right 4 Cols: issued E-Tickets (separate from the payment QR) */}
+                <div className="flex flex-col items-center bg-[#131315]/60 p-6 text-center sm:p-8 lg:col-span-4">
                   <div className="w-full">
-                    <span className="inline-flex items-center gap-1.5 rounded-full border border-secondary/40 bg-secondary/15 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-secondary">
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/40 bg-emerald-500/15 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-emerald-300">
                       <QrCode className="size-3" />
-                      DEMO E-TICKET PREVIEW
+                      E-TICKETS
                     </span>
                     <p className="mt-1.5 text-[11px] text-on-surface-variant">
-                      Pending Tickets Module Issuance
+                      One ticket per seat
                     </p>
                   </div>
 
-                  <div className="my-5 flex flex-col items-center">
-                    <MockQrSvg
-                      payload={
-                        ticketIssuance?.previewReference ||
-                        `ETKT-PREVIEW-${booking.payableReference}`
-                      }
-                      size={168}
-                      badgeLabel="E-TICKET"
-                      ariaLabel="Demo E-Ticket preview QR code"
-                    />
-                    <div className="mt-3">
-                      <span className="block text-[10px] uppercase tracking-widest text-on-surface-variant">
-                        Preview Ticket Code
-                      </span>
-                      <span className="font-heading text-base font-black tracking-widest text-secondary">
-                        {ticketIssuance?.previewReference ||
-                          `ETKT-PREVIEW-${booking.payableReference}`}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="w-full rounded-xl border border-secondary/30 bg-secondary/10 p-3 text-left text-[11px] leading-relaxed text-on-surface-variant">
-                    <strong className="block text-secondary">
-                      Ticket Module Boundary Notice:
-                    </strong>
-                    {ticketIssuance?.notice ||
-                      'Official cinema admission QR issuance belongs to the dedicated Tickets module. This preview confirms your paid booking state.'}
-                  </div>
+                  <IssuedTicketsStub ticketsQuery={ticketsQuery} />
                 </div>
               </div>
             </section>
@@ -388,6 +473,15 @@ function BookingConfirmationPage() {
             {/* C15 Action Buttons */}
             <section className="mt-8 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-white/10 bg-surface-container-low p-5">
               <div className="flex flex-wrap items-center gap-3">
+                {ticketsQuery.data?.tickets?.[0] && (
+                  <Link
+                    to={`/tickets/${ticketsQuery.data.tickets[0].ticketId}`}
+                    className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-3 text-xs font-bold uppercase tracking-wider text-white"
+                  >
+                    <QrCode className="size-4" />
+                    Open E-Ticket
+                  </Link>
+                )}
                 <button
                   type="button"
                   onClick={() => window.print()}
@@ -467,16 +561,19 @@ function BookingConfirmationPage() {
               <ShieldAlert className="size-8 shrink-0" />
               <div>
                 <span className="text-xs font-black uppercase tracking-widest">
-                  Reconciliation Required • Decision A-20
+                  Payment Resolution Pending • UC30 A1
                 </span>
                 <h1 className="font-heading text-2xl font-black text-white sm:text-3xl">
-                  Late Payment Received After Hold Expiry
+                  Payment Received After Your Seat Hold Expired
                 </h1>
               </div>
             </div>
 
             <p className="mt-4 text-sm leading-relaxed text-on-surface-variant">
               Your mock payment notification arrived after the 10-minute seat hold and booking window expired. Per F-Cinema booking safety rules, the expired booking was <strong className="text-white">not confirmed</strong> and <strong className="text-white">no ticket was issued</strong> so seats could not be double-booked.
+            </p>
+            <p className="mt-3 text-sm leading-relaxed text-on-surface-variant">
+              Your payment record is kept for reconciliation. A manager will review it and arrange a refund; you do not need to pay again for this booking.
             </p>
 
             <div className="mt-6 grid gap-3 rounded-2xl border border-white/10 bg-[#131315] p-5 text-xs sm:grid-cols-2">
@@ -540,7 +637,7 @@ function BookingConfirmationPage() {
             <p className="mt-2 text-sm text-on-surface-variant">
               {isPendingPayment
                 ? 'This booking is still awaiting verified payment settlement on the server. No E-Ticket has been issued yet.'
-                : 'This reservation expired before payment was completed. Please select seats again to start a new booking.'}
+                : MSG14_SEAT_HOLD_EXPIRED}
             </p>
 
             <div className="mt-6 flex flex-wrap justify-center gap-3">
