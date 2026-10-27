@@ -19,11 +19,11 @@ import { createBookingVoucherRouter } from "./booking-voucher.routes.js";
 import { paymentPricingReader } from "../payment/payment-pricing.read-service.js";
 
 const showtimeReader = {
-  getBookableShowtime: getBookableShowtimeForBooking,
+  getBookableShowtime: (...args) => getBookableShowtimeForBooking(...args),
 };
 
 const roomLayoutReader = {
-  getLayoutVersion: getLayoutVersionForBooking,
+  getLayoutVersion: (...args) => getLayoutVersionForBooking(...args),
 };
 
 export const seatAvailabilityService = createSeatAvailabilityService({
@@ -39,7 +39,8 @@ export const seatHoldService = createSeatHoldService({
 });
 
 export const concessionCheckoutService = createConcessionCheckoutService({
-  getLiveHold: command => seatHoldService.getLiveHoldForBooking(command), getShowtime: getBookableShowtimeForBooking,
+  getLiveHold: command => seatHoldService.getLiveHoldForBooking(command),
+  getShowtime: (...args) => getBookableShowtimeForBooking(...args),
 });
 export const concessionCheckoutRoutes = createConcessionCheckoutRouter(concessionCheckoutService);
 export const bookingService = createBookingService({

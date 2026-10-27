@@ -26,6 +26,7 @@ import MoviesPage from '../../pages/public/MoviesPage'
 import MovieDetailPage from '../../pages/public/MovieDetailPage'
 import ProtectedRoute from './ProtectedRoute'
 import StaffLayout from '../../layouts/StaffLayout'
+import StaffDashboardPage from '../../features/staff-dashboard/pages/StaffDashboardPage'
 import CounterPosPage from '../../features/counter-pos/pages/CounterPosPage'
 import CounterPaymentPage from '../../features/counter-pos/pages/CounterPaymentPage'
 import CounterCompletePage from '../../features/counter-pos/pages/CounterCompletePage'
@@ -116,7 +117,8 @@ export function AppRoutes() {
         <Route path="staff" element={<ProtectedRoute />}>
           <Route element={<PermissionRoute role="STAFF" />}>
             <Route element={<StaffLayout />}>
-              <Route index element={<Navigate to="pos" replace />} />
+              <Route index element={<Navigate to="dashboard" replace />} />
+              <Route path="dashboard" element={<StaffDashboardPage />} />
               <Route path="pos" element={<CounterPosPage />} />
               <Route path="pos/payment" element={<CounterPaymentPage />} />
               <Route path="pos/complete" element={<CounterCompletePage />} />

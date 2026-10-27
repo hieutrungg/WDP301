@@ -20,7 +20,13 @@ import { useAuth } from '../features/auth/hooks/useAuth'
 // Items without `to` are planned staff screens (SCREEN_FLOW staff routes) that have no page yet.
 // `permission` only hides navigation; the API still enforces access.
 const navItems = [
-  { label: 'Dashboard', icon: LayoutDashboard },
+  {
+    label: 'Dashboard',
+    icon: LayoutDashboard,
+    to: '/staff/dashboard',
+    end: true,
+    title: 'Operations dashboard',
+  },
   { label: 'Sell Tickets', icon: Ticket, to: '/staff/pos', title: 'Sell tickets at counter', section: 'Counter' },
   {
     label: 'Ticket Check-in',
