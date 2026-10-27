@@ -14,6 +14,10 @@ import {
   getPaymentMethodOption,
 } from '../utils/mockQrCode'
 
+// SRS 5.3 messages for the UC30 payment states.
+const MSG14_SEAT_HOLD_EXPIRED = 'Your seat hold has expired. Please select your seats again.'
+const MSG18_PAYMENT_FAILED = 'Payment failed. Please try again.'
+
 export function MockQrSvg({
   payload,
   size = 210,
@@ -138,6 +142,27 @@ function MockPaymentModal({
           </div>
         )}
 
+        {isBookingExpired && (
+          <div
+            role="alert"
+            className="mt-5 flex items-start gap-3 rounded-xl border border-secondary/40 bg-secondary/10 p-4"
+          >
+            <ShieldAlert className="mt-0.5 size-5 shrink-0 text-secondary" />
+            <div>
+              <p className="text-sm font-bold text-white">
+                {payment?.status === 'REVIEW_REQUIRED'
+                  ? 'Payment Resolution Pending'
+                  : MSG14_SEAT_HOLD_EXPIRED}
+              </p>
+              <p className="mt-0.5 text-xs text-on-surface-variant">
+                {payment?.status === 'REVIEW_REQUIRED'
+                  ? 'Your payment was received after the seat hold expired. No ticket was issued; the payment is kept for reconciliation and refund.'
+                  : 'No payment can be taken for this checkout.'}
+              </p>
+            </div>
+          </div>
+        )}
+
         {isAttemptFailed && (
           <div
             role="alert"
@@ -146,11 +171,9 @@ function MockPaymentModal({
             <div className="flex items-start gap-3">
               <ShieldAlert className="mt-0.5 size-5 shrink-0 text-error" />
               <div>
-                <p className="text-sm font-bold text-white">
-                  Mock payment declined ({activeAttempt.failureReason || 'MOCK_PAYMENT_DECLINED'})
-                </p>
+                <p className="text-sm font-bold text-white">{MSG18_PAYMENT_FAILED}</p>
                 <p className="mt-0.5 text-xs text-on-surface-variant">
-                  Your live checkout still holds seats and food. Retry before the original deadline.
+                  Reason: {activeAttempt.failureReason || 'MOCK_PAYMENT_DECLINED'}. Your live checkout still holds seats and food. Retry before the original deadline.
                 </p>
               </div>
             </div>

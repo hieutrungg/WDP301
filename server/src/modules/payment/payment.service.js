@@ -9,11 +9,13 @@ import {
   PAYMENT_CURRENCY,
   PAYMENT_ERROR_CODE,
   PAYMENT_ACCEPTED_METHOD_VALUES,
+  PAYMENT_MESSAGE,
   PAYMENT_RECONCILIATION_REASON,
   PAYMENT_SIMULATION_OUTCOME,
   PAYMENT_STATUS,
 } from "./payment.constants.js";
 import { createMockPaymentGateway } from "./mock-payment-gateway.js";
+import { summarizeTicketIssuance } from "../ticket/ticket.service.js";
 
 const paymentError = (status, message, code) =>
   new AppError(status, message, [], code);
@@ -132,37 +134,50 @@ const pickLatestAttempt = (payment) => {
   return attempts[attempts.length - 1];
 };
 
-const buildTicketIssuancePreview = (booking, payment) => {
-  const isConfirmedAndPaid =
-    booking?.status === BOOKING_STATUS.CONFIRMED &&
-    payment?.status === PAYMENT_STATUS.PAID;
+const isConfirmedAndPaid = (booking, payment) =>
+  booking?.status === BOOKING_STATUS.CONFIRMED &&
+  payment?.status === PAYMENT_STATUS.PAID;
 
-  if (!isConfirmedAndPaid) {
-    return {
-      eligible: false,
-      status: "NOT_ISSUED",
-      isDemoPreview: false,
-      previewReference: null,
-      notice: null,
-    };
-  }
-
-  return {
-    eligible: true,
-    status: "PENDING_TICKET_MODULE",
-    isDemoPreview: true,
-    previewReference: `ETKT-PREVIEW-${booking.payableReference}`,
-    notice:
-      "DEMO E-TICKET PREVIEW — Ticket module issuance is pending in a separate task; this preview QR is not valid for cinema admission.",
-  };
-};
-
+// `ticketPort` is the Ticket module contract (TICKET-001). Tickets are issued only after the PAID
+// settlement is persisted (A-23); every call is idempotent per booking seat.
 export const createPaymentService = ({
   paymentRepository,
   bookingService,
   gateway = createMockPaymentGateway(),
+  ticketPort = null,
   now = () => new Date(),
 }) => {
+  // Payment is already settled when this runs, so an issuance failure must not turn the verified
+  // payment into an error. The next read of the booking retries through resolveTicketIssuance.
+  const issueTicketsAfterSettlement = async (payment) => {
+    if (!ticketPort || payment?.status !== PAYMENT_STATUS.PAID) return;
+    try {
+      await ticketPort.issueTicketsForConfirmedBooking({
+        bookingId: payment.bookingId,
+        ownerId: payment.customerAccountId,
+        paymentId: payment._id,
+      });
+    } catch (error) {
+      console.error(
+        `Ticket issuance deferred for booking ${String(payment.bookingId)}:`,
+        error.message,
+      );
+    }
+  };
+
+  const resolveTicketIssuance = async (booking, payment) => {
+    const eligible = isConfirmedAndPaid(booking, payment);
+    if (!eligible || !ticketPort) {
+      return summarizeTicketIssuance({ isConfirmedAndPaid: eligible, tickets: [] });
+    }
+    let tickets = await ticketPort.listTicketsForBooking({ bookingId: booking.bookingId });
+    const seatCount = (booking.seatIds ?? []).length;
+    if (tickets.length < seatCount) {
+      await issueTicketsAfterSettlement(payment);
+      tickets = await ticketPort.listTicketsForBooking({ bookingId: booking.bookingId });
+    }
+    return summarizeTicketIssuance({ isConfirmedAndPaid: true, tickets });
+  };
   const paymentLocks = new Map();
 
   const withPaymentLock = async (lockKey, fn) => {
@@ -319,9 +334,10 @@ export const createPaymentService = ({
             });
           }
 
+          // UC30 A1 (hold expired before payment): code unchanged, SRS MSG14 as display text.
           throw paymentError(
             409,
-            "Booking has expired and cannot accept new payment attempts",
+            PAYMENT_MESSAGE.MSG14_SEAT_HOLD_EXPIRED,
             PAYMENT_ERROR_CODE.BOOKING_ALREADY_EXPIRED,
           );
         }
@@ -530,6 +546,8 @@ export const createPaymentService = ({
             effectiveNotificationKey,
           )
         ) {
+          // A replayed callback creates no new tickets; it only completes an interrupted issuance.
+          await issueTicketsAfterSettlement(payment);
           const currentBooking = await resolveCurrentBooking();
           const currentOutcome =
             payment.status === PAYMENT_STATUS.PAID
@@ -560,6 +578,7 @@ export const createPaymentService = ({
             const savedPayment = await paymentRepository.saveState(payment._id, {
               processedNotificationKeys: nextKeys,
             });
+            await issueTicketsAfterSettlement(savedPayment);
 
             return {
               idempotent: true,
@@ -661,6 +680,7 @@ export const createPaymentService = ({
                 processedNotificationKeys: nextKeys,
               },
             );
+            await issueTicketsAfterSettlement(updatedPayment);
 
             return {
               idempotent: Boolean(
@@ -886,7 +906,7 @@ export const createPaymentService = ({
         seats: effectiveBooking.seats || [],
         payment: toPaymentDto(payment),
         activeAttempt: toAttemptDto(latestAttempt),
-        ticketIssuance: buildTicketIssuancePreview(effectiveBooking, payment),
+        ticketIssuance: await resolveTicketIssuance(effectiveBooking, payment),
       };
     },
 
@@ -951,7 +971,7 @@ export const createPaymentService = ({
           seats: detail.booking.seats || [],
           payment: toPaymentDto(payment),
           activeAttempt: toAttemptDto(latestAttempt),
-          ticketIssuance: buildTicketIssuancePreview(detail.booking, payment),
+          ticketIssuance: await resolveTicketIssuance(detail.booking, payment),
         });
       }
 

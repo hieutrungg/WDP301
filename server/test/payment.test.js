@@ -3,18 +3,17 @@ import { test } from "node:test";
 import express from "express";
 import cookieParser from "cookie-parser";
 import jwt from "jsonwebtoken";
-import mongoose from "mongoose";
 import { errorHandler } from "../src/middlewares/errorMiddleware.js";
 import {
   BOOKING_CONFIRMATION_OUTCOME,
   BOOKING_STATUS,
 } from "../src/modules/booking/booking.constants.js";
-import { createBookingService } from "../src/modules/booking/booking.service.js";
 import {
   PAYMENT_ATTEMPT_STATUS,
   PAYMENT_ACCEPTED_METHOD_VALUES,
   PAYMENT_ERROR_CODE,
   PAYMENT_METHOD_VALUES,
+  PAYMENT_MESSAGE,
   PAYMENT_METHODS,
   PAYMENT_RECONCILIATION_REASON,
   PAYMENT_STATUS,
@@ -23,256 +22,7 @@ import { createPaymentController } from "../src/modules/payment/payment.controll
 import { PAYMENT_INDEXES } from "../src/modules/payment/payment.indexes.js";
 import { Payment } from "../src/modules/payment/payment.model.js";
 import { createPaymentRouter } from "../src/modules/payment/payment.routes.js";
-import { createPaymentService } from "../src/modules/payment/payment.service.js";
-
-const objectId = () => new mongoose.Types.ObjectId().toString();
-
-const createInMemoryHarness = ({
-  initialNow = new Date("2026-10-22T07:00:00.000Z"),
-} = {}) => {
-  let currentNow = new Date(initialNow);
-  const ownerId = objectId();
-  const otherOwnerId = objectId();
-  const holdId = objectId();
-  const showtimeId = objectId();
-  const roomId = objectId();
-  const seatIds = [objectId(), objectId()];
-  const expiresAt = new Date(currentNow.getTime() + 10 * 60 * 1000);
-
-  const holds = new Map();
-  const bookings = new Map();
-  const payments = new Map();
-  let holdConsumedCount = 0;
-  let holdExpiredCount = 0;
-
-  holds.set(holdId, {
-    _id: new mongoose.Types.ObjectId(holdId),
-    ownerId: new mongoose.Types.ObjectId(ownerId),
-    showtimeId: new mongoose.Types.ObjectId(showtimeId),
-    seatIds: seatIds.map((id) => new mongoose.Types.ObjectId(id)),
-    status: "ACTIVE",
-    expiresAt,
-    priceSnapshot: {
-      quoteId: "QUOTE-PAY-001",
-      currency: "VND",
-      lines: [
-        { seatId: seatIds[0], unitPrice: 95000 },
-        { seatId: seatIds[1], unitPrice: 95000 },
-      ],
-      totalAmount: 190000,
-    },
-  });
-
-  const bookingRepository = {
-    async withTransaction(work) {
-      return work({ id: "tx-booking" });
-    },
-    async findByCustomerRequestKey(customerAccountId, requestKey) {
-      for (const booking of bookings.values()) {
-        if (
-          String(booking.customerAccountId) === String(customerAccountId) &&
-          booking.requestKey === requestKey
-        ) {
-          return booking;
-        }
-      }
-      return null;
-    },
-    async findByHoldId(targetHoldId) {
-      for (const booking of bookings.values()) {
-        if (String(booking.holdId) === String(targetHoldId)) {
-          return booking;
-        }
-      }
-      return null;
-    },
-    async findById(targetBookingId) {
-      return bookings.get(String(targetBookingId)) ?? null;
-    },
-    async findByCustomerAccountId(customerAccountId) {
-      return [...bookings.values()].filter(
-        (b) => String(b.customerAccountId) === String(customerAccountId),
-      );
-    },
-    async findByPayableReference(payableReference) {
-      for (const booking of bookings.values()) {
-        if (booking.payableReference === payableReference) {
-          return booking;
-        }
-      }
-      return null;
-    },
-    async createPending(doc) {
-      const stored = {
-        ...doc,
-        _id: doc._id ?? new mongoose.Types.ObjectId(),
-      };
-      bookings.set(String(stored._id), stored);
-      return stored;
-    },
-    async markConfirmed({ bookingId, paymentId, confirmedAt }) {
-      const existing = bookings.get(String(bookingId));
-      if (!existing) return null;
-      const updated = {
-        ...existing,
-        status: BOOKING_STATUS.CONFIRMED,
-        paymentId,
-        confirmedAt,
-      };
-      bookings.set(String(bookingId), updated);
-      return updated;
-    },
-    async markExpired({ bookingId, expiredAt }) {
-      const existing = bookings.get(String(bookingId));
-      if (!existing) return null;
-      const updated = {
-        ...existing,
-        status: BOOKING_STATUS.EXPIRED,
-        expiredAt,
-      };
-      bookings.set(String(bookingId), updated);
-      return updated;
-    },
-  };
-
-  const seatHoldPort = {
-    async getLiveHoldForBooking({ holdId: requestedHoldId }) {
-      return holds.get(String(requestedHoldId)) ?? null;
-    },
-    async consumeHoldForBooking({ holdId: requestedHoldId, verifiedAt }) {
-      const hold = holds.get(String(requestedHoldId));
-      if (!hold) return { outcome: "EXPIRED" };
-      if (new Date(hold.expiresAt).getTime() <= new Date(verifiedAt).getTime()) {
-        hold.status = "EXPIRED";
-        holdExpiredCount += 1;
-        return { outcome: "EXPIRED" };
-      }
-      hold.status = "CONSUMED";
-      holdConsumedCount += 1;
-      return { outcome: "CONSUMED", hold };
-    },
-    async expireHoldForBooking({ holdId: requestedHoldId }) {
-      const hold = holds.get(String(requestedHoldId));
-      if (hold && hold.status !== "CONSUMED") {
-        hold.status = "EXPIRED";
-        holdExpiredCount += 1;
-      }
-    },
-  };
-
-  const showtimeReader = {
-    async getBookableShowtime() {
-      return {
-        showtimeId,
-        roomId,
-        roomLayoutVersion: 1,
-        movieTitle: "Dune: Part Two",
-        cinemaName: "F-Cinema Landmark 81",
-        roomName: "IMAX Hall 04",
-        format: "IMAX 3D",
-        startAt: new Date("2026-10-24T12:30:00.000Z").toISOString(),
-      };
-    },
-  };
-
-  const roomLayoutReader = {
-    async getLayoutVersion() {
-      return {
-        roomId,
-        layoutVersion: 1,
-        seats: [
-          { _id: seatIds[0], row: "G", number: 12, type: "VIP" },
-          { _id: seatIds[1], row: "G", number: 13, type: "VIP" },
-        ],
-      };
-    },
-  };
-
-  const paymentRepository = {
-    async findById(paymentId) {
-      return payments.get(String(paymentId)) ?? null;
-    },
-    async findByBookingId(bookingId) {
-      for (const payment of payments.values()) {
-        if (String(payment.bookingId) === String(bookingId)) {
-          return payment;
-        }
-      }
-      return null;
-    },
-    async findByAttemptIdempotencyKey(idempotencyKey) {
-      for (const payment of payments.values()) {
-        if (
-          (payment.attempts || []).some(
-            (attempt) => attempt.idempotencyKey === idempotencyKey,
-          )
-        ) {
-          return payment;
-        }
-      }
-      return null;
-    },
-    async create(payload) {
-      const _id = new mongoose.Types.ObjectId();
-      const doc = {
-        ...payload,
-        _id,
-        createdAt: new Date(currentNow),
-        updatedAt: new Date(currentNow),
-      };
-      payments.set(String(_id), doc);
-      return doc;
-    },
-    async saveState(paymentId, updateFields) {
-      const existing = payments.get(String(paymentId));
-      if (!existing) return null;
-      const updated = {
-        ...existing,
-        ...updateFields,
-        updatedAt: new Date(currentNow),
-      };
-      payments.set(String(paymentId), updated);
-      return updated;
-    },
-  };
-
-  const bookingService = createBookingService({
-    repository: bookingRepository,
-    seatHoldPort,
-    showtimeReader,
-    roomLayoutReader,
-    clock: () => new Date(currentNow),
-  });
-
-  const paymentService = createPaymentService({
-    paymentRepository,
-    bookingService,
-    now: () => new Date(currentNow),
-  });
-
-  const advanceTimeMs = (ms) => {
-    currentNow = new Date(currentNow.getTime() + ms);
-  };
-
-  return {
-    ownerId,
-    otherOwnerId,
-    holdId,
-    showtimeId,
-    seatIds,
-    holds,
-    bookings,
-    payments,
-    bookingService,
-    paymentService,
-    advanceTimeMs,
-    getStats: () => ({
-      holdConsumedCount,
-      holdExpiredCount,
-      paymentCount: payments.size,
-    }),
-  };
-};
+import { createInMemoryHarness } from "./helpers/payment-harness.js";
 
 test("Payment model and index definitions satisfy Payment aggregate and validator contract", () => {
   assert.equal(Payment.schema.options.autoIndex, false);
@@ -727,9 +477,11 @@ test("13, 14, 15 & 16. HTTP routes support all 4 C14 payment methods, reloadable
   assert.equal(reloadRes.body.data.payment.status, PAYMENT_STATUS.PAID);
   assert.equal(reloadRes.body.data.payment.attemptCount, 4);
   assert.equal(reloadRes.body.data.ticketIssuance.eligible, true);
-  assert.equal(
-    reloadRes.body.data.ticketIssuance.status,
-    "PENDING_TICKET_MODULE",
+  assert.equal(reloadRes.body.data.ticketIssuance.status, "ISSUED");
+  assert.equal(reloadRes.body.data.ticketIssuance.ticketCount, 2);
+  assert.deepEqual(
+    reloadRes.body.data.ticketIssuance.tickets.map((ticket) => ticket.seatLabel),
+    ["G12", "G13"],
   );
   assert.equal(reloadRes.body.data.seats.length, 2);
   assert.equal(reloadRes.body.data.seats[0].label, "G12");
@@ -741,8 +493,99 @@ test("13, 14, 15 & 16. HTTP routes support all 4 C14 payment methods, reloadable
   assert.equal(myBookingsRes.body.data.summary.confirmedTicketsCount, 1);
   assert.equal(myBookingsRes.body.data.items.length, 1);
   assert.equal(myBookingsRes.body.data.items[0].seats[0].label, "G12");
-  assert.equal(
-    myBookingsRes.body.data.items[0].ticketIssuance.isDemoPreview,
-    true,
+  assert.equal(myBookingsRes.body.data.items[0].ticketIssuance.status, "ISSUED");
+  // Reading history twice issued nothing new: still exactly one ticket per seat.
+  assert.equal(harness.ticketRepository.tickets.size, 2);
+});
+
+test("PAY-TEST-001 UC30 A1: a hold that expired before payment blocks initiation with MSG14 and issues nothing", async () => {
+  const harness = createInMemoryHarness();
+  const createdBooking = await harness.bookingService.createPendingBookingFromHold({
+    holdId: harness.holdId,
+    ownerId: harness.ownerId,
+    requestKey: "req-uc30-a1",
+  });
+
+  harness.advanceTimeMs(10 * 60 * 1000);
+
+  await assert.rejects(
+    () =>
+      harness.paymentService.initiatePayment({
+        bookingId: createdBooking.bookingId,
+        ownerId: harness.ownerId,
+        method: PAYMENT_METHODS.MOMO_WALLET,
+        idempotencyKey: "idem-uc30-a1-expired",
+      }),
+    (error) => {
+      assert.equal(error.statusCode, 409);
+      assert.equal(error.code, PAYMENT_ERROR_CODE.BOOKING_ALREADY_EXPIRED);
+      assert.equal(error.message, PAYMENT_MESSAGE.MSG14_SEAT_HOLD_EXPIRED);
+      return true;
+    },
   );
+  assert.equal(harness.getStats().paymentCount, 0);
+  assert.equal(harness.ticketRepository.tickets.size, 0);
+});
+
+test("PAY-TEST-001 UC30 A4/A5: failed and cancelled attempts keep the booking pending without tickets, and a retry issues tickets once", async () => {
+  const harness = createInMemoryHarness();
+  const createdBooking = await harness.bookingService.createPendingBookingFromHold({
+    holdId: harness.holdId,
+    ownerId: harness.ownerId,
+    requestKey: "req-uc30-a4",
+  });
+  const start = (key, method = PAYMENT_METHODS.MOMO_WALLET) =>
+    harness.paymentService.initiatePayment({
+      bookingId: createdBooking.bookingId,
+      ownerId: harness.ownerId,
+      method,
+      idempotencyKey: key,
+    });
+  const notify = (initiated, outcome, notificationKey) =>
+    harness.paymentService.handlePaymentNotification({
+      paymentId: initiated.payment.paymentId,
+      attemptId: initiated.activeAttempt.attemptId,
+      outcome,
+      notificationKey,
+      actorOwnerId: harness.ownerId,
+    });
+
+  // A4: declined attempt.
+  const first = await start("idem-uc30-a4-attempt-1");
+  const failed = await notify(first, "FAILED", "notif-uc30-a4-fail");
+  assert.equal(failed.activeAttempt.status, PAYMENT_ATTEMPT_STATUS.FAILED);
+  assert.equal(failed.booking.status, BOOKING_STATUS.PENDING_PAYMENT);
+  assert.equal(harness.ticketRepository.tickets.size, 0);
+
+  // A5: customer cancels the next attempt.
+  const second = await start("idem-uc30-a5-attempt-2", PAYMENT_METHODS.VNPAY_QR);
+  const cancelled = await harness.paymentService.cancelPaymentAttempt({
+    paymentId: second.payment.paymentId,
+    attemptId: second.activeAttempt.attemptId,
+    ownerId: harness.ownerId,
+  });
+  assert.equal(cancelled.activeAttempt.status, PAYMENT_ATTEMPT_STATUS.CANCELLED);
+  const pendingDetails = await harness.paymentService.getBookingPaymentDetails({
+    bookingId: createdBooking.bookingId,
+    ownerId: harness.ownerId,
+  });
+  assert.equal(pendingDetails.booking.status, BOOKING_STATUS.PENDING_PAYMENT);
+  assert.equal(pendingDetails.ticketIssuance.status, "NOT_ISSUED");
+  assert.equal(harness.ticketRepository.tickets.size, 0);
+
+  // Retry while the hold is still live succeeds on the same Payment aggregate.
+  const third = await start("idem-uc30-retry-attempt-3", PAYMENT_METHODS.CREDIT_DEBIT_CARD);
+  assert.equal(third.payment.paymentId, first.payment.paymentId);
+  assert.equal(third.activeAttempt.attemptNumber, 3);
+  const settled = await notify(third, "SUCCESS", "notif-uc30-retry-success");
+  assert.equal(settled.payment.status, PAYMENT_STATUS.PAID);
+  assert.equal(settled.booking.status, BOOKING_STATUS.CONFIRMED);
+  assert.equal(harness.ticketRepository.tickets.size, 2);
+
+  // A7: the same success delivered again changes nothing.
+  const replay = await notify(third, "SUCCESS", "notif-uc30-retry-success");
+  assert.equal(replay.duplicateNotification, true);
+  assert.equal(harness.ticketRepository.tickets.size, 2);
+  assert.equal(harness.getStats().holdConsumedCount, 1);
+  assert.equal(harness.getStats().paymentCount, 1);
 });
