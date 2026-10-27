@@ -156,7 +156,7 @@ function TicketDetailModal({ item, onClose }) {
               <div className="rounded-2xl border border-white/10 bg-[#131315] p-4">
                 <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">
                   <Building2 className="size-3.5 text-primary" />
-                  Rạp &amp; Phòng Chiếu (Hall)
+                  Cinema &amp; Screening Room
                 </div>
                 <p className="mt-1.5 font-heading text-base font-bold text-white">
                   {showtime?.cinemaName ||
@@ -173,7 +173,7 @@ function TicketDetailModal({ item, onClose }) {
               <div className="rounded-2xl border border-white/10 bg-[#131315] p-4">
                 <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">
                   <Calendar className="size-3.5 text-secondary" />
-                  Ngày &amp; Giờ Chiếu
+                  Screening Date &amp; Time
                 </div>
                 <p className="mt-1.5 font-heading text-base font-bold text-white">
                   {showtime?.startAt
@@ -183,7 +183,7 @@ function TicketDetailModal({ item, onClose }) {
                     : 'Scheduled Screening'}
                 </p>
                 <p className="mt-0.5 text-xs text-emerald-400">
-                  Giờ Việt Nam (GMT+7)
+                  Vietnam Time (GMT+7)
                 </p>
               </div>
             </div>
@@ -194,7 +194,7 @@ function TicketDetailModal({ item, onClose }) {
               <div className="mb-3 flex items-center justify-between">
                 <span className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-on-surface-variant">
                   <Armchair className="size-4 text-primary" />
-                  Chi tiết ghế đã đặt ({seats.length} ghế)
+                  Seat Details ({seats.length} seats)
                 </span>
                 <span className="font-mono text-xs font-bold text-secondary">
                   {seats.map((s) => s.label).join(', ')}
@@ -212,7 +212,7 @@ function TicketDetailModal({ item, onClose }) {
                         {seat.label}
                       </span>
                       <span className="text-on-surface-variant">
-                        Hạng ghế: <strong className="text-white">{seat.type || 'STANDARD'}</strong>
+                        Seat Type: <strong className="text-white">{seat.type || 'STANDARD'}</strong>
                       </span>
                     </div>
                     <strong className="font-mono text-sm text-white">
@@ -227,18 +227,18 @@ function TicketDetailModal({ item, onClose }) {
             <div className="rounded-2xl border border-white/10 bg-[#131315] p-4">
               <h3 className="mb-3 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-on-surface-variant">
                 <CreditCard className="size-4 text-secondary" />
-                Thông tin Thanh toán &amp; Số tiền
+                Payment &amp; Amount Details
               </h3>
 
               <div className="space-y-2 text-xs">
                 <div className="flex justify-between text-on-surface-variant">
-                  <span>Phương thức thanh toán</span>
+                  <span>Payment Method</span>
                   <strong className="text-white">
-                    {methodMeta ? methodMeta.label : 'Chưa chọn phương thức'}
+                    {methodMeta ? methodMeta.label : 'No payment method selected'}
                   </strong>
                 </div>
                 <div className="flex justify-between text-on-surface-variant">
-                  <span>Mã đối soát (Settlement Ref)</span>
+                  <span>Settlement Reference</span>
                   <span className="font-mono text-white">
                     {payment?.settlementReference ||
                       payment?.settlementAttemptId ||
@@ -246,7 +246,7 @@ function TicketDetailModal({ item, onClose }) {
                   </span>
                 </div>
                 <div className="flex justify-between text-on-surface-variant">
-                  <span>Thời gian đặt / thanh toán</span>
+                  <span>Booking / Payment Time</span>
                   <span className="text-white">
                     {payment?.paidAt
                       ? new Date(payment.paidAt).toLocaleString('en-GB', {
@@ -261,7 +261,7 @@ function TicketDetailModal({ item, onClose }) {
                 </div>
                 <div className="flex items-baseline justify-between border-t border-white/10 pt-3">
                   <span className="font-bold uppercase tracking-wider text-on-surface-variant">
-                    Tổng số tiền (VND)
+                    Total Amount (VND)
                   </span>
                   <strong className="font-heading text-2xl font-black text-secondary">
                     {formatSeatMoney(
@@ -286,7 +286,7 @@ function TicketDetailModal({ item, onClose }) {
                     DEMO E-TICKET PREVIEW
                   </span>
                   <p className="mt-1.5 text-xs text-on-surface-variant">
-                    Mã vé điện tử &amp; QR Preview
+                    E-Ticket &amp; QR Preview
                   </p>
                 </div>
 
@@ -313,7 +313,7 @@ function TicketDetailModal({ item, onClose }) {
                   </div>
                   {copiedCode && (
                     <span className="mt-1 text-[11px] font-bold text-emerald-400">
-                      Đã sao chép mã vé!
+                      Ticket code copied!
                     </span>
                   )}
                 </div>
@@ -323,17 +323,17 @@ function TicketDetailModal({ item, onClose }) {
                     DEMO E-TICKET PREVIEW:
                   </strong>
                   {ticketIssuance?.notice ||
-                    'Mã QR hiển thị ở chế độ Demo E-Ticket Preview (chờ tích hợp module Tickets chính thức).'}
+                    'This QR code is a demo preview. The official ticket module has not been integrated yet.'}
                 </div>
               </>
             ) : isReviewRequired ? (
               <div className="my-auto space-y-3 py-6">
                 <ShieldAlert className="mx-auto size-12 text-secondary" />
                 <h3 className="font-heading text-lg font-bold text-white">
-                  Thanh toán trễ sau khi hết hạn giữ ghế
+                  Late Payment After Seat Hold Expiration
                 </h3>
                 <p className="text-xs leading-relaxed text-on-surface-variant">
-                  Giao dịch ở trạng thái <strong className="text-secondary">REVIEW_REQUIRED</strong> ({payment?.reconciliationReason}). Không phát hành mã QR E-Ticket cho booking đã hết hạn.
+                  This transaction is <strong className="text-secondary">REVIEW_REQUIRED</strong> ({payment?.reconciliationReason}). No E-Ticket QR code is issued for an expired booking.
                 </p>
               </div>
             ) : (
@@ -341,13 +341,13 @@ function TicketDetailModal({ item, onClose }) {
                 <Clock3 className="mx-auto size-12 text-amber-400" />
                 <h3 className="font-heading text-lg font-bold text-white">
                   {isPending
-                    ? 'Chưa hoàn tất thanh toán'
-                    : 'Booking đã hết hạn'}
+                    ? 'Payment Incomplete'
+                    : 'Booking Expired'}
                 </h3>
                 <p className="text-xs leading-relaxed text-on-surface-variant">
                   {isPending
-                    ? 'Mã QR E-Ticket chỉ được tạo sau khi Backend xác nhận thanh toán thành công.'
-                    : 'Thời gian giữ ghế đã kết thúc trước khi thanh toán hoàn tất.'}
+                    ? 'An E-Ticket QR code is created only after the backend confirms successful payment.'
+                    : 'The seat hold expired before payment was completed.'}
                 </p>
               </div>
             )}
@@ -361,7 +361,7 @@ function TicketDetailModal({ item, onClose }) {
             onClick={onClose}
             className="rounded-xl border border-white/15 bg-surface-container px-5 py-2.5 text-xs font-bold uppercase tracking-wider text-white transition hover:border-white/30"
           >
-            Đóng (Close)
+            Close
           </button>
 
           <div className="flex flex-wrap items-center gap-3">
@@ -370,7 +370,7 @@ function TicketDetailModal({ item, onClose }) {
                 to={`/booking/${booking.showtimeId}/checkout`}
                 className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-xs font-bold uppercase tracking-wider text-white"
               >
-                Tiếp tục thanh toán
+                Continue to Payment
                 <ExternalLink className="size-3.5" />
               </Link>
             )}
@@ -379,7 +379,7 @@ function TicketDetailModal({ item, onClose }) {
                 to={`/booking/${booking.showtimeId}/confirmation/${booking.bookingId}`}
                 className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-[#e50914] to-[#b5000b] px-5 py-2.5 text-xs font-bold uppercase tracking-wider text-white shadow-lg shadow-primary/25"
               >
-                Mở toàn màn hình E-Ticket (C15)
+                Open Full-Screen E-Ticket (C15)
                 <ExternalLink className="size-3.5" />
               </Link>
             )}
@@ -462,10 +462,10 @@ function CustomerBookingsPage({ initialMode = 'tickets' }) {
             <h1 className="mt-1 font-heading text-3xl font-black tracking-tight text-white sm:text-4xl">
               {initialMode === 'history'
                 ? 'Booking & Payment History'
-                : 'My Tickets (Vé Của Tôi)'}
+                : 'My Tickets'}
             </h1>
             <p className="mt-1 text-sm text-on-surface-variant">
-              Bấm vào bất kỳ vé hoặc đơn đặt chỗ nào để xem chi tiết ghế, số tiền, ngày/phòng chiếu và mã QR E-Ticket Preview.
+              Select any ticket or booking to view seat details, the amount paid, screening date and room, and the E-Ticket QR preview.
             </p>
           </div>
 
@@ -478,7 +478,7 @@ function CustomerBookingsPage({ initialMode = 'tickets' }) {
             <RefreshCcw
               className={`size-4 ${historyQuery.isFetching ? 'animate-spin' : ''}`}
             />
-            Làm mới danh sách
+            Refresh List
           </button>
         </div>
 
@@ -486,7 +486,7 @@ function CustomerBookingsPage({ initialMode = 'tickets' }) {
         <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
           <div className="rounded-2xl border border-emerald-500/25 bg-surface-container-low p-4">
             <span className="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">
-              Vé đã xác nhận (Paid)
+              Confirmed Tickets (Paid)
             </span>
             <p className="mt-1 font-heading text-2xl font-black text-emerald-400">
               {summary.confirmedTicketsCount}
@@ -494,7 +494,7 @@ function CustomerBookingsPage({ initialMode = 'tickets' }) {
           </div>
           <div className="rounded-2xl border border-white/10 bg-surface-container-low p-4">
             <span className="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">
-              Tổng đơn đặt chỗ
+              Total Bookings
             </span>
             <p className="mt-1 font-heading text-2xl font-black text-white">
               {summary.totalBookings}
@@ -502,7 +502,7 @@ function CustomerBookingsPage({ initialMode = 'tickets' }) {
           </div>
           <div className="rounded-2xl border border-amber-400/25 bg-surface-container-low p-4">
             <span className="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">
-              Chờ thanh toán
+              Awaiting Payment
             </span>
             <p className="mt-1 font-heading text-2xl font-black text-amber-300">
               {summary.pendingCount}
@@ -510,7 +510,7 @@ function CustomerBookingsPage({ initialMode = 'tickets' }) {
           </div>
           <div className="rounded-2xl border border-white/10 bg-surface-container-low p-4">
             <span className="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">
-              Hết hạn / Đối soát
+              Expired / Reconciliation
             </span>
             <p className="mt-1 font-heading text-2xl font-black text-secondary">
               {summary.expiredOrReviewCount}
@@ -546,7 +546,7 @@ function CustomerBookingsPage({ initialMode = 'tickets' }) {
             className="mt-8 flex items-center justify-center gap-3 rounded-2xl border border-white/10 bg-surface-container-low p-12 text-sm"
           >
             <LoaderCircle className="size-6 animate-spin text-primary" />
-            Đang tải danh sách vé và lịch sử đặt chỗ…
+            Loading tickets and booking history…
           </div>
         )}
 
@@ -564,7 +564,7 @@ function CustomerBookingsPage({ initialMode = 'tickets' }) {
               onClick={() => historyQuery.refetch()}
               className="mt-4 rounded-xl bg-primary px-5 py-2.5 text-xs font-bold text-white"
             >
-              Thử lại
+              Try Again
             </button>
           </div>
         )}
@@ -576,10 +576,10 @@ function CustomerBookingsPage({ initialMode = 'tickets' }) {
               <div className="rounded-3xl border border-white/10 bg-surface-container-low p-12 text-center">
                 <Ticket className="mx-auto size-12 text-primary/70" />
                 <h2 className="mt-4 font-heading text-xl font-bold text-white">
-                  Chưa có vé hoặc đơn đặt chỗ nào trong mục này
+                  No tickets or bookings found in this section
                 </h2>
                 <p className="mt-2 text-sm text-on-surface-variant">
-                  Hãy chọn phim và đặt ghế để nhận vé điện tử E-Ticket.
+                  Choose a movie and select your seats to get an E-Ticket.
                 </p>
                 <div className="mt-6 flex justify-center gap-3">
                   {activeFilter !== 'ALL' && allItems.length > 0 && (
@@ -588,14 +588,14 @@ function CustomerBookingsPage({ initialMode = 'tickets' }) {
                       onClick={() => setActiveFilter('ALL')}
                       className="rounded-xl border border-white/15 bg-surface-container px-5 py-3 text-xs font-bold text-white"
                     >
-                      Xem tất cả đơn đặt chỗ ({allItems.length})
+                      View All Bookings ({allItems.length})
                     </button>
                   )}
                   <Link
                     to="/movies"
                     className="rounded-xl bg-primary px-6 py-3 text-xs font-bold uppercase tracking-wider text-white"
                   >
-                    Đặt vé xem phim ngay
+                    Book Tickets Now
                   </Link>
                 </div>
               </div>
@@ -679,7 +679,7 @@ function CustomerBookingsPage({ initialMode = 'tickets' }) {
                         <div className="flex flex-wrap items-center gap-1.5 pt-1">
                           <span className="mr-1 inline-flex items-center gap-1 text-xs text-on-surface-variant">
                             <Armchair className="size-3.5 text-primary" />
-                            Ghế ({seats.length}):
+                            Seats ({seats.length}):
                           </span>
                           {seats.map((seat) => (
                             <span
@@ -719,7 +719,7 @@ function CustomerBookingsPage({ initialMode = 'tickets' }) {
 
                         <div className="text-left lg:text-right">
                           <span className="block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
-                            Tổng tiền
+                            Total
                           </span>
                           <strong className="font-heading text-2xl font-black text-secondary">
                             {formatSeatMoney(
@@ -740,7 +740,7 @@ function CustomerBookingsPage({ initialMode = 'tickets' }) {
                           className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-[#e50914] to-[#b5000b] px-4 py-3 text-xs font-bold uppercase tracking-wider text-white shadow-md shadow-primary/20 transition group-hover:brightness-110"
                         >
                           <QrCode className="size-4" />
-                          Xem Chi Tiết &amp; QR
+                          View Details &amp; QR
                         </button>
                       </div>
                     </div>

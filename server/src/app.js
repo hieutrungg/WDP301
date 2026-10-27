@@ -20,6 +20,8 @@ import {
 } from "./modules/booking/booking.module.js";
 import { paymentRoutes } from "./modules/payment/payment.module.js";
 import { refundRoutes } from "./modules/refund/refund.module.js";
+import reportingRoutes from "./modules/reporting/reporting.routes.js";
+import revenueExportRoutes from "./modules/reporting/revenue-export.routes.js";
 import { ticketRoutes } from "./modules/ticket/ticket.module.js";
 import { counterConcessionCheckoutRoutes } from "./modules/concession/counter-checkout.module.js";
 import { notFound } from "./middlewares/notFoundMiddleware.js";
@@ -62,6 +64,8 @@ app.use("/api/concession-checkout", concessionCheckoutRoutes);
 app.use("/api/counter-concessions", counterConcessionCheckoutRoutes);
 app.use("/api/payments", paymentRoutes);
 app.use("/api/refunds", refundRoutes);
+app.use("/api/analytics", reportingRoutes);
+app.use("/api/reports", revenueExportRoutes);
 app.use("/api/tickets", ticketRoutes);
 
 app.use(notFound);

@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import { Payment } from "./payment.model.js";
+import { PAYMENT_STATUS } from "./payment.constants.js";
 
 const toPlainObject = (document) =>
   typeof document?.toObject === "function" ? document.toObject() : document;
@@ -46,6 +47,29 @@ export const createPaymentRepository = ({
       .session(session ?? null)
       .lean()
       .exec();
+  },
+
+  async aggregateSuccessfulRevenue({ fromAt, toAt, session } = {}) {
+    const match = {
+      status: {
+        $in: [
+          PAYMENT_STATUS.PAID,
+          PAYMENT_STATUS.PARTIALLY_REFUNDED,
+          PAYMENT_STATUS.REFUNDED,
+        ],
+      },
+      ...(fromAt || toAt
+        ? { paidAt: { ...(fromAt ? { $gte: fromAt } : {}), ...(toAt ? { $lt: toAt } : {}) } }
+        : {}),
+    };
+    const [summary] = await paymentModel
+      .aggregate([
+        { $match: match },
+        { $group: { _id: null, amount: { $sum: "$amount" } } },
+      ])
+      .session(session ?? null)
+      .exec();
+    return { amount: summary?.amount ?? 0 };
   },
 
   async create(input, session) {

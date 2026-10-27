@@ -62,7 +62,7 @@ export const rescheduleShowtime = async (req, res, next) => {
 
 export const cancelShowtime = async (req, res, next) => {
   try {
-    const data = await showtimeService.cancelShowtime(req.validated.params);
+    const data = await showtimeService.cancelShowtime({ ...req.validated.params, managerId: req.auth.accountId });
     res.json({ success: true, message: "Showtime cancelled", data });
   } catch (error) {
     next(error);

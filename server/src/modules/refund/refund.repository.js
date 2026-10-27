@@ -6,6 +6,7 @@ import { ConcessionOrder } from "../concession/order.model.js";
 import { Payment } from "../payment/payment.model.js";
 import { Showtime } from "../showtime/showtime.model.js";
 import { RefundRequest } from "./refund.model.js";
+import { REFUND_STATUS } from "./refund.constants.js";
 
 export const refundRepository = {
   async loadEligibility(bookingId) {
@@ -18,10 +19,23 @@ export const refundRepository = {
     return { booking, payment, showtime, order, checkedIn: false };
   },
   findById(id) { return RefundRequest.findById(id).lean(); },
-  findByBookingId(bookingId) { return RefundRequest.findOne({ bookingId }).lean(); },
+  findByBookingId(bookingId, requestType) { return RefundRequest.findOne({ bookingId, ...(requestType ? { requestType } : {}) }).lean(); },
   listForCustomer(customerAccountId) { return RefundRequest.find({ customerAccountId }).sort({ requestedAt: -1 }).lean(); },
   listForManager() { return RefundRequest.find().sort({ requestedAt: 1 }).limit(200).lean(); },
-  async create(input) { const [doc] = await RefundRequest.create([input]); return doc.toObject(); },
+  async aggregateSuccessfulRevenue({ fromAt, toAt, session } = {}) {
+    const match = {
+      status: REFUND_STATUS.REFUNDED,
+      ...(fromAt || toAt
+        ? { processedAt: { ...(fromAt ? { $gte: fromAt } : {}), ...(toAt ? { $lt: toAt } : {}) } }
+        : {}),
+    };
+    const [summary] = await RefundRequest.aggregate([
+      { $match: match },
+      { $group: { _id: null, amount: { $sum: "$refundAmount" } } },
+    ]).session(session ?? null).exec();
+    return { amount: summary?.amount ?? 0 };
+  },
+  async create(input, session) { const [doc] = await RefundRequest.create([input], session ? { session } : {}); return doc.toObject(); },
   claimForProcessing(id, actorId, now) {
     return RefundRequest.findOneAndUpdate(
       { _id: id, status: { $in: ["REQUESTED", "FAILED"] } },
@@ -46,7 +60,9 @@ export const refundRepository = {
         if (paymentUpdate.modifiedCount !== 1) throw new Error("Payment is no longer refundable");
         const bookingUpdate = await Booking.updateOne({ _id: current.bookingId, status: "CONFIRMED" }, { $set: { status: "REFUNDED", refundedAt: now, refundRequestId: current._id } }, { session, runValidators: true });
         if (bookingUpdate.modifiedCount !== 1) throw new Error("Booking is no longer refundable");
-        await ShowtimeSeat.updateMany({ bookingId: current.bookingId, state: SHOWTIME_SEAT_STATE.SOLD }, { $set: { state: SHOWTIME_SEAT_STATE.AVAILABLE }, $unset: { bookingId: 1, priceSnapshot: 1, holdId: 1, holdOwnerId: 1, holdExpiresAt: 1 } }, { session });
+        // The per-showtime price is immutable. Refund releases ownership of the seat, but must
+        // retain priceSnapshot so the remaining public schedule and a later booking stay valid.
+        await ShowtimeSeat.updateMany({ bookingId: current.bookingId, state: SHOWTIME_SEAT_STATE.SOLD }, { $set: { state: SHOWTIME_SEAT_STATE.AVAILABLE }, $unset: { bookingId: 1, holdId: 1, holdOwnerId: 1, holdExpiresAt: 1 } }, { session });
         if (current.fulfillmentSnapshot !== "FULFILLED") {
           await ConcessionOrder.updateOne({ bookingId: current.bookingId, pickupStatus: { $ne: "FULFILLED" } }, { $set: { status: "CANCELLED", paymentStatus: "REFUNDED", pickupStatus: "CANCELLED" } }, { session, runValidators: true });
         }
