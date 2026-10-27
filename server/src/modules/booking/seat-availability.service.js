@@ -230,6 +230,35 @@ export const createSeatAvailabilityService = ({
     }
   };
 
+  const updateUnclaimedShowtime = async ({ showtimeId, roomId, roomLayoutVersion, now, commit }) => {
+    const layout = await roomLayoutReader.getLayoutVersion(roomId, roomLayoutVersion);
+    if (!layout?.seats?.length) {
+      throw error(
+        409,
+        "The published room layout snapshot is unavailable",
+        SEAT_HOLD_ERROR.SHOWTIME_SEATS_NOT_INITIALIZED,
+      );
+    }
+    try {
+      return await repository.updateUnclaimedShowtime({
+        showtimeId,
+        roomLayoutVersion,
+        seatIds: layout.seats.map((seat) => new mongoose.Types.ObjectId(seatIdentity(seat))),
+        now,
+        commit,
+      });
+    } catch (cause) {
+      if (cause instanceof SeatClaimConflictError) {
+        throw error(
+          409,
+          "This showtime has booking activity and cannot be changed",
+          SEAT_HOLD_ERROR.SEAT_UNAVAILABLE,
+        );
+      }
+      throw cause;
+    }
+  };
+
   const getSeatAvailability = async ({ showtimeId, ownerId }) => {
     const now = clock();
     const showtime = await showtimeReader.getBookableShowtime(showtimeId, now);
@@ -317,6 +346,7 @@ export const createSeatAvailabilityService = ({
     hasActiveClaims,
     initializeForPublishedShowtime,
     repriceUnclaimedShowtime,
+    updateUnclaimedShowtime,
   };
 };
 
