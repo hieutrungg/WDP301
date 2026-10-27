@@ -146,6 +146,34 @@ test("rescheduling a linked unsold Showtime passes new prices and time update th
   assert.equal(result.startAt, "2026-10-23T10:00:00.000Z");
 });
 
+test("legacy Showtime rescheduling keeps its price snapshot and commits through the unclaimed-seat guard", async () => {
+  const session = { id: "legacy mutation transaction" };
+  const showtimeId = id();
+  const roomId = id();
+  const showtime = { movieId: id(), roomId, roomLayoutVersion: 2 };
+  let guarded = false;
+  const reschedule = createShowtimeRescheduler({
+    assertEditable: async () => showtime,
+    getMovie: async () => ({ duration: 100 }),
+    findConflict: async () => null,
+    updateUnclaimed: async (input) => {
+      guarded = true;
+      assert.equal(input.showtimeId, String(showtimeId));
+      assert.equal(input.roomId, roomId);
+      assert.equal(input.roomLayoutVersion, 2);
+      return input.commit(session);
+    },
+    updateTime: async (input) => {
+      assert.equal(input.session, session);
+      assert.equal(input.ticketPricePlanId, undefined);
+      return { _id: showtimeId, ...input, status: "PUBLISHED" };
+    },
+    reprice: async () => assert.fail("legacy price snapshots must not be repriced"),
+  });
+  await reschedule({ showtimeId: String(showtimeId), startAt: "2026-10-23T10:00:00Z" }, new Date("2026-10-20T00:00:00Z"));
+  assert.equal(guarded, true);
+});
+
 test("repository persists initialization prices and rejects an attempt to overwrite a snapshot", async () => {
   const showtimeId = id();
   const seatId = id();
@@ -211,5 +239,35 @@ test("repricing repository refuses any Booking, active hold, held or sold seat b
     }), SeatClaimConflictError);
     assert.equal(writes, 0);
     assert.equal(commits, 0);
+  }
+});
+
+test("legacy schedule mutation atomically fences seat claims and rejects existing Bookings", async () => {
+  for (const hasBooking of [false, true]) {
+    let seatWrites = 0;
+    let commits = 0;
+    const seatId = id();
+    const session = { withTransaction: async (work) => work(), endSession: async () => {} };
+    const repository = createSeatHoldRepository({
+      connection: { startSession: async () => session },
+      bookingModel: { exists: () => query(hasBooking ? { _id: id() } : null) },
+      seatHoldModel: { exists: () => query(null) },
+      showtimeSeatModel: {
+        find: (filter) => query(filter.state === "HELD" ? [] : [{ seatId, roomLayoutVersion: 2, state: "AVAILABLE" }]),
+        bulkWrite: async (operations) => { seatWrites += operations.length; return { matchedCount: operations.length }; },
+      },
+    });
+    const commit = async () => { commits += 1; return { _id: id() }; };
+    if (hasBooking) {
+      await assert.rejects(repository.updateUnclaimedShowtime({
+        showtimeId: id(), roomLayoutVersion: 2, seatIds: [seatId], now: new Date(), commit,
+      }), SeatClaimConflictError);
+    } else {
+      await repository.updateUnclaimedShowtime({
+        showtimeId: id(), roomLayoutVersion: 2, seatIds: [seatId], now: new Date(), commit,
+      });
+    }
+    assert.equal(seatWrites, hasBooking ? 0 : 1);
+    assert.equal(commits, hasBooking ? 0 : 1);
   }
 });

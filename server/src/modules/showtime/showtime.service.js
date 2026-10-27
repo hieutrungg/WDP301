@@ -214,6 +214,7 @@ export const createShowtimeRescheduler =
     findConflict = findScheduleConflict,
     resolvePricePlan = resolvePricing,
     reprice = seatAvailability.repriceUnclaimedShowtime,
+    updateUnclaimed = seatAvailability.updateUnclaimedShowtime,
     updateTime = updatePublishedShowtimeTime,
   } = {}) =>
   async ({ showtimeId, startAt: startAtInput }, now = new Date()) => {
@@ -264,8 +265,15 @@ export const createShowtimeRescheduler =
           }),
       });
     } else {
-      // Legacy prices are preserved until an explicit, reviewed migration links a plan.
-      updated = await updateTime({ showtimeId, startAt, endAt, now });
+      // Legacy prices are preserved until a reviewed migration links a plan, but the schedule
+      // mutation still goes through the transactional Booking/SeatHold conflict fence.
+      updated = await updateUnclaimed({
+        showtimeId,
+        roomId: showtime.roomId,
+        roomLayoutVersion: showtime.roomLayoutVersion,
+        now,
+        commit: (session) => updateTime({ showtimeId, startAt, endAt, now, session }),
+      });
     }
     if (!updated) {
       throw showtimeError(
@@ -284,9 +292,19 @@ export const createShowtimeRescheduler =
 
 export const rescheduleShowtime = createShowtimeRescheduler();
 
-export const cancelShowtime = async ({ showtimeId }, now = new Date()) => {
-  await assertEditableShowtime(showtimeId, now);
-  const cancelled = await cancelPublishedShowtime({ showtimeId, now });
+export const createShowtimeCanceller = ({
+  assertEditable = assertEditableShowtime,
+  updateUnclaimed = seatAvailability.updateUnclaimedShowtime,
+  cancel = cancelPublishedShowtime,
+} = {}) => async ({ showtimeId }, now = new Date()) => {
+  const showtime = await assertEditable(showtimeId, now);
+  const cancelled = await updateUnclaimed({
+    showtimeId,
+    roomId: showtime.roomId,
+    roomLayoutVersion: showtime.roomLayoutVersion,
+    now,
+    commit: (session) => cancel({ showtimeId, now, session }),
+  });
   if (!cancelled) {
     throw showtimeError(
       409,
@@ -296,6 +314,8 @@ export const cancelShowtime = async ({ showtimeId }, now = new Date()) => {
   }
   return { id: cancelled._id.toString(), status: cancelled.status };
 };
+
+export const cancelShowtime = createShowtimeCanceller();
 
 export const listShowtimes = async (query, now = new Date()) => {
   if (query.movieId) await movieService.getMovie(query.movieId);
