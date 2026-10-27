@@ -48,6 +48,22 @@ export const createTicketRepository = ({ ticketModel = Ticket } = {}) => {
       return ticketModel.findById(ticketId).session(session ?? null).lean().exec();
     },
 
+    findByTicketCode(ticketCode) {
+      return ticketModel.findOne({ ticketCode }).lean().exec();
+    },
+
+    // TICKET-101 / BR-17: compare-and-set from ISSUED, so two concurrent check-ins of the same
+    // ticket cannot both succeed. Returns true only for the call that made the change.
+    async markUsed(ticketId, { at, by }) {
+      const result = await ticketModel
+        .updateOne(
+          { _id: ticketId, status: TICKET_STATUS.ISSUED },
+          { $set: { status: TICKET_STATUS.USED, checkedInAt: at, checkedInBy: by } },
+        )
+        .exec();
+      return (result.modifiedCount ?? 0) === 1;
+    },
+
     findByBookingId(bookingId, session) {
       return ticketModel
         .find({ bookingId })

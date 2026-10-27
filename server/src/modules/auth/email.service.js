@@ -109,4 +109,44 @@ export const sendPasswordResetOtpEmail = async ({ email, fullName, otp, expiresI
   });
 };
 
+// STAFF-101 / UC35: the Admin never sets the password. The new staff member chooses one through
+// the Forgot Password flow (G04), which proves they own the mailbox.
+export const sendStaffWelcomeEmail = async ({ email, fullName, username, setPasswordUrl }) => {
+  if (env.isTest && process.env.EMAIL_TEST_MODE === "capture") {
+    testOutbox.push({ purpose: "STAFF_WELCOME", email, fullName, username, setPasswordUrl });
+    return;
+  }
+
+  const safeFullName = escapeHtml(fullName);
+  const safeUsername = escapeHtml(username);
+  const safeUrl = escapeHtml(setPasswordUrl);
+
+  await getTransporter().sendMail({
+    from: env.emailFrom,
+    to: email,
+    subject: "Your F-Cinema staff account is ready",
+    text: [
+      `Hello ${fullName},`,
+      "",
+      "An administrator has created an F-Cinema staff account for you.",
+      `Username: ${username}`,
+      `Email: ${email}`,
+      "",
+      `To set your password, open ${setPasswordUrl}, enter this email address and follow the verification code we send you.`,
+      "",
+      "If you were not expecting this account, please contact your administrator.",
+    ].join("\n"),
+    html: `
+      <div style="font-family:Arial,sans-serif;line-height:1.6;color:#1f1f24">
+        <h2 style="color:#e50914">F-Cinema</h2>
+        <p>Hello ${safeFullName},</p>
+        <p>An administrator has created an F-Cinema staff account for you.</p>
+        <p>Username: <strong>${safeUsername}</strong></p>
+        <p>To set your password, open <a href="${safeUrl}">${safeUrl}</a>, enter this email address and follow the verification code we send you.</p>
+        <p>If you were not expecting this account, please contact your administrator.</p>
+      </div>
+    `,
+  });
+};
+
 export const takeTestEmails = () => testOutbox.splice(0, testOutbox.length);

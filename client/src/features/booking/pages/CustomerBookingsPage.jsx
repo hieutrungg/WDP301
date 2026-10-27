@@ -21,10 +21,18 @@ import {
   X,
 } from 'lucide-react'
 import { Link } from 'react-router'
+import QrCodeImage from '../../../components/ui/QrCode'
 import { getApiErrorMessage } from '../../../lib/api/apiError'
 import { formatSeatMoney } from '../../seat-selection/utils/seatPricing'
+import { getBookingTickets } from '../../ticket/api/ticketApi'
+import {
+  describeTicketIssuance,
+  formatSeatType,
+  formatVnDateTime,
+  getTicketStatusMeta,
+  isTicketAdmissible,
+} from '../../ticket/utils/ticketPresentation'
 import { listMyBookingPayments } from '../api/paymentApi'
-import { MockQrSvg } from '../components/MockPaymentModal'
 import { getPaymentMethodOption } from '../utils/mockQrCode'
 
 const FILTER_TABS = [
@@ -67,12 +75,137 @@ function getStatusBadge(booking, payment) {
   }
 }
 
-function TicketDetailModal({ item, onClose }) {
+// Real tickets of a paid booking (GET /api/tickets/bookings/:bookingId): one per seat, with the
+// scannable QR only while the ticket is still valid for entry.
+function BookingTicketsPanel({ bookingId }) {
+  const [selectedId, setSelectedId] = useState(null)
   const [copiedCode, setCopiedCode] = useState(false)
+  const ticketsQuery = useQuery({
+    queryKey: ['booking-tickets', bookingId],
+    queryFn: () => getBookingTickets(bookingId),
+    staleTime: 0,
+  })
 
+  if (ticketsQuery.isPending) {
+    return (
+      <div role="status" className="my-auto flex items-center gap-2 py-10 text-xs text-on-surface-variant">
+        <LoaderCircle className="size-5 animate-spin text-primary" />
+        Loading your E-Tickets…
+      </div>
+    )
+  }
+
+  if (ticketsQuery.isError) {
+    return (
+      <div role="alert" className="my-auto space-y-3 py-8">
+        <AlertTriangle className="mx-auto size-8 text-error" />
+        <p className="text-xs text-on-surface-variant">{getApiErrorMessage(ticketsQuery.error)}</p>
+        <button type="button" onClick={() => ticketsQuery.refetch()} className="rounded-xl bg-primary px-4 py-2 text-xs font-bold text-white">
+          Try again
+        </button>
+      </div>
+    )
+  }
+
+  const tickets = ticketsQuery.data?.tickets ?? []
+  if (tickets.length === 0) {
+    return (
+      <div className="my-auto space-y-3 py-8">
+        <Clock3 className="mx-auto size-10 text-amber-400" />
+        <h3 className="font-heading text-base font-bold text-white">Tickets are being issued</h3>
+        <p className="text-xs text-on-surface-variant">Your payment is confirmed. Refresh in a moment to see your E-Tickets.</p>
+        <button type="button" onClick={() => ticketsQuery.refetch()} className="rounded-xl border border-white/15 px-4 py-2 text-xs font-bold text-white">
+          Refresh
+        </button>
+      </div>
+    )
+  }
+
+  const ticket = tickets.find(({ ticketId }) => ticketId === selectedId) ?? tickets[0]
+  const status = getTicketStatusMeta(ticket.status)
+
+  const select = (next) => {
+    setSelectedId(next.ticketId)
+    setCopiedCode(false)
+  }
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(ticket.ticketCode)
+      setCopiedCode(true)
+      window.setTimeout(() => setCopiedCode(false), 2000)
+    } catch {
+      setCopiedCode(false)
+    }
+  }
+
+  return (
+    <>
+      <div className="w-full">
+        <span className="inline-flex items-center gap-1.5 rounded-full border border-secondary/40 bg-secondary/15 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-secondary">
+          <QrCode className="size-3.5" />
+          E-Ticket {tickets.length > 1 ? `${tickets.indexOf(ticket) + 1} of ${tickets.length}` : ''}
+        </span>
+        {tickets.length > 1 && (
+          <div className="mt-3 flex flex-wrap justify-center gap-1.5" role="tablist" aria-label="Choose a seat">
+            {tickets.map((item) => (
+              <button
+                key={item.ticketId}
+                type="button"
+                role="tab"
+                aria-selected={item.ticketId === ticket.ticketId}
+                onClick={() => select(item)}
+                className={`rounded-md border px-2.5 py-1 font-heading text-xs font-black ${item.ticketId === ticket.ticketId ? 'border-primary bg-primary/25 text-white' : 'border-white/15 text-on-surface-variant hover:text-white'}`}
+              >
+                {item.seat.label}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="my-5 flex flex-col items-center">
+        {isTicketAdmissible(ticket) ? (
+          <QrCodeImage value={ticket.qrCode} size={185} label="E-TICKET" ariaLabel={`Admission QR for seat ${ticket.seat.label}`} />
+        ) : (
+          <div className="flex size-[200px] items-center justify-center rounded-2xl border border-white/10 bg-surface-container-low p-4 text-xs text-on-surface-variant">
+            {ticket.status === 'USED' && ticket.checkedInAt
+              ? `Checked in at ${formatVnDateTime(ticket.checkedInAt)}`
+              : status.label}
+          </div>
+        )}
+
+        <span className={`mt-3 rounded-full border px-3 py-0.5 text-[10px] font-black uppercase tracking-wider ${status.tone}`}>
+          {status.label}
+        </span>
+        <p className="mt-2 text-[11px] text-on-surface-variant">
+          Seat {ticket.seat.label} · {formatSeatType(ticket.seat.type)}
+        </p>
+
+        <div className="mt-3 flex items-center gap-2 rounded-xl border border-white/10 bg-surface-container px-3.5 py-2">
+          <span className="font-mono text-xs font-black tracking-wider text-secondary">{ticket.ticketCode}</span>
+          <button type="button" onClick={handleCopy} title="Copy ticket code" className="text-on-surface-variant hover:text-white">
+            <Copy className="size-3.5" />
+          </button>
+        </div>
+        {copiedCode && <span className="mt-1 text-[11px] font-bold text-emerald-400">Ticket code copied!</span>}
+      </div>
+
+      <Link
+        to={`/tickets/${ticket.ticketId}`}
+        className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#e50914] to-[#b5000b] px-5 py-2.5 text-xs font-bold uppercase tracking-wider text-white shadow-lg shadow-primary/25"
+      >
+        Open fullscreen E-Ticket
+        <ExternalLink className="size-3.5" />
+      </Link>
+    </>
+  )
+}
+
+function TicketDetailModal({ item, onClose }) {
   if (!item) return null
 
-  const { booking, payment, showtime, ticketIssuance } = item
+  const { booking, payment, showtime } = item
   const seats = item.seats?.length ? item.seats : booking?.seats || []
   const isConfirmedAndPaid =
     booking?.status === 'CONFIRMED' && payment?.status === 'PAID'
@@ -83,20 +216,7 @@ function TicketDetailModal({ item, onClose }) {
     : null
   const displayRef =
     booking?.bookingCode || booking?.payableReference || booking?.bookingId
-  const previewQrCode =
-    ticketIssuance?.previewReference ||
-    `ETKT-PREVIEW-${booking?.payableReference}`
   const statusBadge = getStatusBadge(booking, payment)
-
-  const handleCopy = async (text) => {
-    try {
-      await navigator.clipboard.writeText(text)
-      setCopiedCode(true)
-      window.setTimeout(() => setCopiedCode(false), 2000)
-    } catch {
-      setCopiedCode(false)
-    }
-  }
 
   return (
     <div
@@ -176,11 +296,7 @@ function TicketDetailModal({ item, onClose }) {
                   Screening Date &amp; Time
                 </div>
                 <p className="mt-1.5 font-heading text-base font-bold text-white">
-                  {showtime?.startAt
-                    ? new Date(showtime.startAt).toLocaleString('en-GB', {
-                        timeZone: 'Asia/Ho_Chi_Minh',
-                      })
-                    : 'Scheduled Screening'}
+                  {formatVnDateTime(showtime?.startAt, 'Scheduled screening')}
                 </p>
                 <p className="mt-0.5 text-xs text-emerald-400">
                   Vietnam time (GMT+7)
@@ -248,15 +364,7 @@ function TicketDetailModal({ item, onClose }) {
                 <div className="flex justify-between text-on-surface-variant">
                   <span>Booked / paid at</span>
                   <span className="text-white">
-                    {payment?.paidAt
-                      ? new Date(payment.paidAt).toLocaleString('en-GB', {
-                          timeZone: 'Asia/Ho_Chi_Minh',
-                        })
-                      : booking?.bookingTime
-                        ? new Date(booking.bookingTime).toLocaleString('en-GB', {
-                            timeZone: 'Asia/Ho_Chi_Minh',
-                          })
-                        : '—'}
+                    {formatVnDateTime(payment?.paidAt || booking?.bookingTime, '—')}
                   </span>
                 </div>
                 <div className="flex items-baseline justify-between border-t border-white/10 pt-3">
@@ -276,56 +384,18 @@ function TicketDetailModal({ item, onClose }) {
             </div>
           </div>
 
-          {/* Right 5 Cols: DEMO E-TICKET PREVIEW QR Stub */}
+          {/* Right 5 Cols: the booking's real E-Tickets (TICKET-001) */}
           <div className="flex flex-col items-center justify-between rounded-2xl border border-white/10 bg-[#131315] p-6 text-center lg:col-span-5">
             {isConfirmedAndPaid ? (
-              <>
-                <div className="w-full">
-                  <span className="inline-flex items-center gap-1.5 rounded-full border border-secondary/40 bg-secondary/15 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-secondary">
-                    <QrCode className="size-3.5" />
-                    DEMO E-TICKET PREVIEW
-                  </span>
-                  <p className="mt-1.5 text-xs text-on-surface-variant">
-                    E-Ticket code &amp; QR preview
-                  </p>
-                </div>
-
-                <div className="my-5 flex flex-col items-center">
-                  <MockQrSvg
-                    payload={previewQrCode}
-                    size={185}
-                    badgeLabel="E-TICKET"
-                    ariaLabel={`Demo E-Ticket QR for ${previewQrCode}`}
-                  />
-
-                  <div className="mt-4 flex items-center gap-2 rounded-xl border border-white/10 bg-surface-container px-3.5 py-2">
-                    <span className="font-mono text-xs font-black tracking-wider text-secondary">
-                      {previewQrCode}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => handleCopy(previewQrCode)}
-                      title="Copy Ticket Code"
-                      className="text-on-surface-variant hover:text-white"
-                    >
-                      <Copy className="size-3.5" />
-                    </button>
-                  </div>
-                  {copiedCode && (
-                    <span className="mt-1 text-[11px] font-bold text-emerald-400">
-                      Ticket code copied!
-                    </span>
-                  )}
-                </div>
-
-                <div className="w-full rounded-xl border border-secondary/30 bg-secondary/10 p-3 text-left text-[11px] leading-relaxed text-on-surface-variant">
-                  <strong className="block text-secondary">
-                    DEMO E-TICKET PREVIEW:
-                  </strong>
-                  {ticketIssuance?.notice ||
-                    'This QR code is an E-Ticket preview. Open the E-Ticket to see the issued tickets.'}
-                </div>
-              </>
+              <BookingTicketsPanel bookingId={booking.bookingId} />
+            ) : booking?.status === 'REFUNDED' ? (
+              <div className="my-auto space-y-3 py-6">
+                <RefreshCcw className="mx-auto size-12 text-sky-300" />
+                <h3 className="font-heading text-lg font-bold text-white">Booking refunded</h3>
+                <p className="text-xs leading-relaxed text-on-surface-variant">
+                  The refund for this booking is complete, so its E-Tickets are no longer valid for entry.
+                </p>
+              </div>
             ) : isReviewRequired ? (
               <div className="my-auto space-y-3 py-6">
                 <ShieldAlert className="mx-auto size-12 text-secondary" />
@@ -377,9 +447,9 @@ function TicketDetailModal({ item, onClose }) {
             {booking?.bookingId && booking?.showtimeId && (
               <Link
                 to={`/booking/${booking.showtimeId}/confirmation/${booking.bookingId}`}
-                className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-[#e50914] to-[#b5000b] px-5 py-2.5 text-xs font-bold uppercase tracking-wider text-white shadow-lg shadow-primary/25"
+                className="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-surface-container px-5 py-2.5 text-xs font-bold uppercase tracking-wider text-white transition hover:border-white/30"
               >
-                Open E-Ticket
+                Booking confirmation
                 <ExternalLink className="size-3.5" />
               </Link>
             )}
@@ -465,7 +535,7 @@ function CustomerBookingsPage({ initialMode = 'tickets' }) {
                 : 'My Tickets'}
             </h1>
             <p className="mt-1 text-sm text-on-surface-variant">
-              Select any ticket or booking to see its seats, amount, screening date, hall and E-Ticket QR preview.
+              Select any booking to see its seats, amount, screening date, hall and your E-Tickets with their entry QR codes.
             </p>
           </div>
 
@@ -486,7 +556,7 @@ function CustomerBookingsPage({ initialMode = 'tickets' }) {
         <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
           <div className="rounded-2xl border border-emerald-500/25 bg-surface-container-low p-4">
             <span className="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">
-              Confirmed tickets (Paid)
+              Paid bookings
             </span>
             <p className="mt-1 font-heading text-2xl font-black text-emerald-400">
               {summary.confirmedTicketsCount}
@@ -612,6 +682,7 @@ function CustomerBookingsPage({ initialMode = 'tickets' }) {
                 const isPaidTicket =
                   booking?.status === 'CONFIRMED' &&
                   payment?.status === 'PAID'
+                const ticketSummary = describeTicketIssuance(ticketIssuance)
                 const displayRef =
                   booking?.bookingCode ||
                   booking?.payableReference ||
@@ -666,12 +737,7 @@ function CustomerBookingsPage({ initialMode = 'tickets' }) {
 
                           <span className="inline-flex items-center gap-1.5">
                             <Calendar className="size-3.5 text-secondary" />
-                            {showtime?.startAt
-                              ? new Date(showtime.startAt).toLocaleString(
-                                  'en-GB',
-                                  { timeZone: 'Asia/Ho_Chi_Minh' },
-                                )
-                              : 'Scheduled Time'}
+                            {formatVnDateTime(showtime?.startAt, 'Scheduled time')}
                           </span>
                         </div>
 
@@ -694,24 +760,19 @@ function CustomerBookingsPage({ initialMode = 'tickets' }) {
 
                       {/* Right Price, Mini QR Preview & CTA */}
                       <div className="flex flex-wrap items-center justify-between gap-5 border-t border-white/10 pt-4 lg:border-t-0 lg:pt-0">
-                        {isPaidTicket && (
-                          <div className="hidden items-center gap-3 rounded-xl border border-white/10 bg-[#131315] px-3 py-2 sm:flex">
-                            <MockQrSvg
-                              payload={
-                                ticketIssuance?.previewReference ||
-                                `ETKT-PREVIEW-${booking.payableReference}`
-                              }
-                              size={54}
-                              badgeLabel="QR"
-                              ariaLabel="Mini E-Ticket QR preview"
-                            />
+                        {isPaidTicket && ticketSummary.label && (
+                          <div className="flex items-center gap-3 rounded-xl border border-white/10 bg-[#131315] px-3 py-2">
+                            <Ticket className="size-6 text-secondary" />
                             <div className="text-left">
                               <span className="block text-[10px] font-bold uppercase tracking-wider text-secondary">
-                                DEMO E-TICKET QR
+                                {ticketSummary.label}
                               </span>
                               <span className="font-mono text-[11px] text-white">
-                                {ticketIssuance?.previewReference ||
-                                  `ETKT-PREVIEW-${booking.payableReference}`}
+                                {ticketIssuance.tickets
+                                  .slice(0, 2)
+                                  .map((ticket) => ticket.ticketCode)
+                                  .join(', ')}
+                                {ticketIssuance.tickets.length > 2 ? ', …' : ''}
                               </span>
                             </div>
                           </div>
@@ -740,7 +801,7 @@ function CustomerBookingsPage({ initialMode = 'tickets' }) {
                           className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-[#e50914] to-[#b5000b] px-4 py-3 text-xs font-bold uppercase tracking-wider text-white shadow-md shadow-primary/20 transition group-hover:brightness-110"
                         >
                           <QrCode className="size-4" />
-                          View details &amp; QR
+                          {isPaidTicket ? 'View E-Tickets' : 'View details'}
                         </button>
                       </div>
                     </div>

@@ -18,6 +18,8 @@ import { TICKET_INDEXES } from "../src/modules/ticket/ticket.indexes.js";
 import { Ticket } from "../src/modules/ticket/ticket.model.js";
 import { createTicketRouter } from "../src/modules/ticket/ticket.routes.js";
 import { toTicketDto } from "../src/modules/ticket/ticket.service.js";
+import { withTicketCheckInStatus } from "../src/modules/ticket/ticket-refund.adapter.js";
+import { checkInTicketSchema } from "../src/modules/ticket/ticket.validation.js";
 import { createInMemoryTicketRepository } from "./helpers/in-memory-ticket-repository.js";
 import { createInMemoryHarness } from "./helpers/payment-harness.js";
 
@@ -321,4 +323,141 @@ test("HTTP ticket routes enforce authentication and BR-36 ownership", async (t) 
   const invalid = await get("/not-an-id", harness.ownerId);
   assert.equal(invalid.status, 400);
   assert.equal(invalid.body.code, TICKET_ERROR.INVALID_TICKET_ID);
+});
+
+// ---- TICKET-101 check-in by ticket code ----
+// Harness showtime: 12:30Z-15:30Z on 24/10/2026, so check-in opens at 12:00Z.
+const SHOWTIME_END = new Date("2026-10-24T15:30:00.000Z");
+
+const paidHarness = async (options = {}) => {
+  const audits = [];
+  const harness = createInMemoryHarness({ ...options, auditLog: async (entry) => audits.push(entry) });
+  const { booking } = await payBooking(harness, "checkin");
+  const tickets = await harness.ticketService.listTicketsForBooking({ bookingId: booking.bookingId });
+  const moveTo = (iso) => harness.advanceTimeMs(new Date(iso).getTime() - harness.now().getTime());
+  const staffId = new mongoose.Types.ObjectId().toString();
+  const checkIn = (ticketCode, overrides = {}) =>
+    harness.ticketService.checkInTicket({
+      ticketCode,
+      staffAccountId: staffId,
+      staffBranchId: harness.cinemaId,
+      ...overrides,
+    });
+  return { harness, booking, tickets, moveTo, checkIn, staffId, audits };
+};
+
+const rejectsWith = (promise, code) =>
+  assert.rejects(promise, (error) => {
+    assert.equal(error.code, code, error.message);
+    return true;
+  });
+
+test("TICKET-101 check-in opens 30 minutes before the showtime and closes at its end", async () => {
+  const { tickets, moveTo, checkIn } = await paidHarness();
+
+  moveTo("2026-10-24T11:59:00.000Z");
+  await assert.rejects(checkIn(tickets[0].ticketCode), (error) => {
+    assert.equal(error.code, TICKET_ERROR.TOO_EARLY);
+    // 12:00Z is 19:00 in Asia/Ho_Chi_Minh.
+    assert.match(error.message, /opens at 24\/10\/2026 19:00 \(30 minutes before it starts\)/);
+    return true;
+  });
+
+  moveTo(SHOWTIME_END.toISOString());
+  await rejectsWith(checkIn(tickets[0].ticketCode), TICKET_ERROR.SHOWTIME_ENDED);
+});
+
+test("TICKET-101 admits one ticket (one seat) once and records who checked it in (BR-17)", async () => {
+  const { harness, booking, tickets, moveTo, checkIn, staffId, audits } = await paidHarness();
+  moveTo("2026-10-24T12:05:00.000Z");
+
+  const result = await checkIn(tickets[0].ticketCode);
+  assert.equal(result.ticket.status, TICKET_STATUS.USED);
+  assert.equal(result.ticket.qrCode, null);
+  assert.equal(result.ticket.checkedInAt, "2026-10-24T12:05:00.000Z");
+  assert.deepEqual(
+    { ticketCount: result.bookingCheckIn.ticketCount, checkedInCount: result.bookingCheckIn.checkedInCount },
+    { ticketCount: 2, checkedInCount: 1 },
+  );
+  const stored = harness.ticketRepository.tickets.get(result.ticket.ticketId);
+  assert.equal(stored.checkedInBy, staffId);
+  assert.equal(audits.length, 1);
+  assert.equal(audits[0].action, "TICKET_CHECKED_IN");
+  assert.equal(audits[0].targetType, "TICKET");
+
+  // The other seat of the same booking is untouched.
+  const others = await harness.ticketService.listTicketsForBooking({ bookingId: booking.bookingId });
+  assert.equal(others.find(({ ticketId }) => ticketId === tickets[1].ticketId).status, TICKET_STATUS.ISSUED);
+
+  await assert.rejects(checkIn(tickets[0].ticketCode), (error) => {
+    assert.equal(error.code, TICKET_ERROR.ALREADY_USED);
+    assert.match(error.message, /already checked in at 24\/10\/2026 19:05\. It cannot be used again\./);
+    return true;
+  });
+});
+
+test("TICKET-101 concurrent check-ins of the same ticket admit it exactly once", async () => {
+  const { tickets, moveTo, checkIn, audits } = await paidHarness();
+  moveTo("2026-10-24T12:40:00.000Z");
+
+  const results = await Promise.allSettled([checkIn(tickets[1].ticketCode), checkIn(tickets[1].ticketCode)]);
+  assert.equal(results.filter(({ status }) => status === "fulfilled").length, 1);
+  const rejected = results.find(({ status }) => status === "rejected");
+  assert.equal(rejected.reason.code, TICKET_ERROR.ALREADY_USED);
+  assert.equal(audits.length, 1);
+});
+
+test("TICKET-101 Staff check in only tickets of their own branch", async () => {
+  const { tickets, moveTo, checkIn } = await paidHarness();
+  moveTo("2026-10-24T12:10:00.000Z");
+
+  await assert.rejects(
+    checkIn(tickets[0].ticketCode, { staffBranchId: new mongoose.Types.ObjectId().toString() }),
+    (error) => {
+      assert.equal(error.code, TICKET_ERROR.WRONG_BRANCH);
+      assert.equal(error.statusCode, 403);
+      assert.match(error.message, /This ticket is for F-Cinema Landmark 81/);
+      return true;
+    },
+  );
+  await rejectsWith(checkIn(tickets[0].ticketCode, { staffBranchId: null }), TICKET_ERROR.BRANCH_NOT_ASSIGNED);
+});
+
+test("TICKET-101 unknown, invalidated and refunded tickets are refused (BR-40)", async () => {
+  const { harness, booking, tickets, moveTo, checkIn } = await paidHarness();
+  moveTo("2026-10-24T12:10:00.000Z");
+
+  await rejectsWith(checkIn("TK-0000000000"), TICKET_ERROR.TICKET_NOT_FOUND);
+
+  // Refund finalization marks the Booking REFUNDED; check-in refuses it and invalidates its tickets.
+  const stored = harness.bookings.get(booking.bookingId);
+  harness.bookings.set(booking.bookingId, { ...stored, status: "REFUNDED" });
+  await rejectsWith(checkIn(tickets[0].ticketCode), TICKET_ERROR.INVALIDATED);
+  const after = await harness.ticketService.listTicketsForBooking({ bookingId: booking.bookingId });
+  assert.ok(after.every(({ status }) => status === TICKET_STATUS.INVALIDATED));
+  await rejectsWith(checkIn(tickets[1].ticketCode), TICKET_ERROR.INVALIDATED);
+});
+
+test("TICKET-101 Refund eligibility reads the real check-in state", async () => {
+  const { harness, booking, tickets, moveTo, checkIn } = await paidHarness();
+  const fakeRefundRepository = {
+    loadEligibility: async () => ({ booking: { _id: booking.bookingId }, checkedIn: false }),
+    findById: async () => "kept",
+  };
+  const repository = withTicketCheckInStatus(fakeRefundRepository, harness.ticketService);
+
+  assert.equal((await repository.loadEligibility(booking.bookingId)).checkedIn, false);
+  moveTo("2026-10-24T12:10:00.000Z");
+  await checkIn(tickets[0].ticketCode);
+  assert.equal((await repository.loadEligibility(booking.bookingId)).checkedIn, true);
+  assert.equal(await repository.findById(), "kept");
+});
+
+test("TICKET-101 the ticket code is typed or pasted; spaces and case are ignored", () => {
+  assert.equal(checkInTicketSchema.parse({ ticketCode: " tk-1a2b 3c4d5e " }).ticketCode, "TK-1A2B3C4D5E");
+  const empty = checkInTicketSchema.safeParse({ ticketCode: "   " });
+  assert.deepEqual(empty.error.issues.map(({ message }) => message), ["The Ticket code field is required."]);
+  const malformed = checkInTicketSchema.safeParse({ ticketCode: "FCINEMA-TICKET:v1:TK-1" });
+  assert.equal(malformed.error.issues[0].message, "The Ticket code format is invalid.");
+  assert.equal(checkInTicketSchema.safeParse({}).success, false);
 });

@@ -34,7 +34,8 @@ test("TICKET-001 MongoDB unique indexes, concurrent issuance and fail-closed mig
     const bookings = new Map();
     const bookingReader = {
       async getBookingDetails({ bookingId }) {
-        return { booking: bookings.get(bookingId), showtime: null };
+        const booking = bookings.get(bookingId);
+        return { booking, showtime: booking?.showtime ?? null };
       },
     };
     const serviceWith = (repository) => createTicketService({ ticketRepository: repository, bookingReader });
@@ -106,6 +107,38 @@ test("TICKET-001 MongoDB unique indexes, concurrent issuance and fail-closed mig
       assert.equal(status.checkedIn, true);
       const statuses = (await Ticket.find({ bookingId: booking.bookingId }).lean()).map((ticket) => ticket.status).sort();
       assert.deepEqual(statuses, [TICKET_STATUS.INVALIDATED, TICKET_STATUS.USED]);
+    });
+
+    await t.test("TICKET-101 concurrent check-ins of one ticket admit it once (compare-and-set)", async () => {
+      const branchId = new mongoose.Types.ObjectId().toString();
+      const booking = {
+        ...makeBooking(),
+        showtime: {
+          status: "PUBLISHED",
+          startAt: new Date(Date.now() + 10 * 60_000).toISOString(),
+          endAt: new Date(Date.now() + 130 * 60_000).toISOString(),
+          cinema: { id: branchId, branchName: "Test Branch" },
+        },
+      };
+      bookings.set(booking.bookingId, booking);
+      const issued = await serviceWith(createTicketRepository()).issueTicketsForConfirmedBooking({ bookingId: booking.bookingId, ownerId });
+      const code = issued.tickets[0].ticketCode;
+
+      const results = await Promise.allSettled(
+        Array.from({ length: 5 }, () =>
+          serviceWith(createTicketRepository()).checkInTicket({
+            ticketCode: code,
+            staffAccountId: new mongoose.Types.ObjectId().toString(),
+            staffBranchId: branchId,
+          }),
+        ),
+      );
+      assert.equal(results.filter(({ status }) => status === "fulfilled").length, 1);
+      assert.ok(results.filter(({ status }) => status === "rejected").every(({ reason }) => reason.code === "TICKET_ALREADY_USED"));
+      const stored = await Ticket.findOne({ ticketCode: code }).lean();
+      assert.equal(stored.status, TICKET_STATUS.USED);
+      assert.ok(stored.checkedInAt instanceof Date);
+      assert.ok(stored.checkedInBy);
     });
   } finally {
     try {

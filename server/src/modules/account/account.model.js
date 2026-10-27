@@ -50,6 +50,11 @@ const accountSchema = new mongoose.Schema({
     branchId: mongoose.Schema.Types.ObjectId,
     position: String,
   },
+
+  // Admin who created / last changed a staff account (STAFF-101, CR-21). Optional: self-registered
+  // and seeded accounts have neither.
+  createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "Account" },
+  updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: "Account" },
 }, {
   timestamps: true,
 });

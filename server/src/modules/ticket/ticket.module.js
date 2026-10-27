@@ -1,3 +1,4 @@
+import { recordAuditEvent } from "../audit/audit.service.js";
 import { bookingService } from "../booking/booking.module.js";
 import { createTicketController } from "./ticket.controller.js";
 import { ticketRepository } from "./ticket.repository.js";
@@ -11,6 +12,10 @@ const bookingReader = {
     bookingService.getCustomerBookingDetails({ bookingId, ownerId }),
 };
 
-export const ticketService = createTicketService({ ticketRepository, bookingReader });
+export const ticketService = createTicketService({
+  ticketRepository,
+  bookingReader,
+  auditLog: recordAuditEvent,
+});
 
 export const ticketRoutes = createTicketRouter(createTicketController(ticketService));

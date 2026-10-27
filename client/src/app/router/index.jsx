@@ -35,6 +35,7 @@ import CheckoutPage from '../../features/booking/pages/CheckoutPage'
 import BookingConfirmationPage from '../../features/booking/pages/BookingConfirmationPage'
 import CustomerBookingsPage from '../../features/booking/pages/CustomerBookingsPage'
 import ETicketPage from '../../features/ticket/pages/ETicketPage'
+import TicketCheckInPage from '../../features/ticket/pages/TicketCheckInPage'
 import StockInPage from '../../features/inventory/pages/StockInPage'
 import StockLevelsPage from '../../features/inventory/pages/StockLevelsPage'
 import StaffShiftsPage from '../../features/staff-shifts/pages/StaffShiftsPage'
@@ -116,6 +117,10 @@ export function AppRoutes() {
               <Route path="pos/payment" element={<CounterPaymentPage />} />
               <Route path="pos/complete" element={<CounterCompletePage />} />
               <Route path="concessions" element={<CounterConcessionPosPage />} />
+              {/* TICKET-101. UX guard only; the API enforces ticket.validate + the STAFF/MANAGER role. */}
+              <Route element={<PermissionRoute permission="ticket.validate" />}>
+                <Route path="check-in" element={<TicketCheckInPage />} />
+              </Route>
               <Route element={<PermissionRoute permission="inventory.view" />}>
                 <Route path="inventory" element={<StockLevelsPage stockInPath="/staff/inventory/stock-in" />} />
               </Route>

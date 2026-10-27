@@ -111,9 +111,9 @@ Nhật ký bất biến cho thao tác quản trị (CR-20/CR-21). Ứng dụng c
 | :--- | :--- | :--- |
 | `_id` | `ObjectId` | Khóa chính |
 | `actorAccountId` | `ObjectId` | Tham chiếu `accounts._id` (người thực hiện), bắt buộc |
-| `action` | `string` | `STAFF_ACCOUNT_CREATED`, `STAFF_ACCOUNT_UPDATED`, `STAFF_ACCOUNT_ENABLED`, `STAFF_ACCOUNT_DISABLED`, `STAFF_ACCESS_ASSIGNED`, `ROLE_CREATED`, `ROLE_UPDATED`, `ROLE_PERMISSIONS_ASSIGNED` |
-| `targetType` | `string` | `ACCOUNT` hoặc `ROLE` |
-| `targetId` | `ObjectId` | `accounts._id` hoặc `roles._id` |
+| `action` | `string` | `STAFF_ACCOUNT_CREATED`, `STAFF_ACCOUNT_UPDATED`, `STAFF_ACCOUNT_ENABLED`, `STAFF_ACCOUNT_DISABLED`, `STAFF_ACCESS_ASSIGNED`, `ROLE_CREATED`, `ROLE_UPDATED`, `ROLE_PERMISSIONS_ASSIGNED`, `TICKET_CHECKED_IN` (TICKET-101) |
+| `targetType` | `string` | `ACCOUNT`, `ROLE` hoặc `TICKET` |
+| `targetId` | `ObjectId` | `accounts._id`, `roles._id` hoặc `tickets._id` |
 | `summary` | `string` | Mô tả ngắn (≤ 300 ký tự) |
 | `changes` | `Object` | Tóm tắt before/after của các field đã đổi, hoặc tên role/permission được thêm/bớt |
 | `createdAt` | `Date` | Thời điểm ghi nhận |
@@ -294,6 +294,7 @@ Từng vé xem phim được sinh ra từ đơn đặt vé đã thanh toán thà
 | `qrCode` | `string` | Giá trị mã QR dùng để soát vé |
 | `status` | `string` | Trạng thái vé (ví dụ: `VALID`, `USED`, `CANCELLED`, `REFUNDED`) |
 | `checkedInAt` | `Date` | Thời điểm soát vé thành công |
+| `checkedInBy` | `ObjectId` *(tùy chọn)* | Tham chiếu `accounts._id` (Staff/Manager soát vé) *(thêm mới cho TICKET-101)* |
 
 ---
 

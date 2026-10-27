@@ -170,3 +170,11 @@ test("ROLE-101/STAFF-101 Admin access-control screens are routed behind the ADMI
   assert.match(render("/admin/roles", actor("CUSTOMER", adminGrants)), /403/);
   assert.match(render("/admin/roles", actor("ADMIN", ["branch.manage"])), /403/);
 });
+
+test("TICKET-101 Staff check-in screen needs the STAFF role and ticket.validate", () => {
+  const html = render("/staff/check-in", actor("STAFF", ["ticket.validate"]));
+  assert.match(html, /Ticket Check-in/);
+  assert.match(html, /TK-XXXXXXXXXX/);
+  assert.match(render("/staff/check-in", actor("STAFF")), /403/);
+  assert.match(render("/staff/check-in", actor("CUSTOMER", ["ticket.validate"])), /403/);
+});

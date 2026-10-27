@@ -22,6 +22,16 @@ export const createInMemoryTicketRepository = () => {
     async findById(ticketId) {
       return tickets.get(String(ticketId)) ?? null;
     },
+    async findByTicketCode(ticketCode) {
+      return [...tickets.values()].find((ticket) => ticket.ticketCode === ticketCode) ?? null;
+    },
+    // Same compare-and-set as ticket.repository.js markUsed.
+    async markUsed(ticketId, { at, by }) {
+      const ticket = tickets.get(String(ticketId));
+      if (!ticket || ticket.status !== TICKET_STATUS.ISSUED) return false;
+      Object.assign(ticket, { status: TICKET_STATUS.USED, checkedInAt: at, checkedInBy: by });
+      return true;
+    },
     async findByBookingId(bookingId) {
       return [...tickets.values()]
         .filter((ticket) => String(ticket.bookingId) === String(bookingId))

@@ -122,6 +122,17 @@ const serializeAccount = (account) => {
   };
 };
 
+// BR-28: a DISABLED account cannot sign in until an Admin enables it again.
+const assertCanSignIn = (account) => {
+  if (account.status === "DISABLED") {
+    throw new AppError(403, "This account has been disabled. Please contact an administrator.");
+  }
+
+  if (account.status !== "ACTIVE") {
+    throw new AppError(403, "This account is not allowed to sign in");
+  }
+};
+
 const issueAccessToken = (accountId, rememberMe) =>
   jwt.sign({ sub: accountId.toString() }, env.jwtAccessSecret, {
     expiresIn: rememberMe ? "7d" : "8h",
@@ -134,9 +145,7 @@ export const login = async ({ identity, password, rememberMe }) => {
     throw new AppError(401, "Invalid email/username or password");
   }
 
-  if (account.status !== "ACTIVE") {
-    throw new AppError(403, "This account is not allowed to sign in");
-  }
+  assertCanSignIn(account);
 
   return { token: issueAccessToken(account._id, rememberMe), rememberMe };
 };
@@ -213,9 +222,7 @@ export const loginWithGoogle = async ({ credential, rememberMe }) => {
     );
   }
 
-  if (account.status !== "ACTIVE") {
-    throw new AppError(403, "This account is not allowed to sign in");
-  }
+  assertCanSignIn(account);
 
   return { token: issueAccessToken(account._id, rememberMe), rememberMe };
 };
