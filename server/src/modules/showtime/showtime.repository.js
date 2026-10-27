@@ -212,12 +212,12 @@ export const updatePublishedShowtimeTime = ({ showtimeId, startAt, endAt, now, t
     { new: true, runValidators: true },
   ).session(session ?? null).lean().exec();
 
-export const cancelPublishedShowtime = ({ showtimeId, now }) =>
+export const cancelPublishedShowtime = ({ showtimeId, now, session }) =>
   Showtime.findOneAndUpdate(
     { _id: showtimeId, status: SHOWTIME_STATUS.PUBLISHED, startAt: { $gt: now } },
     { $set: { status: SHOWTIME_STATUS.CANCELLED } },
     { new: true, runValidators: true },
-  ).lean().exec();
+  ).session(session ?? null).lean().exec();
 
 export const createDraftShowtime = async (input, session) => {
   const [draft] = await Showtime.create([input], session ? { session } : {});

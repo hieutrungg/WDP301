@@ -197,6 +197,39 @@ export const createSeatHoldRepository = ({
     } finally { await session.endSession(); }
   };
 
+  // Legacy Showtimes without a price-plan reference still need the same transactional
+  // booking-activity fence as repricing. Touching each seat row conflicts with concurrent
+  // hold/booking writes, while leaving its historical price snapshot unchanged.
+  const updateUnclaimedShowtime = async ({ showtimeId, roomLayoutVersion, seatIds, now, commit }) => {
+    const session = await connection.startSession();
+    try {
+      let result;
+      await session.withTransaction(async () => {
+        const booking = await bookingModel.exists({ showtimeId }).session(session).exec();
+        if (booking) throw new SeatClaimConflictError();
+        await expireConflictingHolds({ showtimeId, seatIds, now, session });
+        const activeHold = await seatHoldModel.exists({ showtimeId, status: SEAT_HOLD_STATUS.ACTIVE, expiresAt: { $gt: now } })
+          .session(session).exec();
+        const rows = await listByShowtime(showtimeId, session);
+        const expected = new Set(seatIds.map(String));
+        if (activeHold || rows.length !== expected.size || rows.some((row) =>
+          !expected.has(String(row.seatId)) || row.roomLayoutVersion !== roomLayoutVersion ||
+          ![SHOWTIME_SEAT_STATE.AVAILABLE, SHOWTIME_SEAT_STATE.UNAVAILABLE].includes(row.state) || row.holdId || row.bookingId,
+        )) throw new SeatClaimConflictError();
+        const fence = await showtimeSeatModel.bulkWrite(seatIds.map((seatId) => ({
+          updateOne: {
+            filter: { showtimeId, seatId, roomLayoutVersion, state: { $in: [SHOWTIME_SEAT_STATE.AVAILABLE, SHOWTIME_SEAT_STATE.UNAVAILABLE] } },
+            update: { $set: { updatedAt: now } },
+          },
+        })), { session, ordered: true });
+        if (fence.matchedCount !== seatIds.length) throw new SeatClaimConflictError();
+        result = await commit(session);
+        if (!result) throw new SeatClaimConflictError();
+      });
+      return result;
+    } finally { await session.endSession(); }
+  };
+
   const findByOwnerAndCheckoutKey = (ownerId, checkoutKey, session) =>
     seatHoldModel
       .findOne({ ownerId, checkoutKey })
@@ -609,6 +642,7 @@ export const createSeatHoldRepository = ({
     hasActiveShowtimeClaims,
     initializeShowtimeSeats,
     repriceUnclaimedShowtime,
+    updateUnclaimedShowtime,
     listByShowtime,
     summarizeAvailabilityByShowtime,
     release,
