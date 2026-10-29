@@ -13,10 +13,15 @@ const PICKER_MAX_PAGES = 20
 // Server state without React Query (its provider/convention is not finalized yet).
 // `loading` is derived from whether the settled result matches the current request key, so the
 // previous page stays on screen while the next one loads.
-function useRemoteResource(requestKey, load) {
+function useRemoteResource(requestKey, load, enabled = true) {
   const [result, setResult] = useState({ key: null, data: null, error: null })
 
   useEffect(() => {
+    if (!enabled) {
+      setResult({ key: requestKey, data: null, error: null })
+      return undefined
+    }
+
     const controller = new AbortController()
 
     load(controller.signal)
@@ -30,9 +35,9 @@ function useRemoteResource(requestKey, load) {
     return () => controller.abort()
     // `load` is recreated every render; the request key captures everything it depends on.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [requestKey])
+  }, [requestKey, enabled])
 
-  return { data: result.data, error: result.error, loading: result.key !== requestKey }
+  return { data: result.data, error: result.error, loading: enabled && result.key !== requestKey }
 }
 
 export function useStockLevels({ q, categoryId, status, page, limit, refreshToken }) {
@@ -43,8 +48,8 @@ export function useStockLevels({ q, categoryId, status, page, limit, refreshToke
   )
 }
 
-export function useStockSummary(refreshToken) {
-  return useRemoteResource(`summary:${refreshToken}`, (signal) => getStockSummaryRequest(signal))
+export function useStockSummary(refreshToken, enabled = true) {
+  return useRemoteResource(`summary:${refreshToken}`, (signal) => getStockSummaryRequest(signal), enabled)
 }
 
 export function useCategories() {

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { CirclePlay, Play, X } from 'lucide-react'
 
 function getYouTubeVideoId(trailerUrl) {
@@ -90,9 +91,9 @@ function TrailerPlayerButton({
       >
         {buttonContent}
       </button>
-      {isOpen && (
+      {isOpen && createPortal(
         <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 p-4 backdrop-blur-sm"
+          className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/85 p-4 backdrop-blur-sm"
           onMouseDown={(event) => {
             if (event.target === event.currentTarget) setIsOpen(false)
           }}
@@ -115,7 +116,8 @@ function TrailerPlayerButton({
               />
             </div>
           </section>
-        </div>
+        </div>,
+        document.body,
       )}
     </>
   )

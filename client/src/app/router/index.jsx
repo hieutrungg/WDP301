@@ -12,6 +12,7 @@ import UpdateMoviePage from '../../features/manager-movies/pages/UpdateMoviePage
 import ManagerMoviesPage from '../../features/manager-movies/pages/ManagerMoviesPage'
 import MovieManagementAccess from '../../features/manager-movies/components/MovieManagementAccess'
 import AdminLayout from '../../layouts/AdminLayout'
+import AdminDashboardPage from '../../features/admin-dashboard/pages/AdminDashboardPage'
 import ManagerLayout from '../../layouts/ManagerLayout'
 import PublicLayout from '../../layouts/PublicLayout'
 import ForbiddenPage from '../../pages/public/ForbiddenPage'
@@ -140,7 +141,8 @@ export function AppRoutes() {
         <Route path="admin" element={<ProtectedRoute />}>
           <Route element={<PermissionRoute permission="branch.manage" role="ADMIN" />}>
             <Route element={<AdminLayout />}>
-              <Route index element={<Navigate to="branches" replace />} />
+              <Route index element={<Navigate to="dashboard" replace />} />
+              <Route path="dashboard" element={<AdminDashboardPage />} />
               <Route path="branches" element={<BranchManagementPage />} />
               {/* Read-only for Admin: room writes need the MANAGER role on the API. */}
               <Route element={<PermissionRoute permission="room.view" />}>

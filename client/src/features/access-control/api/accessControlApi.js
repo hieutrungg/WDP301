@@ -6,8 +6,8 @@ export const listPermissionsRequest = async () => {
   return response.data.data
 }
 
-export const listRolesRequest = async (params) => {
-  const response = await httpClient.get('/roles', { params })
+export const listRolesRequest = async (params, signal) => {
+  const response = await httpClient.get('/roles', { params, signal })
   return { items: response.data.data, meta: response.data.meta }
 }
 
@@ -32,8 +32,8 @@ export const assignRolePermissionsRequest = async (roleId, payload) => {
 }
 
 // ---- Staff accounts (UC35-37) ----
-export const listStaffAccountsRequest = async (params) => {
-  const response = await httpClient.get('/staff-accounts', { params })
+export const listStaffAccountsRequest = async (params, signal) => {
+  const response = await httpClient.get('/staff-accounts', { params, signal })
   return { items: response.data.data, meta: response.data.meta }
 }
 
