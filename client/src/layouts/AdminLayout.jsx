@@ -7,30 +7,32 @@ import { useAuth } from '../features/auth/hooks/useAuth'
 
 // Items without `to` are planned admin screens from SCREEN_FLOW §5 that have no route yet.
 const BREADCRUMBS = [
+  ['/admin/dashboard', 'System overview'],
   ['/admin/rooms', 'Room management'],
   ['/admin/staff-accounts', 'Staff account management'],
   ['/admin/roles', 'Role management'],
 ]
 
 const navItems = [
-  { label: 'Dashboard', icon: LayoutDashboard },
-  { label: 'Staff Accounts', icon: Users, to: '/admin/staff-accounts' },
-  { label: 'Roles & Permissions', icon: KeyRound, to: '/admin/roles' },
-  { label: 'Branches', icon: Building2, to: '/admin/branches' },
-  { label: 'Rooms', icon: DoorOpen, to: '/admin/rooms' },
+  { label: 'Dashboard', icon: LayoutDashboard, to: '/admin/dashboard', end: true },
+  { label: 'Staff Accounts', icon: Users, to: '/admin/staff-accounts', permission: 'account.manage' },
+  { label: 'Roles & Permissions', icon: KeyRound, to: '/admin/roles', permission: 'role.view' },
+  { label: 'Branches', icon: Building2, to: '/admin/branches', permission: 'branch.manage' },
+  { label: 'Rooms', icon: DoorOpen, to: '/admin/rooms', permission: 'room.view' },
 ]
 
-function SidebarNav({ onNavigate }) {
+function SidebarNav({ onNavigate, permissions }) {
   return (
     <nav className="grid gap-1" aria-label="Administration">
       <p className="px-3 pb-2 text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">
         Governance &amp; ops
       </p>
-      {navItems.map(({ label, icon: Icon, to }) =>
+      {navItems.filter(({ permission }) => !permission || permissions.has(permission)).map(({ label, icon: Icon, to, end }) =>
         to ? (
           <NavLink
             key={label}
             to={to}
+            end={end}
             onClick={onNavigate}
             className={({ isActive }) =>
               `flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold transition-colors ${isActive ? 'bg-primary-container text-white shadow-crimson' : 'text-on-surface hover:bg-surface-container'}`
@@ -65,6 +67,7 @@ function AdminLayout() {
   const navigate = useNavigate()
   const displayName = account?.profile?.fullName || account?.username || ''
   const roleLabel = account?.roles?.map(({ name }) => name).join(', ')
+  const permissions = new Set(account?.permissions?.map(({ name }) => name))
 
   const handleLogout = async () => {
     setIsLoggingOut(true)
@@ -109,7 +112,7 @@ function AdminLayout() {
           <p className="mt-1 pl-10 text-[10px] font-bold uppercase tracking-[0.2em] text-primary">Administration</p>
         </div>
         <div className="flex-1 overflow-y-auto">
-          <SidebarNav />
+          <SidebarNav permissions={permissions} />
         </div>
         {footer}
       </aside>
@@ -146,7 +149,7 @@ function AdminLayout() {
 
         {menuOpen && (
           <div className="grid gap-4 border-b border-white/5 bg-surface-container-lowest p-4 lg:hidden">
-            <SidebarNav onNavigate={() => setMenuOpen(false)} />
+            <SidebarNav permissions={permissions} onNavigate={() => setMenuOpen(false)} />
             {footer}
           </div>
         )}
