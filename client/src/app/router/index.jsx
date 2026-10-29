@@ -39,7 +39,6 @@ import ETicketPage from '../../features/ticket/pages/ETicketPage'
 import TicketCheckInPage from '../../features/ticket/pages/TicketCheckInPage'
 import StockInPage from '../../features/inventory/pages/StockInPage'
 import StockLevelsPage from '../../features/inventory/pages/StockLevelsPage'
-import StaffShiftsPage from '../../features/staff-shifts/pages/StaffShiftsPage'
 import RolesPage from '../../features/access-control/pages/RolesPage'
 import StaffAccountsPage from '../../features/access-control/pages/StaffAccountsPage'
 import ConcessionCatalogPage from '../../features/concessions/pages/ConcessionCatalogPage'
@@ -187,10 +186,6 @@ export function AppRoutes() {
               <Route element={<PermissionRoute permission="room.manage" />}>
                 <Route path="rooms" element={<RoomManagementPage />} />
                 <Route path="seat-maps" element={<SeatMapConfigPage />} />
-              </Route>
-              {/* UX guard only; the API enforces shift.view / shift.manage + the MANAGER role. */}
-              <Route element={<PermissionRoute permission="shift.view" />}>
-                <Route path="staff-shifts" element={<StaffShiftsPage />} />
               </Route>
             </Route>
           </Route>

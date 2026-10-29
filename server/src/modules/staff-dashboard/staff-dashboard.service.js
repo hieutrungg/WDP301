@@ -1,7 +1,4 @@
-import {
-  localDateOf,
-  localDateRangeToUtc,
-} from "../staff-shift/staff-shift.policy.js";
+import { localDateOf, localDateRangeToUtc } from "../../utils/local-date.js";
 import { readStaffCounterActivity } from "./staff-dashboard.repository.js";
 
 export const createStaffDashboardService =

@@ -75,7 +75,6 @@ test("INT-FE-001 existing Manager navigation and permissions survive integration
     "room.manage",
     "inventory.view",
     "movie.update",
-    "shift.view",
   ]);
   const rooms = render("/manager/rooms", account);
   assert.match(rooms, /Facilities &amp; rooms/);
@@ -85,13 +84,9 @@ test("INT-FE-001 existing Manager navigation and permissions survive integration
     "/manager/rooms",
     "/manager/seat-maps",
     "/manager/inventory",
-    "/manager/staff-shifts",
   ])
     assert.ok(rooms.includes(`href="${path}"`), path);
-  assert.match(
-    render("/manager/staff-shifts", account),
-    /Human resources &amp; operations/,
-  );
+  assert.doesNotMatch(rooms, /staff-shifts/, "the removed Staff Shifts screen is no longer linked");
   assert.match(
     render("/manager/movies", account),
     /Movie catalog &amp; distribution/,

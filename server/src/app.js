@@ -13,7 +13,6 @@ import showtimeRoutes from "./modules/showtime/showtime.routes.js";
 import roomRoutes from "./modules/room/room.routes.js";
 import inventoryRoutes from "./modules/inventory/inventory.routes.js";
 import concessionRoutes from "./modules/concession/concession.routes.js";
-import staffShiftRoutes from "./modules/staff-shift/staff-shift.routes.js";
 import {
   bookingRoutes,
   bookingVoucherRoutes,
@@ -66,7 +65,6 @@ app.use("/api/showtimes/:showtimeId/seats", seatAvailabilityRoutes);
 app.use("/api/seat-holds", seatHoldRoutes);
 app.use("/api/inventory", inventoryRoutes);
 app.use("/api", concessionRoutes);
-app.use("/api/staff-shifts", staffShiftRoutes);
 app.use("/api/staff-dashboard", staffDashboardRoutes);
 app.use("/api/bookings", bookingRoutes);
 app.use("/api/bookings", bookingVoucherRoutes);

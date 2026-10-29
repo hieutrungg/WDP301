@@ -133,16 +133,7 @@ Ca làm việc của nhân viên.
 | `startTime` | `Date` | Thời điểm bắt đầu ca |
 | `endTime` | `Date` | Thời điểm kết thúc ca |
 | `station` | `string` | Vị trí làm việc được phân công |
-| `status` | `string` | Vòng đời ca đã lưu (**PROPOSED**, CMS_UC38): `SCHEDULED`, `APPROVED`, `CANCELLED`. Document cũ có giá trị khác hoặc thiếu được đọc là `SCHEDULED`. `IN_PROGRESS` / `COMPLETED` **không lưu**: backend tính từ `startTime`/`endTime` và thời điểm hiện tại |
-| `createdBy` | `ObjectId` *(tùy chọn)* | Tham chiếu đến `accounts._id` (Manager phân ca) *(thêm mới cho CMS_UC38)* |
-| `cancelledBy` | `ObjectId` *(tùy chọn)* | Tham chiếu đến `accounts._id` (Manager hủy ca) *(thêm mới cho CMS_UC38)* |
-| `cancelledAt` | `Date` *(tùy chọn)* | Thời điểm hủy ca *(thêm mới cho CMS_UC38)* |
-| `approvedBy` | `ObjectId` *(tùy chọn)* | Tham chiếu đến `accounts._id` (**người duyệt**: Manager duyệt ca đã kết thúc) *(thêm mới cho CMS_UC38)* |
-| `approvedAt` | `Date` *(tùy chọn)* | Thời điểm duyệt ca *(thêm mới cho CMS_UC38)* |
-| `approvalNote` | `string` *(tùy chọn)* | Ghi chú khi duyệt (tối đa 500 ký tự) *(thêm mới cho CMS_UC38)* |
-| `createdAt`, `updatedAt` | `Date` | Mongoose tự cập nhật; document cũ có thể thiếu |
-
-> **CMS_UC38 chỉ làm phần ca làm việc tối thiểu: vòng đời ca, vị trí làm việc (`station`, văn bản tự do) và người duyệt (`approvedBy`).** Không có dữ liệu chấm công (clock-in/clock-out, nghỉ giải lao, terminal): nhóm chưa chốt, không tự thêm. Nhân viên của một ca là tài khoản `ACTIVE` có role `STAFF` và làm việc tại chi nhánh của Manager (`accounts.employeeProfile.branchId`, cùng quy tắc với Inventory); chi nhánh của ca luôn là chi nhánh của Manager tạo ca. Ca không bị xóa mà chuyển `CANCELLED`.
+| `status` | `string` | Trạng thái ca làm |
 
 ---
 
@@ -585,12 +576,6 @@ erDiagram
         Date endTime
         string station
         string status
-        ObjectId createdBy FK
-        ObjectId cancelledBy FK
-        Date cancelledAt
-        ObjectId approvedBy FK
-        Date approvedAt
-        string approvalNote
     }
 
     movies {
@@ -825,8 +810,6 @@ erDiagram
 | Collection | Index | Mục đích |
 | :--- | :--- | :--- |
 | `stock_transactions` | `{ branchId: 1, type: 1, transactionDate: -1 }` | Danh sách phiếu nhập gần đây của một chi nhánh (CMS_UC40) |
-| `staff_shifts` | `{ branchId: 1, startTime: -1 }` | Danh sách ca và dashboard của một chi nhánh (CMS_UC38) |
-| `staff_shifts` | `{ employeeAccountId: 1, startTime: 1 }` | Kiểm tra trùng giờ khi phân ca cho một nhân viên (CMS_UC38) |
 | `payments` | `{ status: 1, paidAt: 1, amount: 1 }` | Tính tổng thanh toán thành công theo thời điểm thu (REP-102) |
 | `refund_requests` | `{ status: 1, processedAt: 1, refundAmount: 1 }` | Tính tổng refund đã hoàn tất theo thời điểm xử lý (REP-102) |
 
@@ -902,7 +885,6 @@ This collection contains metadata only, not report files or payment/customer PII
 | 2026-10-17 | `inventories` | Thêm `minThreshold` (số nguyên ≥ 0, mặc định 10) | CMS_UC39 cần ngưỡng tồn tối thiểu để đánh dấu low stock; đặt theo chi nhánh | Không cần backfill: document thiếu giá trị được đọc là 10; document mới nhận mặc định khi upsert |
 | 2026-10-17 | `stock_transactions` | Thêm `receiptCode`; thêm index `{ branchId, type, transactionDate: -1 }` | CMS_UC40 gom nhiều dòng của một lần nhập và liệt kê phiếu nhập gần đây | Không cần backfill: giao dịch cũ không có `receiptCode` (hiển thị `—`) |
 | 2026-10-17 | `permissions`, `roles` *(dữ liệu, không đổi cấu trúc)* | Thêm quyền `inventory.stock_in`, gán cho role `STAFF`; đảm bảo `inventory.view` gán cho `STAFF` và `MANAGER` | CMS_UC40 chỉ dành cho Staff; Manager chỉ xem tồn kho (CMS_UC39) | `server/src/seeds/seed-inventory.js` (idempotent, `$addToSet`) |
-| 2026-10-20 | `staff_shifts` *(PROPOSED, chờ team review)* | CMS_UC38 (ca làm việc tối thiểu): thêm field tùy chọn `createdBy`, `cancelledBy`, `cancelledAt`, `approvedBy`, `approvedAt`, `approvalNote`; chốt `status` lưu `SCHEDULED`/`APPROVED`/`CANCELLED`; thêm index `{ branchId, startTime: -1 }` và `{ employeeAccountId, startTime: 1 }`. Không thêm collection mới, không thêm chấm công. Dùng quyền có sẵn `shift.view` / `shift.manage`; chi nhánh và nhân viên xác định qua `accounts.employeeProfile.branchId` | Không cần backfill: field mới tùy chọn; document cũ đọc là `SCHEDULED`. `server/src/migrations/20261020-staff-shift-monitoring.js` (chỉ tạo index); không có seed dữ liệu mẫu |
 | 2026-10-21 | `rooms` *(PROPOSED, chờ team review)* | ROOM-001 (quản lý phòng): chốt `status` = `ACTIVE`/`MAINTENANCE`/`INACTIVE` (đọc `AVAILABLE` như `ACTIVE`); thêm unique index `uniq_room_branch_name_normalized` `{ branchId, roomName }` với collation `en` strength 2. Không đổi cấu trúc field. Quyền dùng sẵn `room.view` (đọc: STAFF/MANAGER/ADMIN) và `room.manage` + role `MANAGER` (ghi); ADMIN chỉ đọc | Không cần backfill dữ liệu: `AVAILABLE` cũ vẫn hợp lệ. Cần chạy `server/src/migrations/20261021-room-management-indexes.js` để tạo index; script liệt kê và dừng nếu đã có tên phòng trùng trong cùng chi nhánh. Showtime chỉ nhận phòng `ACTIVE`/`AVAILABLE` nên hai trạng thái mới bị loại khỏi lịch chiếu mà không cần sửa Showtime |
 | 2026-10-27 | `payments`, `refund_requests` | Thêm index đọc `{ status, paidAt, amount }` và `{ status, processedAt, refundAmount }` cho REP-102; không đổi field hoặc dữ liệu nghiệp vụ | `server/src/migrations/20261027-revenue-report-indexes.js`; cần apply riêng trên từng database trước khi cần hiệu năng production |
 | 2026-10-27 | `report_exports`; `roles` *(dữ liệu, không đổi cấu trúc)* | Ghi metadata cho export doanh thu thành công; gán quyền hiện có `report.view`/`report.export` cho `MANAGER`; thêm index theo branch/actor và thời gian | UC43 yêu cầu export và ghi nhận actor, scope, format, timestamp | `server/src/migrations/20261027-rep-104-report-export.js` (idempotent; phải chạy trước rollout) |
