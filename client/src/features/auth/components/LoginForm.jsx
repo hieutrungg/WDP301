@@ -1,27 +1,30 @@
-import { zodResolver } from '@hookform/resolvers/zod'
+import { zodResolver } from "@hookform/resolvers/zod";
 import {
   ArrowRight,
   LockKeyhole,
   ShieldCheck,
+  Building2,
   UserRound,
-} from 'lucide-react'
-import { useState } from 'react'
-import { useForm, useWatch } from 'react-hook-form'
-import { Link, useLocation, useNavigate } from 'react-router'
-import { toast } from 'sonner'
-import { getApiErrorMessage } from '../../../lib/api/apiError'
-import { useLogin } from '../hooks/useLogin'
-import { loginSchema } from '../schema/loginSchema'
-import { getLoginDestination } from '../utils/loginDestination'
-import { AuthInput, AuthServerError, PasswordInput } from './AuthFormField'
-import GoogleSignInButton from './GoogleSignInButton'
+} from "lucide-react";
+import { useState } from "react";
+import { useForm, useWatch } from "react-hook-form";
+import { Link, useLocation, useNavigate } from "react-router";
+import { toast } from "sonner";
+import { getApiErrorMessage } from "../../../lib/api/apiError";
+import { useLogin } from "../hooks/useLogin";
+import { loginSchema } from "../schema/loginSchema";
+import { getLoginDestination } from "../utils/loginDestination";
+import { AuthInput, AuthServerError, PasswordInput } from "./AuthFormField";
+import GoogleSignInButton from "./GoogleSignInButton";
+import InternalStaffLogin from "./InternalStaffLogin";
 
 function LoginForm() {
-  const [showPassword, setShowPassword] = useState(false)
-  const [serverError, setServerError] = useState('')
-  const { login, isPending } = useLogin()
-  const navigate = useNavigate()
-  const location = useLocation()
+  const [showPassword, setShowPassword] = useState(false);
+  const [serverError, setServerError] = useState("");
+  const [internalLoginOpen, setInternalLoginOpen] = useState(false);
+  const { login, isPending } = useLogin();
+  const navigate = useNavigate();
+  const location = useLocation();
   const {
     register,
     handleSubmit,
@@ -29,22 +32,24 @@ function LoginForm() {
     formState: { errors },
   } = useForm({
     resolver: zodResolver(loginSchema),
-    defaultValues: { identity: '', password: '', rememberMe: false },
-  })
+    defaultValues: { identity: "", password: "", rememberMe: false },
+  });
 
-  const rememberMe = useWatch({ control, name: 'rememberMe' })
+  const rememberMe = useWatch({ control, name: "rememberMe" });
 
   const onSubmit = async (values) => {
-    setServerError('')
+    setServerError("");
 
     try {
-      const account = await login(values)
-      toast.success('Welcome back to F-Cinema!')
-      navigate(getLoginDestination(account, location.state?.from), { replace: true })
+      const account = await login(values);
+      toast.success("Welcome back to F-Cinema!");
+      navigate(getLoginDestination(account, location.state?.from), {
+        replace: true,
+      });
     } catch (error) {
-      setServerError(getApiErrorMessage(error))
+      setServerError(getApiErrorMessage(error));
     }
-  }
+  };
 
   return (
     <div className="rounded-2xl border border-white/5 bg-surface-container-low p-6 shadow-2xl sm:p-8">
@@ -57,7 +62,8 @@ function LoginForm() {
           Sign In to F-Cinema
         </h1>
         <p className="mt-2 text-sm leading-6 text-on-surface-variant">
-          Enter your credentials to access tickets, concessions, and exclusive F-Club privileges.
+          Enter your credentials to access tickets, concessions, and exclusive
+          F-Club privileges.
         </p>
       </div>
 
@@ -71,14 +77,17 @@ function LoginForm() {
           error={errors.identity}
           autoComplete="username"
           placeholder="username@example.com or username"
-          {...register('identity')}
+          {...register("identity")}
         />
 
         <PasswordInput
           id="login-password"
           label="Password"
           labelAction={
-            <Link to="/forgot-password" className="text-xs text-primary transition hover:text-white">
+            <Link
+              to="/forgot-password"
+              className="text-xs text-primary transition hover:text-white"
+            >
               Forgot password?
             </Link>
           }
@@ -88,7 +97,7 @@ function LoginForm() {
           onToggle={() => setShowPassword((visible) => !visible)}
           autoComplete="current-password"
           placeholder="Enter your password"
-          {...register('password')}
+          {...register("password")}
         />
 
         <div className="flex items-center justify-between pt-1">
@@ -96,7 +105,7 @@ function LoginForm() {
             <input
               type="checkbox"
               className="size-4 accent-primary-container"
-              {...register('rememberMe')}
+              {...register("rememberMe")}
             />
             Remember me
           </label>
@@ -131,14 +140,28 @@ function LoginForm() {
 
       <GoogleSignInButton onError={setServerError} rememberMe={rememberMe} />
 
+      <button
+        type="button"
+        onClick={() => setInternalLoginOpen(true)}
+        className="mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-lg border border-white/10 bg-surface-container text-sm font-bold text-on-surface transition hover:border-primary/40 hover:bg-surface-container-high"
+      >
+        <Building2 className="size-4 text-primary" /> Internal Sign In
+      </button>
+      {internalLoginOpen && (
+        <InternalStaffLogin onClose={() => setInternalLoginOpen(false)} />
+      )}
+
       <p className="mt-6 text-center text-sm text-on-surface-variant">
-        Don&apos;t have an account yet?{' '}
-        <Link to="/register" className="font-semibold text-primary transition hover:text-white hover:underline">
+        Don&apos;t have an account yet?{" "}
+        <Link
+          to="/register"
+          className="font-semibold text-primary transition hover:text-white hover:underline"
+        >
           Register now
         </Link>
       </p>
     </div>
-  )
+  );
 }
 
-export default LoginForm
+export default LoginForm;

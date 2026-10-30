@@ -29,12 +29,20 @@ export const loginSchema = z.object({
   rememberMe: z.boolean().optional().default(false),
 });
 
+export const internalStaffLoginSchema = loginSchema.extend({
+  branchId: z.string().regex(/^[a-f\d]{24}$/i, "Select a valid cinema"),
+});
+
 export const googleLoginSchema = z.object({
   credential: z
     .string({ error: "Google credential is required" })
     .min(1, "Google credential is required")
     .max(4096, "Google credential is too long"),
   rememberMe: z.boolean().optional().default(false),
+});
+
+export const internalStaffGoogleLoginSchema = googleLoginSchema.extend({
+  branchId: z.string().regex(/^[a-f\d]{24}$/i, "Select a valid cinema"),
 });
 
 export const fullNameField = z

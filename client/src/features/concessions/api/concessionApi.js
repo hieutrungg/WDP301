@@ -26,11 +26,23 @@ export const getCatalogBranches = (signal) =>
   collectPages((page) => getPublicCinemas({ page, limit: 50 }, signal), signal);
 
 export const createCounterConcessionOrder = async (payload) => {
-  const { data } = await httpClient.post("/counter-concessions/orders", payload);
+  const { data } = await httpClient.post(
+    "/counter-concessions/orders",
+    payload,
+  );
   return data.data;
 };
 
 export const confirmCounterConcessionQr = async (orderId) => {
-  const { data } = await httpClient.post(`/counter-concessions/orders/${orderId}/confirm-qr`);
+  const { data } = await httpClient.post(
+    `/counter-concessions/orders/${orderId}/confirm-qr`,
+  );
+  return data.data;
+};
+
+export const simulateCounterConcessionPayment = async (orderId) => {
+  const { data } = await httpClient.post(
+    `/counter-concessions/orders/${orderId}/simulate-payment`,
+  );
   return data.data;
 };

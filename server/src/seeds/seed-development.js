@@ -2,6 +2,7 @@ import "dotenv/config";
 import mongoose from "mongoose";
 import { env } from "../config/env.js";
 import { seedBranches } from "./seed-branches.js";
+import { seedStaffAccounts } from "./seed-staff-accounts.js";
 import { seedInventory } from "./seed-inventory.js";
 import { seedMovies } from "./seed-movies.js";
 import { seedRooms } from "./seed-rooms.js";
@@ -17,11 +18,12 @@ const runDevelopmentSeed = async () => {
 
   const movies = await seedMovies(database);
   const branches = await seedBranches(database);
+  const staffAccounts = await seedStaffAccounts(database);
   const rooms = await seedRooms(database);
   const seatHold = await seedSeatHoldDemoData(database);
   const inventory = await seedInventory(database);
 
-  console.table({ movies, branches, rooms });
+  console.table({ movies, branches, staffAccounts, rooms });
   console.log("Inventory fixtures:", inventory);
   console.log("SeatHold fixtures:", seatHold);
   console.log("Development seed completed without deleting unrelated data.");

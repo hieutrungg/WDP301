@@ -248,55 +248,6 @@ function StaffDashboardPage() {
           </div>
         </section>
 
-        <section className="rounded-2xl border border-white/7 bg-surface-container-low p-5 sm:p-6">
-          <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex items-start gap-4">
-              <span className="grid size-12 shrink-0 place-items-center rounded-xl bg-primary-container/15 text-primary ring-1 ring-primary-container/20">
-                <CalendarClock className="size-6" />
-              </span>
-              <div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <h2 className="font-heading text-xl font-bold">
-                    Current Shift Status
-                  </h2>
-                  <span className="rounded-full bg-surface-container-high px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-tertiary">
-                    Schedule feed unavailable
-                  </span>
-                </div>
-                <p className="mt-2 max-w-2xl text-sm leading-6 text-tertiary">
-                  Your account is authenticated for counter operations at{" "}
-                  {branchName}. Shift window, supervisor and till balance will
-                  appear when a Staff-readable shift endpoint is available.
-                </p>
-              </div>
-            </div>
-            <div className="grid shrink-0 grid-cols-2 gap-3 sm:grid-cols-3">
-              <div className="rounded-xl bg-surface-container px-4 py-3">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
-                  Station
-                </p>
-                <p className="mt-1 text-sm font-bold">Staff Counter</p>
-              </div>
-              <div className="rounded-xl bg-surface-container px-4 py-3">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
-                  Session
-                </p>
-                <p className="mt-1 text-sm font-bold text-emerald-400">
-                  Online
-                </p>
-              </div>
-              <div className="col-span-2 rounded-xl bg-surface-container px-4 py-3 sm:col-span-1">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
-                  Till balance
-                </p>
-                <p className="mt-1 text-sm font-bold text-tertiary">
-                  Not tracked
-                </p>
-              </div>
-            </div>
-          </div>
-        </section>
-
         <section>
           <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
             <div>

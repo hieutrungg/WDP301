@@ -3,6 +3,8 @@ import {
   forgotPassword,
   googleLogin,
   login,
+  internalStaffLogin,
+  internalStaffGoogleLogin,
   logout,
   me,
   register,
@@ -15,6 +17,8 @@ import {
   forgotPasswordSchema,
   googleLoginSchema,
   loginSchema,
+  internalStaffLoginSchema,
+  internalStaffGoogleLoginSchema,
   registerSchema,
   resendVerificationSchema,
   resetPasswordSchema,
@@ -35,8 +39,29 @@ import {
 const router = Router();
 
 router.post("/login", validate(loginSchema), login);
-router.post("/google", googleLoginRateLimiter, validate(googleLoginSchema), googleLogin);
-router.post("/register", registerRateLimiter, validate(registerSchema), register);
+router.post(
+  "/internal-login",
+  validate(internalStaffLoginSchema),
+  internalStaffLogin,
+);
+router.post(
+  "/internal-google",
+  googleLoginRateLimiter,
+  validate(internalStaffGoogleLoginSchema),
+  internalStaffGoogleLogin,
+);
+router.post(
+  "/google",
+  googleLoginRateLimiter,
+  validate(googleLoginSchema),
+  googleLogin,
+);
+router.post(
+  "/register",
+  registerRateLimiter,
+  validate(registerSchema),
+  register,
+);
 router.post(
   "/verify-email",
   verifyEmailRateLimiter,

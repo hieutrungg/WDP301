@@ -14,6 +14,8 @@ import {
   setAccountPasswordHash,
 } from "../account/account.repository.js";
 import { findRoleByName } from "../role-permission/role.repository.js";
+import { getRolesByIds } from "../role-permission/role.service.js";
+import { getBranchSummariesByIds } from "../branch/branch.service.js";
 import {
   createVerification,
   deleteVerificationById,
@@ -22,7 +24,10 @@ import {
   incrementAttemptCount,
   markVerificationVerified,
 } from "./email-verification.repository.js";
-import { sendPasswordResetOtpEmail, sendRegistrationOtpEmail } from "./email.service.js";
+import {
+  sendPasswordResetOtpEmail,
+  sendRegistrationOtpEmail,
+} from "./email.service.js";
 import { googleTokenVerifier } from "./google.service.js";
 import { AppError } from "../../utils/AppError.js";
 
@@ -36,13 +41,22 @@ const RESEND_COOLDOWN_MS = 60 * 1000;
 const BCRYPT_ROUNDS = 10;
 
 const duplicateError = (field) =>
-  new AppError(409, `${field === "email" ? "Email" : "Username"} is already registered`, [
-    { field, message: `${field === "email" ? "Email" : "Username"} is already registered` },
-  ]);
+  new AppError(
+    409,
+    `${field === "email" ? "Email" : "Username"} is already registered`,
+    [
+      {
+        field,
+        message: `${field === "email" ? "Email" : "Username"} is already registered`,
+      },
+    ],
+  );
 
 const handleDuplicateKeyError = (error) => {
   if (error?.code !== 11000) throw error;
-  const field = Object.hasOwn(error.keyPattern ?? {}, "email") ? "email" : "username";
+  const field = Object.hasOwn(error.keyPattern ?? {}, "email")
+    ? "email"
+    : "username";
   throw duplicateError(field);
 };
 
@@ -96,12 +110,18 @@ const serializeAccount = (account) => {
 
   for (const role of account.roleIds ?? []) {
     for (const permission of role.permissionIds ?? []) {
-      permissionMap.set(permission._id.toString(), normalizePermission(permission));
+      permissionMap.set(
+        permission._id.toString(),
+        normalizePermission(permission),
+      );
     }
   }
 
   for (const permission of account.directPermissionIds ?? []) {
-    permissionMap.set(permission._id.toString(), normalizePermission(permission));
+    permissionMap.set(
+      permission._id.toString(),
+      normalizePermission(permission),
+    );
   }
 
   return {
@@ -125,7 +145,10 @@ const serializeAccount = (account) => {
 // BR-28: a DISABLED account cannot sign in until an Admin enables it again.
 const assertCanSignIn = (account) => {
   if (account.status === "DISABLED") {
-    throw new AppError(403, "This account has been disabled. Please contact an administrator.");
+    throw new AppError(
+      403,
+      "This account has been disabled. Please contact an administrator.",
+    );
   }
 
   if (account.status !== "ACTIVE") {
@@ -138,15 +161,56 @@ const issueAccessToken = (accountId, rememberMe) =>
     expiresIn: rememberMe ? "7d" : "8h",
   });
 
+const assertInternalAccountBranch = async (account, branchId) => {
+  const roles = await getRolesByIds(account.roleIds ?? []);
+  if (!roles.some(({ name }) => name === "STAFF" || name === "MANAGER")) {
+    throw new AppError(
+      403,
+      "Internal sign-in is available to Staff and Managers only",
+    );
+  }
+  if (String(account.employeeProfile?.branchId ?? "") !== String(branchId)) {
+    throw new AppError(
+      403,
+      "This staff account is not assigned to the selected cinema",
+    );
+  }
+  const branches = await getBranchSummariesByIds([branchId]);
+  if (branches.get(String(branchId))?.status !== "ACTIVE") {
+    throw new AppError(403, "The selected cinema is not active");
+  }
+};
+
 export const login = async ({ identity, password, rememberMe }) => {
   const account = await findAccountForLogin(identity);
 
-  if (!account?.passwordHash || !(await bcrypt.compare(password, account.passwordHash))) {
+  if (
+    !account?.passwordHash ||
+    !(await bcrypt.compare(password, account.passwordHash))
+  ) {
     throw new AppError(401, "Invalid email/username or password");
   }
 
   assertCanSignIn(account);
 
+  return { token: issueAccessToken(account._id, rememberMe), rememberMe };
+};
+
+export const loginInternalStaff = async ({
+  identity,
+  password,
+  rememberMe,
+  branchId,
+}) => {
+  const account = await findAccountForLogin(identity);
+  if (
+    !account?.passwordHash ||
+    !(await bcrypt.compare(password, account.passwordHash))
+  ) {
+    throw new AppError(401, "Invalid staff username or password");
+  }
+  assertCanSignIn(account);
+  await assertInternalAccountBranch(account, branchId);
   return { token: issueAccessToken(account._id, rememberMe), rememberMe };
 };
 
@@ -213,7 +277,8 @@ export const loginWithGoogle = async ({ credential, rememberMe }) => {
   }
 
   const account =
-    (await findAccountByEmail(profile.email)) ?? (await createGoogleAccount(profile));
+    (await findAccountByEmail(profile.email)) ??
+    (await createGoogleAccount(profile));
 
   if (account.status === "PENDING_VERIFICATION") {
     throw new AppError(
@@ -224,6 +289,26 @@ export const loginWithGoogle = async ({ credential, rememberMe }) => {
 
   assertCanSignIn(account);
 
+  return { token: issueAccessToken(account._id, rememberMe), rememberMe };
+};
+
+export const loginInternalStaffWithGoogle = async ({
+  credential,
+  rememberMe,
+  branchId,
+}) => {
+  const profile = await googleTokenVerifier.verify(credential);
+  if (!profile.email || !profile.emailVerified) {
+    throw new AppError(401, "Your Google email address is not verified");
+  }
+  const account = await findAccountByEmail(profile.email);
+  if (!account)
+    throw new AppError(
+      401,
+      "No internal account is linked to this Google email",
+    );
+  assertCanSignIn(account);
+  await assertInternalAccountBranch(account, branchId);
   return { token: issueAccessToken(account._id, rememberMe), rememberMe };
 };
 
@@ -310,7 +395,10 @@ const assertResendCooldown = (verification) => {
   const elapsed = Date.now() - verification.createdAt.getTime();
   if (elapsed < RESEND_COOLDOWN_MS) {
     const retryAfter = Math.ceil((RESEND_COOLDOWN_MS - elapsed) / 1000);
-    throw new AppError(429, `Please wait ${retryAfter} seconds before requesting another code`);
+    throw new AppError(
+      429,
+      `Please wait ${retryAfter} seconds before requesting another code`,
+    );
   }
 };
 
@@ -331,7 +419,10 @@ export const verifyEmail = async ({ email, otp }) => {
 
   const result = await activateAccount(account._id);
   if (result.modifiedCount !== 1) {
-    throw new AppError(409, "Account verification state changed. Please try again.");
+    throw new AppError(
+      409,
+      "Account verification state changed. Please try again.",
+    );
   }
 
   await deleteVerificationById(verification._id);
@@ -344,15 +435,23 @@ export const resendVerification = async ({ email }) => {
     return;
   }
 
-  const currentVerification = await findVerification(account._id, REGISTER_PURPOSE);
+  const currentVerification = await findVerification(
+    account._id,
+    REGISTER_PURPOSE,
+  );
   assertResendCooldown(currentVerification);
 
-  await createOtpVerification(account, { previousOtpHash: currentVerification?.otpHash });
+  await createOtpVerification(account, {
+    previousOtpHash: currentVerification?.otpHash,
+  });
 };
 
 const notRegisteredError = () =>
   new AppError(404, "No account is registered with this email address", [
-    { field: "email", message: "No account is registered with this email address" },
+    {
+      field: "email",
+      message: "No account is registered with this email address",
+    },
   ]);
 
 const findResetVerification = async (email) => {
@@ -377,14 +476,23 @@ export const requestPasswordReset = async ({ email }) => {
   }
 
   if (account.status === "PENDING_VERIFICATION") {
-    throw new AppError(400, "Please verify your email address before resetting your password");
+    throw new AppError(
+      400,
+      "Please verify your email address before resetting your password",
+    );
   }
 
   if (account.status !== "ACTIVE") {
-    throw new AppError(403, "This account is not allowed to reset its password");
+    throw new AppError(
+      403,
+      "This account is not allowed to reset its password",
+    );
   }
 
-  const currentVerification = await findVerification(account._id, RESET_PASSWORD_PURPOSE);
+  const currentVerification = await findVerification(
+    account._id,
+    RESET_PASSWORD_PURPOSE,
+  );
   assertResendCooldown(currentVerification);
 
   await createOtpVerification(account, {
@@ -409,7 +517,10 @@ export const resetPassword = async ({ email, otp, newPassword }) => {
   const { account, verification } = await findResetVerification(email);
 
   if (!verification.verifiedAt) {
-    throw new AppError(400, "Please verify your code before choosing a new password");
+    throw new AppError(
+      400,
+      "Please verify your code before choosing a new password",
+    );
   }
 
   await assertValidOtp(verification, otp);

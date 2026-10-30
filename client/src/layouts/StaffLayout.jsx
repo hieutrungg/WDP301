@@ -200,14 +200,25 @@ function StaffLayout() {
               aria-label="Breadcrumb"
               className="flex min-w-0 items-center gap-1.5 text-xs text-on-surface-variant"
             >
-              <span className="hidden sm:inline">Staff portal</span>
+              <Link
+                to="/"
+                className="hidden transition hover:text-on-surface sm:inline"
+              >
+                Home
+              </Link>
               {current && (
                 <>
                   <ChevronRight className="hidden size-3.5 sm:block" />
-                  <span className="hidden sm:inline">{current.section}</span>
-                  <ChevronRight className="hidden size-3.5 sm:block" />
+                  {current.section && (
+                    <>
+                      <span className="hidden sm:inline">
+                        {current.section}
+                      </span>
+                      <ChevronRight className="hidden size-3.5 sm:block" />
+                    </>
+                  )}
                   <span className="truncate font-semibold text-primary">
-                    {current.title}
+                    {current.label}
                   </span>
                 </>
               )}

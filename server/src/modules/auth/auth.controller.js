@@ -29,6 +29,20 @@ export const login = async (req, res, next) => {
   }
 };
 
+export const internalStaffLogin = async (req, res, next) => {
+  try {
+    const { token, rememberMe } = await authService.loginInternalStaff(
+      req.body,
+    );
+    setAccessCookie(res, token, rememberMe).json({
+      success: true,
+      message: "Internal account signed in successfully",
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 export const googleLogin = async (req, res, next) => {
   try {
     const { token, rememberMe } = await authService.loginWithGoogle(req.body);
@@ -36,6 +50,19 @@ export const googleLogin = async (req, res, next) => {
     setAccessCookie(res, token, rememberMe).json({
       success: true,
       message: "Signed in successfully",
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const internalStaffGoogleLogin = async (req, res, next) => {
+  try {
+    const { token, rememberMe } =
+      await authService.loginInternalStaffWithGoogle(req.body);
+    setAccessCookie(res, token, rememberMe).json({
+      success: true,
+      message: "Internal account signed in successfully",
     });
   } catch (error) {
     next(error);
@@ -86,7 +113,8 @@ export const resendVerification = async (req, res, next) => {
     await authService.resendVerification(req.body);
     res.json({
       success: true,
-      message: "If the account is awaiting verification, a new code has been sent.",
+      message:
+        "If the account is awaiting verification, a new code has been sent.",
     });
   } catch (error) {
     next(error);
@@ -97,7 +125,10 @@ export const forgotPassword = async (req, res, next) => {
   try {
     await authService.requestPasswordReset(req.body);
     // MSG07, worded for the OTP variant UC04 step 5 allows (a code, not a link).
-    res.json({ success: true, message: `A password reset code has been sent to ${req.body.email}.` });
+    res.json({
+      success: true,
+      message: `A password reset code has been sent to ${req.body.email}.`,
+    });
   } catch (error) {
     next(error);
   }
@@ -118,7 +149,8 @@ export const resetPassword = async (req, res, next) => {
     // MSG09 (UC04 step 11).
     res.json({
       success: true,
-      message: "Your information has been updated successfully. You can now sign in with your new password.",
+      message:
+        "Your information has been updated successfully. You can now sign in with your new password.",
     });
   } catch (error) {
     next(error);

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { MOVIE_STATUSES } from "../src/modules/movie/movie.constants.js";
 import { branchSeeds } from "../src/seeds/seed-branches.js";
+import { DEVELOPMENT_STAFF_PASSWORD, staffAccountSeeds } from "../src/seeds/seed-staff-accounts.js";
 import { movieSeeds, seedMovies } from "../src/seeds/seed-movies.js";
 import { roomSeeds, seedRooms } from "../src/seeds/seed-rooms.js";
 import {
@@ -107,6 +108,14 @@ test("branch and room fixtures satisfy the approved M0 invariants", () => {
     assert.deepEqual(room.seatLayout.rowLabels, [...new Set(room.seats.map(({ row }) => row))]);
     assert.ok(room.seats.every(({ column }) => column >= 1 && column <= room.seatLayout.columnCount));
   }
+});
+
+test("development seed provides one deterministic Staff identity per cinema", () => {
+  assert.equal(staffAccountSeeds.length, branchSeeds.length);
+  assert.equal(new Set(staffAccountSeeds.map(({ username }) => username)).size, branchSeeds.length);
+  assert.equal(new Set(staffAccountSeeds.map(({ email }) => email)).size, branchSeeds.length);
+  assert.ok(staffAccountSeeds.every(({ branchSeedKey }) => branchSeeds.some(({ seedKey }) => seedKey === branchSeedKey)));
+  assert.match(DEVELOPMENT_STAFF_PASSWORD, /^(?=.*[A-Z])(?=.*[a-z])(?=.*\d)(?=.*[^A-Za-z0-9])/);
 });
 
 test("room seed never overwrites a layout versioned after insert", async () => {
