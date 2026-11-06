@@ -7,6 +7,7 @@ if (!process.argv.includes('--serve')) process.exit(0)
 let mode = 'list'
 let failOnce = false
 let failPostOnce = false
+let failEditOnce = false
 let published = null
 const a = '111111111111111111111111', b = '222222222222222222222222'
 const server = await createServer({
@@ -18,7 +19,9 @@ const server = await createServer({
       const url = new URL(req.url, 'http://127.0.0.1:5177')
       const send = (data, status = 200) => { res.statusCode = status; res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify(data)) }
       if (url.pathname.startsWith('/__review-mode/')) {
-        mode = url.pathname.split('/').at(-1); failOnce = mode === 'error'; failPostOnce = mode === 'post-error'; published = null
+        mode = url.pathname.split('/').at(-1); failOnce = mode === 'error'; failPostOnce = mode === 'post-error'
+        failEditOnce = mode === 'edit-error'
+        published = mode.startsWith('edit') ? {id:'qa-existing',authorDisplayName:'Fixture Customer',rating:3,content:'My original review',createdAt:'2026-10-26T00:00:00Z'} : null
         return send({ mode })
       }
       if (url.pathname === '/__review-preview') {
@@ -34,7 +37,7 @@ const server = await createServer({
             return React.createElement('main',{style:{paddingTop:24}},
               React.createElement('div',{style:{display:'flex',flexWrap:'wrap',gap:12,padding:'0 24px 24px'}},
                 React.createElement('strong',null,'QA fixtures only'),
-                ...['list','empty','error','ineligible','already','post-error','write-not-ready'].map(s=>React.createElement('button',{key:s,onClick:()=>scenario(s)},s)),
+                ...['list','empty','error','ineligible','already','post-error','write-not-ready','edit','edit-error'].map(s=>React.createElement('button',{key:s,onClick:()=>scenario(s)},s)),
                 ...['Guest','Customer','Staff'].map(role=>React.createElement('button',{key:role,onClick:()=>useAuthStore.setState({account:role==='Guest'?null:{id:'fixture-account',status:'ACTIVE',roles:[{name:role.toUpperCase()}]}})},role)),
                 React.createElement('button',{onClick:()=>setMovie('${a}')},'Movie A'),React.createElement('button',{onClick:()=>setMovie('${b}')},'Movie B')),
               React.createElement(MovieReviews,{key:movie+version,movieId:movie}))}
@@ -42,6 +45,17 @@ const server = await createServer({
         </script></html>`))
       }
       if (url.pathname.startsWith('/api/')) {
+        if (url.pathname.endsWith('/reviews/mine')) {
+          if (req.method === 'PATCH') {
+            let raw = ''; for await (const chunk of req) raw += chunk
+            const input = JSON.parse(raw)
+            await new Promise(resolve => setTimeout(resolve, 600))
+            if (failEditOnce) { failEditOnce = false; return send({success:false,message:'Test-only edit failure'},500) }
+            if (!published) return send({success:false,code:'REVIEW_NOT_FOUND',message:'You have not reviewed this movie'},404)
+            published = {...published,rating:input.rating,content:input.content}
+          }
+          return send({success:true,data:published})
+        }
         if (url.pathname.endsWith('/review-eligibility')) return send({ success: true, data: {
           canReview: !published && !['ineligible','already'].includes(mode), reason: published || mode === 'already' ? 'ALREADY_REVIEWED' : mode === 'ineligible' ? 'NO_ELIGIBLE_BOOKING' : null,
         } })

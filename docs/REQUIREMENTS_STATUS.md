@@ -6,7 +6,9 @@ Rule: `NOT IMPLEMENTED` mô tả trạng thái code; `REQUIREMENT NOT FINALIZED`
 
 ## Status definitions
 
-REV-102 update 2026-10-27: Hiếu approved the scoped policy and subsequent technical proposal and requested implementation (“oke triển khai đi bạn ơi”). REV-102 is now `APPROVED_READY` for create-only reviews under `REV-102-CONTRACT-REVIEW.md`, superseding the historical blocked/proposed rows below. Separate development-Atlas index application remains pending; implementation must fail closed until the unique index is installed. No Ticket/check-in dependency, edit/delete, rewards or legacy-data repair is authorized.
+REV-102 edit extension 2026-10-27: Hiếu explicitly requested “làm cho tôi phần edit đánh giá, cho phép người ta sửa đánh giá”. This authorizes editing one's own rating/content, superseding the earlier create-only exclusion for edits. Existing Customer/paid-ended-non-refunded eligibility, validation and publication rules are retained. Implementation, additive API/error contract, actual checks and integration review requirements: `REV-102-EDIT-IMPLEMENTATION.md`. Delete, rewards and legacy-data repair remain outside scope; development data/DDL was not changed by this extension.
+
+REV-102 original update 2026-10-27: Hiếu approved the scoped policy and subsequent technical proposal and requested implementation (“oke triển khai đi bạn ơi”). REV-102 became `APPROVED_READY` for create-only reviews under `REV-102-CONTRACT-REVIEW.md`, superseding the historical blocked/proposed rows below. Separate development-Atlas index application was pending; implementation must fail closed until the unique index is installed. No Ticket/check-in dependency, delete, rewards or legacy-data repair is authorized. Edit scope is extended by the subsequent request above.
 
 - `IMPLEMENTED`: behavior đã có và được kiểm chứng trong source/test.
 - `APPROVED_READY`: owner đã duyệt đủ để implement; không được tự gán status này từ AI recommendation.

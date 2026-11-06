@@ -42,6 +42,10 @@ test("REV-102 Mongo/HTTP eligibility, migration safety and concurrent submission
     const post = (body = { rating: 3, content: "  Test-only tiếng Việt\n<script>text</script>  " }, actor = customerId, id = movieId) => fetch(`${base}/${id}/reviews`, {
       method: "POST", headers: { "Content-Type": "application/json", ...(actor ? cookie(actor) : {}) }, body: JSON.stringify(body),
     });
+    const own = (method = "GET", body, actor = customerId, id = movieId, query = "") => fetch(`${base}/${id}/reviews/mine${query}`, {
+      method, headers: { "Content-Type": "application/json", ...(actor ? cookie(actor) : {}) },
+      ...(body ? { body: JSON.stringify(body) } : {}),
+    });
 
     await t.test("backend guards enforce Guest/Staff/locked-account boundaries", async () => {
       assert.equal((await get(movieId, null)).status, 401);
@@ -137,6 +141,68 @@ test("REV-102 Mongo/HTTP eligibility, migration safety and concurrent submission
       assert.equal(JSON.stringify(read).includes("private"), false);
       assert.equal((await (await get()).json()).data.reason, "ALREADY_REVIEWED");
       assert.equal((await post()).status, 409);
+    });
+    await t.test("own review read/edit guards, immutable identity/date and public readback", async () => {
+      const before = await db.collection("movie_reviews").findOne({ movieId, customerAccountId: customerId });
+      for (const actor of [null, staffId]) {
+        const status = actor ? 403 : 401;
+        assert.equal((await own("GET", undefined, actor)).status, status);
+        assert.equal((await own("PATCH", { rating: 4 }, actor)).status, status);
+      }
+      assert.equal((await (await own("GET", undefined, otherId)).json()).data, null);
+      assert.equal((await own("PATCH", { rating: 4 }, otherId)).status, 404);
+      assert.equal((await own("PATCH", { rating: 4 }, customerId, otherMovieId)).status, 404);
+      assert.equal((await own("PATCH", { rating: 4 }, customerId, draftId)).status, 404);
+      assert.equal((await own("PATCH", { rating: 4 }, customerId, "invalid")).status, 400);
+      for (const body of [{ rating: "4" }, { rating: 0 }, { rating: 2.5 }, { rating: 6 },
+        { rating: 4, content: "a".repeat(2001) }, { rating: 4, customerAccountId: otherId },
+        { rating: 4, createdAt: new Date() }, { rating: 4, status: "PUBLIC" }]) {
+        assert.equal((await own("PATCH", body)).status, 400);
+      }
+      assert.equal((await own("PATCH", { rating: 4 }, customerId, movieId, "?accountId=spoof")).status, 400);
+      await db.collection("accounts").updateOne({ _id: customerId }, { $set: { status: "LOCKED" } });
+      assert.equal((await own("PATCH", { rating: 4 })).status, 403);
+      await db.collection("accounts").updateOne({ _id: customerId }, { $set: { status: "ACTIVE" } });
+      await db.collection("payments").updateOne({ _id: paymentId }, { $set: { status: "REFUNDED" } });
+      assert.equal((await own("PATCH", { rating: 4 })).status, 403);
+      await db.collection("payments").updateOne({ _id: paymentId }, { $set: { status: "PAID" } });
+      assert.equal((await db.collection("movie_reviews").findOne({ _id: before._id })).rating, before.rating);
+      const input = { rating: 5, content: "  Edited tiếng Việt\n<script>plain text</script>  " };
+      const response = await own("PATCH", input);
+      assert.equal(response.status, 200);
+      const saved = (await response.json()).data;
+      assert.equal(saved.content, input.content);
+      assert.deepEqual((await (await own()).json()).data, saved);
+      assert.deepEqual((await (await fetch(`${base}/${movieId}/reviews`)).json()).data[0], saved);
+      const after = await db.collection("movie_reviews").findOne({ _id: before._id });
+      assert.equal(after.rating, 5);
+      assert.deepEqual(after.createdAt, before.createdAt);
+      assert.deepEqual(after.customerAccountId, before.customerAccountId);
+      assert.deepEqual(after.movieId, before.movieId);
+      assert.ok(after.updatedAt > before.updatedAt);
+      assert.equal(await db.collection("movie_reviews").countDocuments(), 1);
+      assert.deepEqual(Object.keys(saved).sort(), ["id", "authorDisplayName", "rating", "content", "createdAt"].sort());
+      assert.equal((await post()).status, 409);
+      assert.equal((await own("PATCH", { rating: 1 })).status, 200);
+      assert.equal((await (await own()).json()).data.content, "");
+    });
+    await t.test("a concurrent refund also rolls back edits without changing the existing review", async () => {
+      const before = await db.collection("movie_reviews").findOne({ movieId, customerAccountId: customerId });
+      const { createMovieReviewWriteService } = await import("../src/modules/movie/movie-review-write.service.js");
+      const { createReviewEligibilityService } = await import("../src/modules/booking/review-eligibility.service.js");
+      const { hasPaidBookingForReview } = await import("../src/modules/payment/review-payment.service.js");
+      let settled = false;
+      const eligibility = createReviewEligibilityService({ paidBooking: async command => {
+        if (!settled) {
+          settled = true;
+          await db.collection("payments").updateOne({ _id: paymentId }, { $set: { status: "REFUNDED" } });
+        }
+        return hasPaidBookingForReview(command);
+      } });
+      await assert.rejects(createMovieReviewWriteService({ eligibility })
+        .edit(movieId.toString(), customerId.toString(), { rating: 5, content: "Must not persist" }), e => e.code === "REVIEW_NOT_ELIGIBLE");
+      assert.deepEqual(await db.collection("movie_reviews").findOne({ _id: before._id }), before);
+      await db.collection("payments").updateOne({ _id: paymentId }, { $set: { status: "PAID" } });
     });
     await t.test("a refund settling after the transaction snapshot cannot slip past the paid guard", async () => {
       await db.collection("movie_reviews").deleteMany({});

@@ -55,3 +55,14 @@ test('Guest and Staff do not render a fake posting form; Customer starts with se
     assert.ok(!html.includes('Publish review'))
   } finally { store.getInitialState().account = original }
 })
+
+test('edit form preloads saved values, offers cancel and disables actions while saving', () => {
+  const html = form({ editing: true, rating: 4, content: 'Existing review', onCancel() {} })
+  assert.ok(html.includes('Existing review'))
+  assert.ok(html.includes('Save changes'))
+  assert.ok(html.includes('Cancel'))
+  assert.ok(!html.includes('Publish review'))
+  const busy = form({ editing: true, rating: 4, busy: true })
+  assert.ok(busy.includes('Saving…'))
+  assert.equal((busy.match(/<button[^>]*disabled/g) ?? []).length, 2)
+})
