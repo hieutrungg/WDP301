@@ -2,7 +2,7 @@ import { Router } from "express";
 import { archiveMovie, createMovie, getManagerMovie, getMovie, listManagerMovies, listMovies, updateMovie } from "./movie.controller.js";
 import { requireAuth } from "../../middlewares/authMiddleware.js";
 import { requirePermission, requireRole } from "../../middlewares/permissionMiddleware.js";
-import { listMovieReviews, getMovieReviewEligibility, submitMovieReview } from "./movie-review.controller.js";
+import { listMovieReviews, getMovieReviewEligibility, submitMovieReview, getOwnMovieReview, editOwnMovieReview } from "./movie-review.controller.js";
 
 const router = Router();
 
@@ -16,6 +16,8 @@ router.get("/", listMovies);
 router.get("/:movieId/reviews", listMovieReviews);
 router.get("/:movieId/review-eligibility", requireAuth, requireRole("CUSTOMER"), getMovieReviewEligibility);
 router.post("/:movieId/reviews", requireAuth, requireRole("CUSTOMER"), submitMovieReview);
+router.get("/:movieId/reviews/mine", requireAuth, requireRole("CUSTOMER"), getOwnMovieReview);
+router.patch("/:movieId/reviews/mine", requireAuth, requireRole("CUSTOMER"), editOwnMovieReview);
 router.get("/:id", getMovie);
 
 export default router;

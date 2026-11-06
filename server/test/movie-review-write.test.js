@@ -74,3 +74,41 @@ test("eligibility does not cap at fifty historical bookings and skips refunded/u
   assert.equal(await eligibility.canReview({ accountId: "account", movieId: "movie", now: new Date() }), true);
   assert.equal(closed, true);
 });
+
+const existingReview = () => ({ _id: "review-id", movieId: "movie", customerAccountId: "account",
+  rating: 2, content: "Original", createdAt: new Date("2026-10-26T00:00:00Z") });
+test("editing locks eligibility, scopes the update to the authenticated owner and preserves createdAt", async () => {
+  let checked = false;
+  const service = make({ repository: repo({
+    async readOwn(movieId, accountId, session) {
+      assert.equal(movieId, "movie"); assert.equal(accountId, "account");
+      assert.equal(session, "transaction"); return existingReview();
+    },
+    async updateOwn(command, session) {
+      assert.ok(checked); assert.equal(session, "transaction");
+      assert.equal(command.accountId, "account"); assert.equal(command.reviewId, "review-id");
+      assert.equal(command.movieId, "movie");
+      return { ...existingReview(), rating: command.rating, content: command.content, updatedAt: command.now };
+    },
+  }), eligibility: { async canReview(command) {
+    assert.equal(command.lock, true); assert.equal(command.session, "transaction"); checked = true; return true;
+  } } });
+  assert.deepEqual(await service.edit("movie", "account", { rating: 5, content: "Updated" }), {
+    id: "review-id", authorDisplayName: "Name", rating: 5, content: "Updated", createdAt: "2026-10-26T00:00:00.000Z",
+  });
+});
+
+test("edit fails without writing for missing own review, legacy state, lost eligibility or infrastructure", async () => {
+  for (const [options, code] of [
+    [{ repository: repo({ async ready() { return false; } }) }, "REVIEW_WRITE_NOT_READY"],
+    [{ review: null }, "REVIEW_NOT_FOUND"],
+    [{ review: { ...existingReview(), status: "HIDDEN" } }, "REVIEW_WRITE_NOT_READY"],
+    [{ eligibility: { async canReview() { return false; } } }, "REVIEW_NOT_ELIGIBLE"],
+    [{ authors: async () => new Map() }, "REVIEW_AUTHOR_NAME_REQUIRED"],
+  ]) {
+    const { review = existingReview(), ...dependencies } = options;
+    const repository = dependencies.repository ?? repo({ async readOwn() { return review; },
+      async updateOwn() { assert.fail("must not update"); } });
+    await assert.rejects(make({ ...dependencies, repository }).edit("movie", "account", { rating: 4, content: "" }), e => e.code === code);
+  }
+});

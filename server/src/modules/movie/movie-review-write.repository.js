@@ -8,6 +8,17 @@ export const createMovieReviewWriteRepository = (connection = mongoose.connectio
       movieId: new mongoose.Types.ObjectId(movieId), customerAccountId: new mongoose.Types.ObjectId(accountId),
     }, { projection: { _id: 1 }, ...(session ? { session } : {}) });
   },
+  readOwn(movieId, accountId, session) {
+    return connection.db.collection("movie_reviews").findOne({
+      movieId: new mongoose.Types.ObjectId(movieId), customerAccountId: new mongoose.Types.ObjectId(accountId),
+    }, session ? { session } : {});
+  },
+  updateOwn({ movieId, accountId, reviewId, rating, content, now }, session) {
+    return connection.db.collection("movie_reviews").findOneAndUpdate({
+      _id: reviewId, movieId: new mongoose.Types.ObjectId(movieId),
+      customerAccountId: new mongoose.Types.ObjectId(accountId),
+    }, { $set: { rating, content, updatedAt: now } }, { session, returnDocument: "after" });
+  },
   async insert({ movieId, accountId, rating, content, now }, session) {
     const document = { _id: new mongoose.Types.ObjectId(), movieId: new mongoose.Types.ObjectId(movieId),
       customerAccountId: new mongoose.Types.ObjectId(accountId), rating, content, createdAt: now, updatedAt: now };

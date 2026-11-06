@@ -25,3 +25,19 @@ export const submitMovieReview = async (req, res, next) => {
     res.status(201).json({ success: true, data });
   } catch (error) { next(error); }
 };
+
+export const getOwnMovieReview = async (req, res, next) => {
+  try {
+    if (Object.keys(req.query).length) throw new AppError(400, "Invalid review query", [], "INVALID_QUERY");
+    const data = await movieReviewWriteService.getOwn(req.params.movieId, req.auth.accountId);
+    res.json({ success: true, data });
+  } catch (error) { next(error); }
+};
+
+export const editOwnMovieReview = async (req, res, next) => {
+  try {
+    const input = parseMovieReviewBody(req.body, req.query);
+    const data = await movieReviewWriteService.edit(req.params.movieId, req.auth.accountId, input);
+    res.json({ success: true, data });
+  } catch (error) { next(error); }
+};
