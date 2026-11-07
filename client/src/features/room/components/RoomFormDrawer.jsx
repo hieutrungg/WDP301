@@ -46,11 +46,13 @@ function Field({ id, label, hint, required = true, icon: Icon, error, children }
   )
 }
 
-function RoomFormDrawer({ room, branches, branchesLoading, branchesError, onClose, onSaved }) {
+function RoomFormDrawer({ room, branches, lockedBranchId = '', branchesLoading, branchesError, onClose, onSaved }) {
   const isEdit = Boolean(room)
   const navigate = useNavigate()
   const [serverError, setServerError] = useState('')
-  const initialValues = isEdit ? toRoomForm(room) : emptyRoomForm
+  // A manager can only add rooms to the branch of their account, so it is fixed, not chosen.
+  const initialValues = isEdit ? toRoomForm(room) : { ...emptyRoomForm, branchId: lockedBranchId }
+  const lockedBranch = lockedBranchId ? branches.find(({ id }) => id === lockedBranchId) : null
   const {
     register,
     handleSubmit,
@@ -98,6 +100,7 @@ function RoomFormDrawer({ room, branches, branchesLoading, branchesError, onClos
   }
 
   const noBranches = !isEdit && !branchesLoading && !branchesError && branches.length === 0
+  // Closed branches are not in the active list, so a locked branch that is missing cannot receive rooms.
 
   return (
     <RoomOverlay
@@ -133,6 +136,16 @@ function RoomFormDrawer({ room, branches, branchesLoading, branchesError, onClos
               <p>
                 <span className="block text-sm font-semibold text-on-surface">{room.branch.branchName ?? 'Unknown branch'}</span>
                 A room stays in the branch it was created for, because its showtimes and bookings belong to that branch.
+              </p>
+            </div>
+          ) : lockedBranchId ? (
+            <div className="flex items-start gap-3 rounded-xl border border-white/5 bg-surface-container p-4 text-xs text-on-surface-variant">
+              <Lock className="mt-0.5 size-4 shrink-0 text-secondary" />
+              <p>
+                <span className="block text-sm font-semibold text-on-surface">
+                  {lockedBranch?.branchName ?? (branchesLoading ? 'Loading branch…' : 'Your branch')}
+                </span>
+                You can only add rooms to the branch you work at.
               </p>
             </div>
           ) : (

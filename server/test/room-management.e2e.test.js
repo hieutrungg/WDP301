@@ -19,7 +19,11 @@ let central;
 let east;
 let closedBranch;
 let managerCookie;
+let eastManagerCookie;
+let noBranchManagerCookie;
 let staffCookie;
+let eastStaffCookie;
+let closedManagerCookie;
 let customerCookie;
 let adminCookie;
 
@@ -38,7 +42,7 @@ const signIn = async (identity) => {
   return response.headers.get("set-cookie").split(";")[0];
 };
 
-const createAccount = (username, roleIds) =>
+const createAccount = (username, roleIds, branch) =>
   Account.create({
     username,
     email: `${username}@example.com`,
@@ -46,12 +50,15 @@ const createAccount = (username, roleIds) =>
     roleIds,
     status: "ACTIVE",
     profile: { fullName: username },
+    ...(branch ? { employeeProfile: { branchId: branch._id, position: username } } : {}),
   });
 
+// Managers and staff are bound to one branch: `asManager` works for Central, `asEastManager` for East.
 const asManager = (path, options = {}) => request(path, { cookie: managerCookie, ...options });
+const asEastManager = (path, options = {}) => request(path, { cookie: eastManagerCookie, ...options });
 
-const newRoom = async (body) => {
-  const result = await asManager("/rooms", { method: "POST", body });
+const newRoom = async (body, act = asManager) => {
+  const result = await act("/rooms", { method: "POST", body });
   assert.equal(result.response.status, 201, JSON.stringify(result.body));
   return result.body.data;
 };
@@ -130,11 +137,6 @@ before(async () => {
     { name: "ADMIN", description: "System administrator", permissionIds: [roomView._id, roomManage._id] },
   ]);
 
-  await createAccount("rm_manager", [managerRole._id]);
-  await createAccount("rm_staff", [staffRole._id]);
-  await createAccount("rm_customer", [customerRole._id]);
-  await createAccount("rm_admin", [adminRole._id]);
-
   central = await Branch.create({ branchName: "F-Cinema Central", address: "123 Nguyen Hue, HCMC" });
   east = await Branch.create({ branchName: "F-Cinema East", address: "45 Thu Duc, HCMC" });
   closedBranch = await Branch.create({
@@ -143,13 +145,26 @@ before(async () => {
     status: "INACTIVE",
   });
 
+  await createAccount("rm_manager", [managerRole._id], central);
+  await createAccount("rm_manager_east", [managerRole._id], east);
+  await createAccount("rm_manager_nobranch", [managerRole._id]);
+  await createAccount("rm_manager_closed", [managerRole._id], closedBranch);
+  await createAccount("rm_staff", [staffRole._id], central);
+  await createAccount("rm_staff_east", [staffRole._id], east);
+  await createAccount("rm_customer", [customerRole._id]);
+  await createAccount("rm_admin", [adminRole._id]);
+
   await new Promise((resolve) => {
     server = app.listen(0, "127.0.0.1", resolve);
   });
   baseUrl = `http://127.0.0.1:${server.address().port}/api`;
 
   managerCookie = await signIn("rm_manager");
+  eastManagerCookie = await signIn("rm_manager_east");
+  noBranchManagerCookie = await signIn("rm_manager_nobranch");
   staffCookie = await signIn("rm_staff");
+  eastStaffCookie = await signIn("rm_staff_east");
+  closedManagerCookie = await signIn("rm_manager_closed");
   customerCookie = await signIn("rm_customer");
   adminCookie = await signIn("rm_admin");
 });
@@ -247,15 +262,19 @@ test("POST /rooms", async (t) => {
     assert.deepEqual(fields, ["branchId", "roomName", "roomType", "status"]);
   });
 
-  await t.test("rejects an unknown or inactive branch", async () => {
+  await t.test("rejects an unknown branch and a branch the manager does not work at", async () => {
+    // A manager can only name their own branch, so an unknown id is refused before it is looked up.
     const unknown = await asManager("/rooms", {
       method: "POST",
       body: { branchId: new mongoose.Types.ObjectId().toString(), roomName: "Ghost", roomType: "2D" },
     });
-    assert.equal(unknown.response.status, 400);
-    assert.equal(unknown.body.code, "ROOM_BRANCH_INVALID");
+    assert.equal(unknown.response.status, 403);
+    assert.equal(unknown.body.code, "ROOM_WRONG_BRANCH");
+  });
 
-    const inactive = await asManager("/rooms", {
+  await t.test("rejects a room for an inactive branch", async () => {
+    const inactive = await request("/rooms", {
+      cookie: closedManagerCookie,
       method: "POST",
       body: { branchId: closedBranch.id, roomName: "Closed Hall", roomType: "2D" },
     });
@@ -276,14 +295,14 @@ test("POST /rooms", async (t) => {
     assert.equal(duplicate.body.errors[0].field, "roomName");
 
     // Another branch may reuse the name.
-    await newRoom({ branchId: east.id, roomName: "Dolby Hall", roomType: "2D" });
+    await newRoom({ branchId: east.id, roomName: "Dolby Hall", roomType: "2D" }, asEastManager);
     assert.equal(await Room.countDocuments({ roomName: "Dolby Hall" }), 2);
   });
 
   await t.test("lets the seat map editor create the first layout afterwards", async () => {
-    const room = await newRoom({ branchId: east.id, roomName: "Layout Hall", roomType: "STANDARD" });
+    const room = await newRoom({ branchId: east.id, roomName: "Layout Hall", roomType: "STANDARD" }, asEastManager);
 
-    const layout = await asManager(`/rooms/${room.id}/seat-layout`, {
+    const layout = await asEastManager(`/rooms/${room.id}/seat-layout`, {
       method: "POST",
       body: {
         rowLabels: ["A"],
@@ -298,7 +317,7 @@ test("POST /rooms", async (t) => {
     });
     assert.equal(layout.response.status, 201, JSON.stringify(layout.body));
 
-    const detail = await asManager(`/rooms/${room.id}`);
+    const detail = await asEastManager(`/rooms/${room.id}`);
     assert.equal(detail.body.data.capacity, 3);
     assert.equal(detail.body.data.hasLayout, true);
     assert.deepEqual(detail.body.data.seatCounts, {
@@ -312,6 +331,8 @@ test("POST /rooms", async (t) => {
 });
 
 test("GET /rooms and /rooms/summary", async (t) => {
+  // Everything in this block reads the East branch, so it runs as the East manager.
+  const asManager = asEastManager;
   const layout = seats(["A", "B"], 4);
   layout[0].type = "VIP";
   layout[1].type = "DOUBLE_LUXURY";
@@ -437,8 +458,7 @@ test("PATCH /rooms/:roomId", async (t) => {
   await t.test("rejects fields it does not own", async () => {
     const room = await newRoom({ branchId: central.id, roomName: "Strict Room", roomType: "2D" });
 
-    for (const body of [{ branchId: east.id }, { capacity: 10 }, { status: "INACTIVE" }, {}]) {
-      const result = await asManager(`/rooms/${room.id}`, { method: "PATCH", body });
+    for (const body of [{ branchId: east.id }, { capacity: 10 }, { status: "INACTIVE" }, {}]) {      const result = await asManager(`/rooms/${room.id}`, { method: "PATCH", body });
       assert.equal(result.response.status, 400, JSON.stringify(body));
       assert.equal(result.body.code, "VALIDATION_FAILED");
     }
@@ -580,5 +600,115 @@ test("DELETE /rooms/:roomId", async (t) => {
     const result = await asManager("/rooms/not-an-id", { method: "DELETE" });
     assert.equal(result.response.status, 400);
     assert.equal(result.body.code, "INVALID_ROOM_ID");
+  });
+});
+
+test("rooms and seat maps are limited to the actor's branch", async (t) => {
+  const layoutBody = {
+    rowLabels: ["A"],
+    columnCount: 2,
+    positions: [1, 2].map((columnNumber) => ({ rowIndex: 0, columnNumber, positionType: "SEAT", seatType: "STANDARD" })),
+  };
+  const centralRoom = await seedRoom(central, "Scope Central", { layout: seats(["A"], 2) });
+  const eastRoom = await seedRoom(east, "Scope East", { layout: seats(["A"], 2) });
+
+  await t.test("lists and summarizes only the manager's own branch", async () => {
+    const list = await asManager("/rooms?limit=200");
+    assert.equal(list.response.status, 200);
+    assert.ok(list.body.data.length > 0);
+    assert.ok(list.body.data.every(({ branch }) => branch.id === central.id));
+    assert.ok(list.body.data.some(({ id }) => id === centralRoom));
+    assert.ok(!list.body.data.some(({ id }) => id === eastRoom));
+
+    const eastList = await asEastManager("/rooms?limit=200");
+    assert.ok(eastList.body.data.every(({ branch }) => branch.id === east.id));
+
+    const centralTotal = await Room.countDocuments({ branchId: central._id });
+    assert.equal((await asManager("/rooms/summary")).body.data.totalRooms, centralTotal);
+  });
+
+  await t.test("refuses to filter by another branch", async () => {
+    for (const path of [`/rooms?branchId=${east.id}`, `/rooms/summary?branchId=${east.id}`]) {
+      const result = await asManager(path);
+      assert.equal(result.response.status, 403, path);
+      assert.equal(result.body.code, "ROOM_WRONG_BRANCH");
+    }
+
+    assert.equal((await asManager(`/rooms?branchId=${central.id}`)).response.status, 200);
+  });
+
+  await t.test("limits staff to their own branch too", async () => {
+    const own = await request("/rooms?limit=200", { cookie: staffCookie });
+    assert.equal(own.response.status, 200);
+    assert.ok(own.body.data.every(({ branch }) => branch.id === central.id));
+
+    for (const path of [`/rooms/${eastRoom}`, `/rooms/${eastRoom}/seat-layout`, `/rooms?branchId=${east.id}`]) {
+      const result = await request(path, { cookie: staffCookie });
+      assert.equal(result.response.status, 403, path);
+      assert.equal(result.body.code, "ROOM_WRONG_BRANCH");
+    }
+
+    assert.equal((await request(`/rooms/${eastRoom}`, { cookie: eastStaffCookie })).response.status, 200);
+  });
+
+  await t.test("blocks reading another branch's room and seat map", async () => {
+    for (const path of [`/rooms/${eastRoom}`, `/rooms/${eastRoom}/seat-layout`]) {
+      const result = await asManager(path);
+      assert.equal(result.response.status, 403, path);
+      assert.equal(result.body.code, "ROOM_WRONG_BRANCH");
+    }
+  });
+
+  await t.test("blocks writing another branch's room and seat map, changing nothing", async () => {
+    const before = await Room.findById(eastRoom).lean();
+    const attempts = [
+      ["POST", "/rooms", { branchId: east.id, roomName: "Intruder", roomType: "2D" }],
+      ["PATCH", `/rooms/${eastRoom}`, { roomName: "Hijacked" }],
+      ["PATCH", `/rooms/${eastRoom}/status`, { status: "INACTIVE" }],
+      ["DELETE", `/rooms/${eastRoom}`],
+      ["POST", `/rooms/${eastRoom}/seat-layout`, layoutBody],
+      ["PUT", `/rooms/${eastRoom}/seat-layout`, { ...layoutBody, expectedLayoutVersion: 1 }],
+    ];
+
+    for (const [method, path, body] of attempts) {
+      const result = await asManager(path, { method, body });
+      assert.equal(result.response.status, 403, `${method} ${path}`);
+      assert.equal(result.body.code, "ROOM_WRONG_BRANCH", `${method} ${path}`);
+    }
+
+    const after = await Room.findById(eastRoom).lean();
+    assert.equal(after.roomName, "Scope East");
+    assert.equal(after.status, "ACTIVE");
+    assert.equal(after.layoutVersion, before.layoutVersion);
+    assert.equal(after.seats.length, before.seats.length);
+    assert.equal(await Room.countDocuments({ roomName: "Intruder" }), 0);
+  });
+
+  await t.test("still lets a manager manage a room in their own branch", async () => {
+    const detail = await asManager(`/rooms/${centralRoom}`);
+    assert.equal(detail.response.status, 200);
+    assert.equal((await asManager(`/rooms/${centralRoom}/seat-layout`)).response.status, 200);
+    assert.equal((await asManager(`/rooms/${centralRoom}`, { method: "PATCH", body: { roomName: "Scope Central 2" } })).response.status, 200);
+  });
+
+  await t.test("lets an administrator read every branch but never write", async () => {
+    const list = await request("/rooms?limit=200", { cookie: adminCookie });
+    const branches = new Set(list.body.data.map(({ branch }) => branch.id));
+    assert.ok(branches.has(central.id) && branches.has(east.id));
+
+    assert.equal((await request(`/rooms?branchId=${east.id}`, { cookie: adminCookie })).response.status, 200);
+    assert.equal((await request(`/rooms/${eastRoom}/seat-layout`, { cookie: adminCookie })).response.status, 200);
+
+    const write = await request(`/rooms/${eastRoom}`, { method: "PATCH", cookie: adminCookie, body: { roomName: "Admin Edit" } });
+    assert.equal(write.response.status, 403);
+    assert.equal(write.body.code, "FORBIDDEN");
+  });
+
+  await t.test("refuses a manager who has no branch assigned", async () => {
+    for (const path of ["/rooms", "/rooms/summary", `/rooms/${centralRoom}`, `/rooms/${centralRoom}/seat-layout`]) {
+      const result = await request(path, { cookie: noBranchManagerCookie });
+      assert.equal(result.response.status, 403, path);
+      assert.equal(result.body.code, "BRANCH_NOT_ASSIGNED");
+    }
   });
 });

@@ -19,6 +19,7 @@ import {
   replaceRoomLayout,
   saveLayoutSnapshot,
 } from "./room.repository.js";
+import { assertRoomInScope, resolveBranchFilter } from "./room-scope.js";
 import {
   buildSeats,
   isSameLayout,
@@ -44,9 +45,10 @@ const versionConflictError = () =>
     ROOM_ERROR.SEAT_LAYOUT_VERSION_CONFLICT,
   );
 
-const requireRoom = async (roomId) => {
+const requireRoom = async (roomId, scope) => {
   const room = await findRoomById(roomId);
   if (!room) throw roomNotFoundError();
+  assertRoomInScope(room, scope);
   return room;
 };
 
@@ -136,8 +138,14 @@ export const serializeSeatCounts = (room) => {
   };
 };
 
-export const listRooms = async ({ branchId, q, status, roomType, sort, order, page, limit }) => {
-  const filter = buildRoomFilter({ branchId, q, status, roomType });
+// `scope` is the actor's branch id (see room-scope.js), or null for an unrestricted actor.
+export const listRooms = async ({ branchId, q, status, roomType, sort, order, page, limit }, scope) => {
+  const filter = buildRoomFilter({
+    branchId: resolveBranchFilter(branchId, scope),
+    q,
+    status,
+    roomType,
+  });
 
   const [rooms, total] = await Promise.all([
     findRooms({ filter, sort: buildRoomSort(sort, order), skip: (page - 1) * limit, limit }),
@@ -164,7 +172,10 @@ export const listRooms = async ({ branchId, q, status, roomType, sort, order, pa
   };
 };
 
-export const getSeatLayout = async (roomId) => toSeatLayoutDetail(await requireRoom(roomId));
+// Also the Showtime module's internal room read, which calls it without a scope. Only the HTTP
+// controller passes one.
+export const getSeatLayout = async (roomId, scope = null) =>
+  toSeatLayoutDetail(await requireRoom(roomId, scope));
 
 // Exported Room read contract for Booking. It resolves the exact layout version snapshotted by
 // a Showtime and never exposes a mutable current layout in place of a missing historical one.
@@ -181,8 +192,8 @@ export const getLayoutVersionForBooking = async (roomId, layoutVersion) => {
   return { roomId: snapshot.roomId, roomLayoutVersion: layoutVersion, seats: snapshot.seats ?? [] };
 };
 
-export const createSeatLayout = async (roomId, input, actorId) => {
-  const room = await requireRoom(roomId);
+export const createSeatLayout = async (roomId, input, actorId, scope) => {
+  const room = await requireRoom(roomId, scope);
 
   if (roomHasLayout(room)) {
     throw new AppError(
@@ -213,8 +224,8 @@ export const createSeatLayout = async (roomId, input, actorId) => {
   return { ...(await toSeatLayoutDetail(updated)), changed: true };
 };
 
-export const updateSeatLayout = async (roomId, input, actorId) => {
-  const room = await requireRoom(roomId);
+export const updateSeatLayout = async (roomId, input, actorId, scope) => {
+  const room = await requireRoom(roomId, scope);
 
   if (!roomHasLayout(room)) {
     throw new AppError(

@@ -41,7 +41,8 @@ const validateRoomBody = (schema) =>
 const manageRooms = [requirePermission("room.manage"), requireRole("MANAGER")];
 
 // Default-deny: every route needs a session; reads need room.view, writes need room.manage plus
-// the MANAGER role. Branch-scoped RBAC is not approved yet.
+// the MANAGER role. Manager and Staff are also limited to their own branch in the services
+// (room-scope.js); only ADMIN reads across branches.
 router.use(requireAuth);
 
 router.get(

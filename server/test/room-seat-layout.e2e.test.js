@@ -16,9 +16,11 @@ let Account;
 let Room;
 let RoomLayoutVersion;
 let branch;
+let otherBranch;
 let legacyRoom;
 let emptyRoom;
 let managerCookie;
+let otherManagerCookie;
 let staffCookie;
 let customerCookie;
 let adminCookie;
@@ -38,7 +40,7 @@ const signIn = async (identity) => {
   return response.headers.get("set-cookie").split(";")[0];
 };
 
-const createAccount = (username, roleIds) =>
+const createAccount = (username, roleIds, branchDoc) =>
   Account.create({
     username,
     email: `${username}@example.com`,
@@ -46,6 +48,7 @@ const createAccount = (username, roleIds) =>
     roleIds,
     status: "ACTIVE",
     profile: { fullName: username },
+    ...(branchDoc ? { employeeProfile: { branchId: branchDoc._id, position: username } } : {}),
   });
 
 // rows: one char per cell. S=standard V=vip D=double luxury .=aisle a=accessible x=disabled
@@ -131,12 +134,14 @@ before(async () => {
     { name: "ADMIN", description: "System administrator", permissionIds: [roomView._id, roomManage._id] },
   ]);
 
-  await createAccount("room_manager", [managerRole._id]);
-  await createAccount("room_staff", [staffRole._id]);
+  branch = await Branch.create({ branchName: "F-Cinema Central", address: "123 Nguyen Hue, HCMC" });
+  otherBranch = await Branch.create({ branchName: "F-Cinema East", address: "45 Thu Duc, HCMC" });
+
+  await createAccount("room_manager", [managerRole._id], branch);
+  await createAccount("room_manager_east", [managerRole._id], otherBranch);
+  await createAccount("room_staff", [staffRole._id], branch);
   await createAccount("room_customer", [customerRole._id]);
   await createAccount("room_admin", [adminRole._id]);
-
-  branch = await Branch.create({ branchName: "F-Cinema Central", address: "123 Nguyen Hue, HCMC" });
 
   // Shaped like the pre-UC41 development seed (written raw, as the seed does): seats only, no
   // grid metadata and no `column`.
@@ -162,6 +167,7 @@ before(async () => {
   baseUrl = `http://127.0.0.1:${server.address().port}/api`;
 
   managerCookie = await signIn("room_manager");
+  otherManagerCookie = await signIn("room_manager_east");
   staffCookie = await signIn("room_staff");
   customerCookie = await signIn("room_customer");
   adminCookie = await signIn("room_admin");
@@ -207,6 +213,39 @@ test("room seat layout authorization", async (t) => {
   });
 });
 
+test("a manager can only read and write seat maps of their own branch", async () => {
+  const roomsBefore = await Room.findById(legacyRoom._id).lean();
+
+  const read = await request(layoutPath(legacyRoom._id), { cookie: otherManagerCookie });
+  assert.equal(read.response.status, 403);
+  assert.equal(read.body.code, "ROOM_WRONG_BRANCH");
+
+  const update = await request(layoutPath(legacyRoom._id), {
+    method: "PUT",
+    cookie: otherManagerCookie,
+    body: layoutBody(["A"], ["SS"], { expectedLayoutVersion: 1 }),
+  });
+  assert.equal(update.response.status, 403);
+  assert.equal(update.body.code, "ROOM_WRONG_BRANCH");
+
+  const create = await request(layoutPath(emptyRoom._id), {
+    method: "POST",
+    cookie: otherManagerCookie,
+    body: layoutBody(["A"], ["SS"]),
+  });
+  assert.equal(create.response.status, 403);
+  assert.equal(create.body.code, "ROOM_WRONG_BRANCH");
+
+  const roomsAfter = await Room.findById(legacyRoom._id).lean();
+  assert.equal(roomsAfter.layoutVersion, roomsBefore.layoutVersion);
+  assert.equal(roomsAfter.seats.length, roomsBefore.seats.length);
+  assert.equal(await Room.countDocuments({ _id: emptyRoom._id, "seats.0": { $exists: true } }), 0);
+
+  const list = await request("/rooms?limit=200", { cookie: otherManagerCookie });
+  assert.equal(list.response.status, 200);
+  assert.equal(list.body.data.length, 0, "the other branch has no rooms, and must not see this branch's");
+});
+
 test("only the MANAGER role may write seat layouts", async (t) => {
   await t.test("rejects an ADMIN even though it holds room.manage", async () => {
     const update = await request(layoutPath(legacyRoom._id), {
@@ -242,8 +281,13 @@ test("GET /rooms", async (t) => {
   });
 
   await t.test("filters by branch and rejects unknown query keys", async () => {
+    // A manager can only filter by their own branch; any other id is a cross-branch request.
     const other = await request(`/rooms?branchId=${new mongoose.Types.ObjectId()}`, { cookie: managerCookie });
-    assert.equal(other.body.data.length, 0);
+    assert.equal(other.response.status, 403);
+    assert.equal(other.body.code, "ROOM_WRONG_BRANCH");
+
+    const own = await request(`/rooms?branchId=${branch.id}`, { cookie: managerCookie });
+    assert.equal(own.body.data.length, 2);
 
     const invalid = await request("/rooms?branchId=nope&sort=x", { cookie: managerCookie });
     assert.equal(invalid.response.status, 400);

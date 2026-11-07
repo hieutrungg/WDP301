@@ -17,6 +17,7 @@ import {
   setRoomStatus,
   updateRoomIdentity,
 } from "./room.repository.js";
+import { assertRoomInScope, resolveBranchFilter } from "./room-scope.js";
 import { normalizeRoomStatus, roomNotFoundError, serializeRoom } from "./room.service.js";
 import { resolveLayoutGrid, summarizeSeats } from "./seat-layout.js";
 
@@ -41,9 +42,10 @@ const futureShowtimesError = (count, action) =>
     ROOM_MANAGEMENT_ERROR.HAS_FUTURE_SHOWTIMES,
   );
 
-const requireRoom = async (roomId) => {
+const requireRoom = async (roomId, scope) => {
   const room = await findRoomById(roomId);
   if (!room) throw roomNotFoundError();
+  assertRoomInScope(room, scope);
   return room;
 };
 
@@ -86,10 +88,12 @@ const toRoomDetail = async (room) => {
   };
 };
 
-export const getRoom = async (roomId) => toRoomDetail(await requireRoom(roomId));
+// `scope` is the actor's branch id (see room-scope.js), or null for an unrestricted actor.
+export const getRoom = async (roomId, scope) => toRoomDetail(await requireRoom(roomId, scope));
 
-export const getRoomSummary = async ({ branchId } = {}) => {
-  const filter = branchId ? { branchId: toObjectId(branchId) } : {};
+export const getRoomSummary = async ({ branchId } = {}, scope) => {
+  const effectiveBranchId = resolveBranchFilter(branchId, scope);
+  const filter = effectiveBranchId ? { branchId: toObjectId(effectiveBranchId) } : {};
   const [[facets], roomIds] = await Promise.all([aggregateRoomTotals(filter), findRoomIds(filter)]);
   const upcomingByRoom = await countFuturePublishedShowtimesByRoomIds(roomIds);
 
@@ -116,7 +120,8 @@ export const getRoomSummary = async ({ branchId } = {}) => {
   };
 };
 
-export const createRoom = async ({ branchId, roomName, roomType, status }) => {
+export const createRoom = async ({ branchId, roomName, roomType, status }, scope) => {
+  resolveBranchFilter(branchId, scope);
   const branch = (await getBranchSummariesByIds([branchId])).get(branchId.toLowerCase());
 
   if (!branch) {
@@ -156,8 +161,8 @@ export const createRoom = async ({ branchId, roomName, roomType, status }) => {
   }
 };
 
-export const updateRoom = async (roomId, changes) => {
-  const current = await requireRoom(roomId);
+export const updateRoom = async (roomId, changes, scope) => {
+  const current = await requireRoom(roomId, scope);
   const set = {};
 
   if (changes.roomName !== undefined && changes.roomName !== current.roomName) {
@@ -186,8 +191,8 @@ export const updateRoom = async (roomId, changes) => {
   }
 };
 
-export const changeRoomStatus = async (roomId, status) => {
-  const room = await requireRoom(roomId);
+export const changeRoomStatus = async (roomId, status, scope) => {
+  const room = await requireRoom(roomId, scope);
 
   // Compared with the stored value on purpose: setting a legacy `AVAILABLE` room to ACTIVE
   // rewrites it to the canonical spelling.
@@ -212,11 +217,11 @@ export const changeRoomStatus = async (roomId, status) => {
     );
   }
 
-  return getRoom(room._id);
+  return getRoom(room._id, scope);
 };
 
-export const deleteRoom = async (roomId) => {
-  const room = await requireRoom(roomId);
+export const deleteRoom = async (roomId, scope) => {
+  const room = await requireRoom(roomId, scope);
 
   // Rooms that ever hosted a showtime keep their history (bookings, tickets and payments reach a
   // room through its showtimes), so they are retired with INACTIVE instead of deleted.

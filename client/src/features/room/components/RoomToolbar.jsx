@@ -19,7 +19,7 @@ function FilterSelect({ label, value, onChange, children }) {
   )
 }
 
-function RoomToolbar({ filters, branches, roomTypes, summary, readOnly, onChange, onReset, onCreate }) {
+function RoomToolbar({ filters, branches, branchLocked = false, roomTypes, summary, readOnly, onChange, onReset, onCreate }) {
   const [draft, setDraft] = useState(filters.q)
   const onChangeRef = useRef(onChange)
 
@@ -34,7 +34,7 @@ function RoomToolbar({ filters, branches, roomTypes, summary, readOnly, onChange
   }, [draft, filters.q])
 
   const count = (value) => (summary ? ` (${value})` : '')
-  const hasFilters = Boolean(filters.q || filters.status || filters.roomType || filters.branchId || filters.sort || draft)
+  const hasFilters = Boolean(filters.q || filters.status || filters.roomType || (filters.branchId && !branchLocked) || filters.sort || draft)
 
   const handleReset = () => {
     setDraft('')
@@ -79,15 +79,19 @@ function RoomToolbar({ filters, branches, roomTypes, summary, readOnly, onChange
         )}
       </div>
 
-      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-[repeat(4,minmax(0,1fr))_auto]">
-        <FilterSelect label="Filter by branch" value={filters.branchId} onChange={(branchId) => onChange({ branchId })}>
-          <option value="">All branches</option>
-          {branches.map(({ id, branchName }) => (
-            <option key={id} value={id}>
-              {branchName}
-            </option>
-          ))}
-        </FilterSelect>
+      <div
+        className={`grid gap-2 sm:grid-cols-2 ${branchLocked ? 'lg:grid-cols-[repeat(3,minmax(0,1fr))_auto]' : 'lg:grid-cols-[repeat(4,minmax(0,1fr))_auto]'}`}
+      >
+        {!branchLocked && (
+          <FilterSelect label="Filter by branch" value={filters.branchId} onChange={(branchId) => onChange({ branchId })}>
+            <option value="">All branches</option>
+            {branches.map(({ id, branchName }) => (
+              <option key={id} value={id}>
+                {branchName}
+              </option>
+            ))}
+          </FilterSelect>
+        )}
 
         <FilterSelect label="Filter by format" value={filters.roomType} onChange={(roomType) => onChange({ roomType })}>
           <option value="">All formats</option>

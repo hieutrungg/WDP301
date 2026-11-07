@@ -2,6 +2,7 @@ import { ChevronLeft, ChevronRight, DoorOpen, Eye, Grid3x3, RefreshCw, SearchX, 
 import { useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { getApiErrorMessage } from '../../../lib/api/apiError'
+import { useAuth } from '../../auth/hooks/useAuth'
 import RoomDeleteDialog from '../components/RoomDeleteDialog'
 import RoomFormDrawer from '../components/RoomFormDrawer'
 import RoomList from '../components/RoomList'
@@ -67,7 +68,11 @@ const secondaryButton =
 // role on the API, so the hidden controls are a UX choice, not the security boundary).
 function RoomManagementPage({ readOnly = false }) {
   const [searchParams, setSearchParams] = useSearchParams()
-  const filters = readFilters(searchParams)
+  const { account } = useAuth()
+  // A manager only works on the branch of their account (the API enforces it); only the Admin
+  // read-only view spans branches.
+  const ownBranchId = readOnly ? '' : String(account?.employeeProfile?.branchId ?? '')
+  const filters = { ...readFilters(searchParams), ...(ownBranchId ? { branchId: ownBranchId } : {}) }
   const [refreshToken, setRefreshToken] = useState(0)
   const [editing, setEditing] = useState(null)
   const [statusTarget, setStatusTarget] = useState(null)
@@ -89,7 +94,9 @@ function RoomManagementPage({ readOnly = false }) {
   const branchOptions = useActiveBranches()
   const rooms = list.data?.items ?? []
   const meta = list.data?.meta
-  const branches = branchOptions.data?.items ?? []
+  const allBranches = branchOptions.data?.items ?? []
+  const branches = ownBranchId ? allBranches.filter(({ id }) => id === ownBranchId) : allBranches
+  const ownBranch = branches[0] ?? null
 
   const refresh = () => setRefreshToken((token) => token + 1)
 
@@ -99,7 +106,7 @@ function RoomManagementPage({ readOnly = false }) {
     if (next.q) params.q = next.q
     if (next.status) params.status = next.status
     if (next.roomType) params.type = next.roomType
-    if (next.branchId) params.branch = next.branchId
+    if (next.branchId && !ownBranchId) params.branch = next.branchId
     if (next.sort) params.sort = next.sort
     if (next.page > 1) params.page = String(next.page)
     setSearchParams(params, { replace: true })
@@ -122,7 +129,7 @@ function RoomManagementPage({ readOnly = false }) {
     refresh()
   }
 
-  const hasFilters = Boolean(filters.q || filters.status || filters.roomType || filters.branchId)
+  const hasFilters = Boolean(filters.q || filters.status || filters.roomType || (filters.branchId && !ownBranchId))
   const firstItem = meta && meta.total > 0 ? (meta.page - 1) * meta.limit + 1 : 0
   const lastItem = meta ? Math.min(meta.page * meta.limit, meta.total) : 0
   // Filter options follow the data: every format that exists, plus a format picked from a stale link.
@@ -210,7 +217,7 @@ function RoomManagementPage({ readOnly = false }) {
         <div className="max-w-2xl">
           <p className="inline-flex items-center gap-1.5 rounded-full bg-primary-container/15 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider text-primary">
             <span className="size-1.5 rounded-full bg-primary-container" />
-            {readOnly ? 'Read-only view' : 'Auditorium settings'}
+            {readOnly ? 'Read-only view' : ownBranch ? `Auditorium settings · ${ownBranch.branchName}` : 'Auditorium settings'}
           </p>
           <h1 className="mt-3 font-heading text-[28px] font-bold leading-9 text-on-surface sm:text-[32px] sm:leading-10">
             Room Management
@@ -237,6 +244,7 @@ function RoomManagementPage({ readOnly = false }) {
       <RoomToolbar
         filters={filters}
         branches={branches}
+        branchLocked={Boolean(ownBranchId)}
         roomTypes={roomTypes}
         summary={summary.data}
         readOnly={readOnly}
@@ -312,6 +320,7 @@ function RoomManagementPage({ readOnly = false }) {
         <RoomFormDrawer
           room={editing === 'new' ? null : editing}
           branches={branches}
+          lockedBranchId={ownBranchId}
           branchesLoading={branchOptions.loading && !branchOptions.data}
           branchesError={branchOptions.error && !branchOptions.data ? branchOptions.error : null}
           onClose={() => setEditing(null)}
