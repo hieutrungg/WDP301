@@ -12,9 +12,8 @@ import {
   Copy,
   CreditCard,
   Home,
-  Info,
   LoaderCircle,
-  Printer,
+  Mail,
   QrCode,
   RefreshCcw,
   ShieldAlert,
@@ -415,7 +414,7 @@ function BookingConfirmationPage() {
 
                   {/* Payment & Transaction Summary Footer */}
                   <div className="mt-6 border-t border-white/10 pt-5">
-                    <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+                    <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
                       <div>
                         <span className="block text-[10px] uppercase tracking-widest text-on-surface-variant">
                           Total Paid
@@ -431,15 +430,6 @@ function BookingConfirmationPage() {
                         <span className="mt-0.5 inline-flex items-center gap-1.5 text-xs font-bold text-white">
                           <CreditCard className="size-3.5 text-secondary" />
                           {methodMeta.label}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="block text-[10px] uppercase tracking-widest text-on-surface-variant">
-                          Settlement Ref
-                        </span>
-                        <span className="mt-0.5 block font-mono text-xs font-semibold text-white">
-                          {payment.settlementReference ||
-                            payment.settlementAttemptId}
                         </span>
                       </div>
                       <div>
@@ -485,14 +475,6 @@ function BookingConfirmationPage() {
                 )}
                 <button
                   type="button"
-                  onClick={() => window.print()}
-                  className="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-surface-container px-5 py-3 text-xs font-bold uppercase tracking-wider text-white transition hover:border-white/30"
-                >
-                  <Printer className="size-4 text-secondary" />
-                  Print Confirmation
-                </button>
-                <button
-                  type="button"
                   onClick={handleCopyBookingRef}
                   className="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-surface-container px-5 py-3 text-xs font-bold uppercase tracking-wider text-white transition hover:border-white/30"
                 >
@@ -532,11 +514,11 @@ function BookingConfirmationPage() {
               </div>
               <div className="rounded-2xl border border-white/5 bg-surface-container-low p-5">
                 <div className="flex items-center gap-2 text-sm font-bold text-white">
-                  <Info className="size-4 text-secondary" />
-                  Authoritative Server Receipt
+                  <Mail className="size-4 text-secondary" />
+                  E-Tickets Sent by Email
                 </div>
                 <p className="mt-1.5 text-xs leading-relaxed text-on-surface-variant">
-                  Your payment ({payment.settlementReference}) has been verified and locked in VND by the F-Cinema Payment Service.
+                  Your payment has been verified. A copy of your E-Tickets with their QR codes has been sent to your account email.
                 </p>
               </div>
               <div className="rounded-2xl border border-white/5 bg-surface-container-low p-5">

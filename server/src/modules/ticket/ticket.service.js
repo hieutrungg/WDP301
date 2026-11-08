@@ -111,6 +111,9 @@ export const createTicketService = ({
   generateQrCode = defaultGenerateQrCode,
   // Audit sink for check-ins; the module injects recordAuditEvent, tests keep the no-op.
   auditLog = async () => {},
+  // Customer notification after a booking's tickets are issued; the module injects the email
+  // notifier, tests keep the no-op. It never blocks or fails issuance.
+  notifyTicketsIssued = async () => {},
 } = {}) => {
   if (typeof bookingReader?.getBookingDetails !== "function") {
     throw new TypeError("bookingReader.getBookingDetails is required");
@@ -172,10 +175,23 @@ export const createTicketService = ({
       throw new Error(`Ticket issuance for booking ${booking.bookingId} is incomplete`);
     }
 
+    const newlyIssuedCount = tickets.filter((ticket) => generatedCodes.has(ticket.ticketCode)).length;
+    const ticketDtos = tickets.map(toTicketDto);
+
+    // Only the call that actually inserted tickets notifies, so a retried or concurrent issuance
+    // (payment callback + booking read) does not email the customer twice.
+    if (newlyIssuedCount > 0) {
+      Promise.resolve()
+        .then(() => notifyTicketsIssued({ booking, tickets: ticketDtos }))
+        .catch((error) => {
+          console.error(`Ticket email for booking ${booking.bookingId} not sent:`, error.message);
+        });
+    }
+
     return {
       bookingId: booking.bookingId,
-      newlyIssuedCount: tickets.filter((ticket) => generatedCodes.has(ticket.ticketCode)).length,
-      tickets: tickets.map(toTicketDto),
+      newlyIssuedCount,
+      tickets: ticketDtos,
     };
   };
 

@@ -82,6 +82,7 @@ const serializeDetailedBooking = (booking, { seatDetails = [] } = {}) => ({
   bookingCode: booking.bookingCode,
   payableReference: booking.payableReference,
   customerAccountId: objectIdString(booking.customerAccountId),
+  channel: booking.channel ?? "ONLINE",
   holdId: objectIdString(booking.holdId),
   showtimeId: objectIdString(booking.showtimeId),
   seatIds: (booking.seatIds ?? []).map(objectIdString),
