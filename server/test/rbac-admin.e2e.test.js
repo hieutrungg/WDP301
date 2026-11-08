@@ -21,6 +21,7 @@ let adminCookie;
 let managerCookie;
 let directGrantCookie;
 let adminAccount;
+let branch;
 const roles = {};
 const permissions = {};
 
@@ -72,6 +73,9 @@ before(async () => {
   ({ takeTestEmails } = await import("../src/modules/auth/email.service.js"));
   const { Role } = await import("../src/modules/role-permission/role.model.js");
   const { Permission } = await import("../src/modules/role-permission/permission.model.js");
+  const { Branch } = await import("../src/modules/branch/branch.model.js");
+  // Staff and Managers must work at a branch (STAFF_BRANCH_REQUIRED).
+  branch = await Branch.create({ branchName: "RBAC Test Cinema", address: "1 Test Street, HCMC" });
   const { default: app } = await import("../src/app.js");
 
   await Account.syncIndexes();
@@ -79,6 +83,7 @@ before(async () => {
   const catalog = [
     "account.manage", "role.view", "role.manage", "permission.view", "permission.assign",
     "staff.manage", "movie.view", "movie.create", "ticket.validate", "report.view",
+    "inventory.view", "inventory.stock_in",
   ];
   for (const permission of await Permission.create(catalog.map((name) => ({ name, description: name })))) {
     permissions[permission.name] = permission;
@@ -142,8 +147,12 @@ test("BR-26 / BR-32: only the ADMIN role reaches staff and role management", asy
   await t.test("Admin reads the predefined permission catalog grouped by module", async () => {
     const { response, body } = await request("/permissions", { cookie: adminCookie });
     assert.equal(response.status, 200);
-    assert.equal(body.data.length, 10);
-    assert.deepEqual(body.data.find(({ name }) => name === "movie.create").group, "movie");
+    assert.equal(body.data.length, 12);
+    const movieCreate = body.data.find(({ name }) => name === "movie.create");
+    assert.deepEqual(movieCreate.group, "movie");
+    // Ceilings: which system roles may hold each permission (role-permission-scope.js).
+    assert.deepEqual(movieCreate.scopes, ["MANAGER"]);
+    assert.deepEqual(body.data.find(({ name }) => name === "role.manage").scopes, []);
   });
 });
 
@@ -151,15 +160,15 @@ test("UC45-47 role management", async (t) => {
   let customRole;
 
   await t.test("UC45 7: empty, malformed, duplicate and reserved names are rejected", async () => {
-    const empty = await request("/roles", { method: "POST", cookie: adminCookie, body: { name: "  " } });
+    const empty = await request("/roles", { method: "POST", cookie: adminCookie, body: { name: "  ", baseRole: "STAFF" } });
     assert.equal(empty.response.status, 400);
     assert.deepEqual(empty.body.errors, [{ field: "name", message: "The Role name field is required." }]);
 
-    const malformed = await request("/roles", { method: "POST", cookie: adminCookie, body: { name: "Box@Office" } });
+    const malformed = await request("/roles", { method: "POST", cookie: adminCookie, body: { name: "Box@Office", baseRole: "STAFF" } });
     assert.equal(malformed.body.errors[0].message, "The Role name format is invalid.");
 
     for (const name of ["staff", "Admin"]) {
-      const reserved = await request("/roles", { method: "POST", cookie: adminCookie, body: { name, permissionIds: ids("movie.view") } });
+      const reserved = await request("/roles", { method: "POST", cookie: adminCookie, body: { name, baseRole: "STAFF", permissionIds: ids("movie.view") } });
       assert.equal(reserved.response.status, 409, name);
       assert.equal(reserved.body.code, "ROLE_NAME_TAKEN");
       assert.equal(reserved.body.message, "This role name already exists.");
@@ -170,21 +179,21 @@ test("UC45-47 role management", async (t) => {
     const { response, body } = await request("/roles", {
       method: "POST",
       cookie: adminCookie,
-      body: { name: "Ghost", permissionIds: [new mongoose.Types.ObjectId().toString()] },
+      body: { name: "Ghost", baseRole: "STAFF", permissionIds: [new mongoose.Types.ObjectId().toString()] },
     });
     assert.equal(response.status, 400);
     assert.equal(body.code, "PERMISSION_INVALID");
   });
 
   await t.test("UC45 5: a role without permissions needs explicit confirmation", async () => {
-    const unconfirmed = await request("/roles", { method: "POST", cookie: adminCookie, body: { name: "Usher" } });
+    const unconfirmed = await request("/roles", { method: "POST", cookie: adminCookie, body: { name: "Usher", baseRole: "STAFF" } });
     assert.equal(unconfirmed.response.status, 409);
     assert.equal(unconfirmed.body.code, "ROLE_EMPTY_PERMISSIONS_CONFIRMATION_REQUIRED");
 
     const confirmed = await request("/roles", {
       method: "POST",
       cookie: adminCookie,
-      body: { name: "Usher", confirmNoPermissions: true },
+      body: { name: "Usher", baseRole: "STAFF", confirmNoPermissions: true },
     });
     assert.equal(confirmed.response.status, 201);
     assert.equal(confirmed.body.message, "Role created successfully.");
@@ -195,19 +204,29 @@ test("UC45-47 role management", async (t) => {
     const created = await request("/roles", {
       method: "POST",
       cookie: adminCookie,
-      body: { name: "Ticket   Checker", description: "Door staff", permissionIds: ids("ticket.validate", "movie.view") },
+      body: {
+        name: "Ticket   Checker",
+        baseRole: "STAFF",
+        description: "Door staff",
+        permissionIds: ids("ticket.validate", "movie.view"),
+      },
     });
     assert.equal(created.response.status, 201, JSON.stringify(created.body));
     customRole = created.body.data;
     assert.equal(customRole.name, "Ticket Checker");
     assert.equal(customRole.isSystem, false);
     assert.equal(customRole.permissionCount, 2);
+    assert.equal(customRole.baseRole, "STAFF");
+    assert.deepEqual(
+      [...customRole.allowedPermissionIds].sort(),
+      ids("movie.view", "ticket.validate", "inventory.view", "inventory.stock_in").sort(),
+    );
     assert.equal(customRole.createdBy.username, "rbac_admin");
 
     const duplicate = await request("/roles", {
       method: "POST",
       cookie: adminCookie,
-      body: { name: "ticket checker", permissionIds: ids("movie.view") },
+      body: { name: "ticket checker", baseRole: "STAFF", permissionIds: ids("movie.view") },
     });
     assert.equal(duplicate.response.status, 409);
   });
@@ -279,11 +298,53 @@ test("UC45-47 role management", async (t) => {
     assert.equal(response.status, 409);
     assert.equal(body.code, "ROLE_EMPTY_PERMISSIONS_CONFIRMATION_REQUIRED");
   });
+
+  await t.test("ceilings: roles only hold permissions of their system or base role", async () => {
+    const noBase = await request("/roles", {
+      method: "POST",
+      cookie: adminCookie,
+      body: { name: "Floating", permissionIds: ids("movie.view") },
+    });
+    assert.equal(noBase.response.status, 400);
+    assert.equal(noBase.body.errors[0].field, "baseRole");
+
+    const customOutside = await request("/roles", {
+      method: "POST",
+      cookie: adminCookie,
+      body: { name: "Cashier", baseRole: "STAFF", permissionIds: ids("ticket.validate", "report.view") },
+    });
+    assert.equal(customOutside.response.status, 400);
+    assert.equal(customOutside.body.code, "PERMISSION_OUT_OF_SCOPE");
+    assert.match(customOutside.body.message, /report\.view/);
+
+    const managerBased = await request("/roles", {
+      method: "POST",
+      cookie: adminCookie,
+      body: { name: "Reporter", baseRole: "MANAGER", permissionIds: ids("report.view") },
+    });
+    assert.equal(managerBased.response.status, 201, JSON.stringify(managerBased.body));
+
+    const systemOutside = await request(`/roles/${roles.customer._id}/permissions`, {
+      method: "PUT",
+      cookie: adminCookie,
+      body: { permissionIds: ids("movie.view", "ticket.validate"), confirmAffectedAccounts: true },
+    });
+    assert.equal(systemOutside.response.status, 400);
+    assert.equal(systemOutside.body.code, "PERMISSION_OUT_OF_SCOPE");
+
+    const baseChange = await request(`/roles/${customRole.id}`, {
+      method: "PATCH",
+      cookie: adminCookie,
+      body: { baseRole: "MANAGER" },
+    });
+    assert.equal(baseChange.response.status, 400);
+  });
 });
 
 test("UC35-37 staff accounts, with BR-29/BR-34 propagation and BR-28", async (t) => {
   let staff;
   let staffCookie;
+  let generatedPassword;
 
   await t.test("UC35 7a/7c: required fields and at least one role", async () => {
     const { response, body } = await request("/staff-accounts", {
@@ -325,7 +386,14 @@ test("UC35-37 staff accounts, with BR-29/BR-34 propagation and BR-28", async (t)
     const { response, body } = await request("/staff-accounts", {
       method: "POST",
       cookie: adminCookie,
-      body: { fullName: "Copy Cat", email: "RBAC_customer@example.com", username: "RBAC_ADMIN", phone: "0900000009", roleIds: [roles.staff._id.toString()] },
+      body: {
+        fullName: "Copy Cat",
+        email: "RBAC_customer@example.com",
+        username: "RBAC_ADMIN",
+        phone: "0900000009",
+        roleIds: [roles.staff._id.toString()],
+        branchId: branch._id.toString(),
+      },
     });
     assert.equal(response.status, 409);
     assert.equal(body.code, "DUPLICATE_ACCOUNT");
@@ -334,6 +402,26 @@ test("UC35-37 staff accounts, with BR-29/BR-34 propagation and BR-28", async (t)
       { field: "username", message: "This username is already registered." },
       { field: "phone", message: "This phone number is already registered." },
     ]);
+  });
+
+  await t.test("Staff and Managers need a branch; a system Admin has none", async () => {
+    const base = { fullName: "Branch Rule", email: "branch.rule@example.com", username: "branch_rule", phone: "0907777777" };
+    const noBranch = await request("/staff-accounts", {
+      method: "POST",
+      cookie: adminCookie,
+      body: { ...base, roleIds: [roles.staff._id.toString()] },
+    });
+    assert.equal(noBranch.response.status, 400);
+    assert.equal(noBranch.body.code, "STAFF_BRANCH_REQUIRED");
+    assert.equal(noBranch.body.errors[0].field, "branchId");
+
+    const adminWithBranch = await request("/staff-accounts", {
+      method: "POST",
+      cookie: adminCookie,
+      body: { ...base, roleIds: [roles.admin._id.toString()], branchId: branch._id.toString() },
+    });
+    assert.equal(adminWithBranch.response.status, 400);
+    assert.equal(adminWithBranch.body.code, "STAFF_BRANCH_NOT_ALLOWED");
   });
 
   await t.test("UC35 creates an ACTIVE staff account without an Admin-set password (MSG35)", async () => {
@@ -347,13 +435,13 @@ test("UC35-37 staff accounts, with BR-29/BR-34 propagation and BR-28", async (t)
         phone: "090 222 3333",
         roleIds: [roles.staff._id.toString()],
         // ticket.validate is already granted by STAFF: kept as an explicit direct grant (UC37 4a).
-        directPermissionIds: ids("ticket.validate", "report.view"),
-        position: "Ticket checker",
+        directPermissionIds: ids("ticket.validate", "inventory.view"),
+        branchId: branch._id.toString(),
       },
     });
     assert.equal(response.status, 201, JSON.stringify(body));
     assert.equal(body.message, "Staff account created successfully.");
-    assert.deepEqual(body.meta.credentialSetup, { method: "PASSWORD_RESET", emailSent: true });
+    assert.deepEqual(body.meta.credentialSetup, { method: "GENERATED_PASSWORD", emailSent: true });
     staff = body.data;
     assert.equal(staff.status, "ACTIVE");
     assert.equal(staff.email, "linh@example.com");
@@ -363,18 +451,26 @@ test("UC35-37 staff accounts, with BR-29/BR-34 propagation and BR-28", async (t)
 
     const redundant = staff.directPermissions.find(({ name }) => name === "ticket.validate");
     assert.deepEqual(redundant.grantedByRoles, ["STAFF"]);
-    assert.deepEqual(staff.directPermissions.find(({ name }) => name === "report.view").grantedByRoles, []);
+    assert.deepEqual(staff.directPermissions.find(({ name }) => name === "inventory.view").grantedByRoles, []);
 
     const [welcome] = takeTestEmails().filter(({ purpose }) => purpose === "STAFF_WELCOME");
     assert.equal(welcome.email, "linh@example.com");
-    assert.match(welcome.setPasswordUrl, /\/forgot-password$/);
+    // 8 characters with a lowercase, an uppercase, a digit and a special character.
+    generatedPassword = welcome.temporaryPassword;
+    assert.equal(generatedPassword.length, 8);
+    for (const rule of [/[a-z]/, /[A-Z]/, /\d/, /[^A-Za-z0-9]/]) assert.match(generatedPassword, rule);
+    // Only the staff member receives it: never in the API response to the Admin.
+    assert.ok(!JSON.stringify(body).includes(generatedPassword));
 
     const stored = await Account.findById(staff.id).lean();
     assert.equal(String(stored.createdBy), String(adminAccount._id));
     assert.ok(await AuditLog.exists({ targetId: staff.id, action: "STAFF_ACCOUNT_CREATED" }));
   });
 
-  await t.test("the new staff member sets their own password through UC04", async () => {
+  await t.test("the new staff member signs in with the emailed password and may still reset it (UC04)", async () => {
+    const first = await signIn("linh_tran", generatedPassword);
+    assert.equal(first.response.status, 200, JSON.stringify(first.body));
+
     const forgot = await request("/auth/forgot-password", { method: "POST", body: { email: "linh@example.com" } });
     assert.equal(forgot.response.status, 200);
     assert.equal(forgot.body.message, "A password reset code has been sent to linh@example.com.");
@@ -469,14 +565,23 @@ test("UC35-37 staff accounts, with BR-29/BR-34 propagation and BR-28", async (t)
     const before = await request("/auth/me", { cookie: staffCookie });
     assert.ok(!before.body.data.permissions.some(({ name }) => name === "movie.create"));
 
-    const assigned = await request(`/staff-accounts/${staff.id}/access`, {
+    // A staff account holds exactly one role.
+    const twoRoles = await request(`/staff-accounts/${staff.id}/access`, {
       method: "PUT",
       cookie: adminCookie,
       body: { roleIds: [roles.staff._id.toString(), roles.manager._id.toString()] },
     });
+    assert.equal(twoRoles.response.status, 400);
+    assert.deepEqual(twoRoles.body.errors, [{ field: "roleIds", message: "A staff account can have only one role." }]);
+
+    const assigned = await request(`/staff-accounts/${staff.id}/access`, {
+      method: "PUT",
+      cookie: adminCookie,
+      body: { roleIds: [roles.manager._id.toString()] },
+    });
     assert.equal(assigned.response.status, 200, JSON.stringify(assigned.body));
     assert.equal(assigned.body.message, "Permissions assigned successfully.");
-    assert.deepEqual(assigned.body.data.directPermissions.map(({ name }) => name), ["report.view", "ticket.validate"]);
+    assert.deepEqual(assigned.body.data.directPermissions.map(({ name }) => name), ["inventory.view", "ticket.validate"]);
 
     const after = await request("/auth/me", { cookie: staffCookie });
     assert.ok(after.body.data.permissions.some(({ name }) => name === "movie.create"));
@@ -484,21 +589,31 @@ test("UC35-37 staff accounts, with BR-29/BR-34 propagation and BR-28", async (t)
     const revoked = await request(`/staff-accounts/${staff.id}/access`, {
       method: "PUT",
       cookie: adminCookie,
-      body: { roleIds: [roles.staff._id.toString()], directPermissionIds: ids("report.view") },
+      body: { roleIds: [roles.staff._id.toString()], directPermissionIds: ids("inventory.view") },
     });
-    assert.deepEqual(revoked.body.data.directPermissions.map(({ name }) => name), ["report.view"]);
+    assert.deepEqual(revoked.body.data.directPermissions.map(({ name }) => name), ["inventory.view"]);
     const record = await AuditLog.findOne({ targetId: staff.id, action: "STAFF_ACCESS_ASSIGNED" })
       .sort({ createdAt: -1 })
       .lean();
     assert.deepEqual(record.changes.rolesRemoved, ["MANAGER"]);
     assert.deepEqual(record.changes.directPermissionsRemoved, ["ticket.validate"]);
+
+    // A direct grant can only give back permissions within the ceilings of the account's roles.
+    const outside = await request(`/staff-accounts/${staff.id}/access`, {
+      method: "PUT",
+      cookie: adminCookie,
+      body: { roleIds: [roles.staff._id.toString()], directPermissionIds: ids("report.view") },
+    });
+    assert.equal(outside.response.status, 400);
+    assert.equal(outside.body.code, "PERMISSION_OUT_OF_SCOPE");
+    assert.equal(outside.body.errors[0].field, "directPermissionIds");
   });
 
   await t.test("UC46 8 / BR-34: changing a role in use needs confirmation, then applies at once", async () => {
     const unconfirmed = await request(`/roles/${roles.staff._id}/permissions`, {
       method: "PUT",
       cookie: adminCookie,
-      body: { permissionIds: ids("movie.view", "ticket.validate", "report.view", "movie.create") },
+      body: { permissionIds: ids("movie.view", "ticket.validate", "inventory.view", "inventory.stock_in") },
     });
     assert.equal(unconfirmed.response.status, 409);
     assert.equal(unconfirmed.body.code, "ROLE_AFFECTED_ACCOUNTS_CONFIRMATION_REQUIRED");
@@ -507,13 +622,13 @@ test("UC35-37 staff accounts, with BR-29/BR-34 propagation and BR-28", async (t)
     const confirmed = await request(`/roles/${roles.staff._id}/permissions`, {
       method: "PUT",
       cookie: adminCookie,
-      body: { permissionIds: ids("movie.view", "ticket.validate", "report.view", "movie.create"), confirmAffectedAccounts: true },
+      body: { permissionIds: ids("movie.view", "ticket.validate", "inventory.view", "inventory.stock_in"), confirmAffectedAccounts: true },
     });
     assert.equal(confirmed.response.status, 200);
     assert.equal(confirmed.body.message, "Permissions assigned successfully.");
 
     const me = await request("/auth/me", { cookie: staffCookie });
-    assert.ok(me.body.data.permissions.some(({ name }) => name === "movie.create"));
+    assert.ok(me.body.data.permissions.some(({ name }) => name === "inventory.stock_in"));
   });
 
   await t.test("self-protection: an Admin cannot disable or demote their own account", async () => {
@@ -569,7 +684,7 @@ test("UC35-37 staff accounts, with BR-29/BR-34 propagation and BR-28", async (t)
     assert.equal(response.status, 200);
     assert.ok(!body.data.roles.some(({ name }) => name === "CUSTOMER"));
     assert.ok(body.data.roles.find(({ name }) => name === "STAFF").permissionIds.length > 0);
-    assert.equal(body.data.permissions.length, 10);
-    assert.deepEqual(body.data.branches, []);
+    assert.equal(body.data.permissions.length, 12);
+    assert.deepEqual(body.data.branches, [{ id: branch._id.toString(), branchName: "RBAC Test Cinema" }]);
   });
 });

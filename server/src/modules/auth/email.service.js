@@ -109,17 +109,18 @@ export const sendPasswordResetOtpEmail = async ({ email, fullName, otp, expiresI
   });
 };
 
-// STAFF-101 / UC35: the Admin never sets the password. The new staff member chooses one through
-// the Forgot Password flow (G04), which proves they own the mailbox.
-export const sendStaffWelcomeEmail = async ({ email, fullName, username, setPasswordUrl }) => {
+// STAFF-101 / UC35: the system generates a password and only the staff member receives it, by
+// email. The Admin never sees it; the staff member may change it later in Profile.
+export const sendStaffWelcomeEmail = async ({ email, fullName, username, temporaryPassword }) => {
   if (env.isTest && process.env.EMAIL_TEST_MODE === "capture") {
-    testOutbox.push({ purpose: "STAFF_WELCOME", email, fullName, username, setPasswordUrl });
+    testOutbox.push({ purpose: "STAFF_WELCOME", email, fullName, username, temporaryPassword });
     return;
   }
 
   const safeFullName = escapeHtml(fullName);
   const safeUsername = escapeHtml(username);
-  const safeUrl = escapeHtml(setPasswordUrl);
+  const safeEmail = escapeHtml(email);
+  const safePassword = escapeHtml(temporaryPassword);
 
   await getTransporter().sendMail({
     from: env.emailFrom,
@@ -131,19 +132,26 @@ export const sendStaffWelcomeEmail = async ({ email, fullName, username, setPass
       "An administrator has created an F-Cinema staff account for you.",
       `Username: ${username}`,
       `Email: ${email}`,
+      `Password: ${temporaryPassword}`,
       "",
-      `To set your password, open ${setPasswordUrl}, enter this email address and follow the verification code we send you.`,
-      "",
-      "If you were not expecting this account, please contact your administrator.",
+      "Sign in on the F-Cinema staff sign-in page with your username or email and this password.",
+      "You can change the password at any time in Profile > Change password.",
+      "Do not share this email. If you were not expecting this account, please contact your administrator.",
     ].join("\n"),
     html: `
       <div style="font-family:Arial,sans-serif;line-height:1.6;color:#1f1f24">
         <h2 style="color:#e50914">F-Cinema</h2>
         <p>Hello ${safeFullName},</p>
         <p>An administrator has created an F-Cinema staff account for you.</p>
-        <p>Username: <strong>${safeUsername}</strong></p>
-        <p>To set your password, open <a href="${safeUrl}">${safeUrl}</a>, enter this email address and follow the verification code we send you.</p>
-        <p>If you were not expecting this account, please contact your administrator.</p>
+        <table role="presentation" cellpadding="6" cellspacing="0" style="border:1px solid #e3e3e8;border-radius:8px">
+          <tr><td style="color:#6b6b76">Username</td><td><strong>${safeUsername}</strong></td></tr>
+          <tr><td style="color:#6b6b76">Email</td><td><strong>${safeEmail}</strong></td></tr>
+          <tr><td style="color:#6b6b76">Password</td>
+            <td><strong style="font-family:Consolas,monospace;font-size:18px;letter-spacing:2px">${safePassword}</strong></td></tr>
+        </table>
+        <p>Sign in on the F-Cinema staff sign-in page with your username or email and this password.
+           You can change the password at any time in <strong>Profile &gt; Change password</strong>.</p>
+        <p style="color:#6b6b76;font-size:13px">Do not share this email. If you were not expecting this account, please contact your administrator.</p>
       </div>
     `,
   });

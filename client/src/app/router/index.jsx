@@ -87,7 +87,7 @@ export function AppRoutes() {
               path="booking-history"
               element={<CustomerBookingsPage key="booking-history" initialMode="history" />}
             />
-            <Route element={<PermissionRoute role="CUSTOMER" />}>
+            <Route element={<PermissionRoute role="CUSTOMER" permission="refund.request" />}>
               <Route path="refunds" element={<CustomerRefundsPage />} />
             </Route>
             <Route path="booking/:showtimeId/seats" element={<SeatSelectionPage />} />
@@ -170,11 +170,18 @@ export function AppRoutes() {
               <Route element={<PermissionRoute permission="report.view" />}>
                 <Route path="reports/revenue" element={<RevenueReportsPage />} />
               </Route>
-              <Route path="showtimes" element={<ManagerShowtimesPage />} />
-              <Route path="refunds" element={<ManagerRefundsPage />} />
-              <Route path="promotions" element={<PromotionsPage />} />
-              <Route path="promotions/new" element={<PromotionFormPage />} />
-              <Route path="promotions/:promotionId/edit" element={<PromotionFormPage />} />
+              {/* Each screen also needs its permission, so an Admin can withdraw it on /admin/roles. */}
+              <Route element={<PermissionRoute permission="showtime.view" />}>
+                <Route path="showtimes" element={<ManagerShowtimesPage />} />
+              </Route>
+              <Route element={<PermissionRoute permission="refund.manage" />}>
+                <Route path="refunds" element={<ManagerRefundsPage />} />
+              </Route>
+              <Route element={<PermissionRoute permission="promotion.manage" />}>
+                <Route path="promotions" element={<PromotionsPage />} />
+                <Route path="promotions/new" element={<PromotionFormPage />} />
+                <Route path="promotions/:promotionId/edit" element={<PromotionFormPage />} />
+              </Route>
               <Route element={<MovieManagementAccess />}>
                 <Route path="movies" element={<ManagerMoviesPage />} />
                 <Route path="movies/:movieId/edit" element={<UpdateMoviePage />} />

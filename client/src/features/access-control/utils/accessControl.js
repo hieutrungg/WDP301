@@ -94,6 +94,42 @@ export function effectivePermissionIds(roles, selectedRoleIds, directPermissionI
   return [...ids].sort()
 }
 
+// Permission ceilings (server: role-permission-scope.js). Each permission in the catalog lists the
+// system roles whose ceiling contains it (`scopes`); a custom role acts as its base role.
+export const BASE_ROLES = ['STAFF', 'MANAGER']
+
+export function actorRoleOf(role) {
+  return role?.baseRole || role?.name || null
+}
+
+// Branch rule (server: staff-account.service.js): STAFF and MANAGER, and custom roles built on them,
+// work at one cinema (branch required); a system ADMIN manages every branch (no branch).
+export function branchRuleForRoles(roles) {
+  const actors = new Set((roles ?? []).map(actorRoleOf))
+  if (actors.has('STAFF') || actors.has('MANAGER')) return 'REQUIRED'
+  if (actors.has('ADMIN')) return 'NONE'
+  return 'OPTIONAL'
+}
+
+// Ids of the permissions that may be granted directly to an account holding these roles.
+export function allowedIdsForRoles(permissions, roles, selectedRoleIds) {
+  const selected = new Set(selectedRoleIds ?? [])
+  const actors = new Set((roles ?? []).filter((role) => selected.has(role.id)).map(actorRoleOf))
+  if (actors.has('ADMIN')) return new Set((permissions ?? []).map(({ id }) => id))
+  return new Set(
+    (permissions ?? [])
+      .filter((permission) => (permission.scopes ?? []).some((scope) => actors.has(scope)))
+      .map(({ id }) => id),
+  )
+}
+
+// Catalog entries to show: the allowed ones plus any already selected (so a legacy grant outside
+// the ceiling can still be unticked).
+export function visiblePermissions(permissions, allowedIds, selectedIds = []) {
+  const selected = new Set(selectedIds)
+  return (permissions ?? []).filter(({ id }) => allowedIds.has(id) || selected.has(id))
+}
+
 export function sameIdSet(left, right) {
   const a = new Set(left ?? [])
   const b = new Set(right ?? [])

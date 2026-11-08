@@ -1,10 +1,11 @@
 import { AppError } from "../../utils/AppError.js";
+import { actorRoleNames } from "../role-permission/role-permission-scope.js";
 import { ROOM_ERROR } from "./room.constants.js";
 
 // Rooms and seat maps are branch-scoped like stock and check-in: a Manager or Staff only works on
 // the branch stored on their own account, never on a branch named in the request. Only an
 // Administrator (read-only here, writes also need the MANAGER role) sees every branch.
-const hasRole = (account, name) => (account?.roles ?? []).some((role) => role.name === name);
+const hasRole = (account, name) => actorRoleNames(account?.roles ?? []).has(name);
 
 export const resolveBranchScope = (account) => {
   const adminOnly = hasRole(account, "ADMIN") && !hasRole(account, "MANAGER") && !hasRole(account, "STAFF");

@@ -89,7 +89,6 @@ function StaffRow({ account, isSelf, onEdit, onAccess, onChangeStatus }) {
       </div>
       <div className="min-w-0 text-xs text-on-surface-variant">
         <p className="truncate text-sm text-on-surface">{account.branch?.branchName ?? 'No branch'}</p>
-        <p className="truncate">{account.position ?? '—'}</p>
       </div>
       <div>
         <StatusBadge status={account.status} />
@@ -228,7 +227,7 @@ function StaffAccountsPage() {
         <div className={`hidden gap-3 border-b border-white/5 px-5 py-3 lg:grid ${COLUMNS}`}>
           <SortHeader label="Staff member" field="fullName" {...sortProps} />
           <span className="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">Roles</span>
-          <span className="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">Branch / position</span>
+          <span className="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">Branch</span>
           <SortHeader label="Status" field="status" {...sortProps} />
           <SortHeader label="Created" field="createdAt" {...sortProps} />
           <span className="text-right text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">Actions</span>

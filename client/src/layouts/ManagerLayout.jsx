@@ -34,6 +34,7 @@ const navItems = [
     label: "Showtimes",
     icon: CalendarClock,
     to: "/manager/showtimes",
+    permission: "showtime.view",
   },
   {
     label: "Rooms",
@@ -53,8 +54,8 @@ const navItems = [
     to: "/manager/inventory",
     permission: "inventory.view",
   },
-  { label: "Promotions", icon: TicketPercent, to: "/manager/promotions" },
-  { label: "Refunds", icon: ReceiptText, to: "/manager/refunds" },
+  { label: "Promotions", icon: TicketPercent, to: "/manager/promotions", permission: "promotion.manage" },
+  { label: "Refunds", icon: ReceiptText, to: "/manager/refunds", permission: "refund.manage" },
   { label: "Reports", icon: ChartLine, to: "/manager/reports/revenue", permission: "report.view" },
 ];
 

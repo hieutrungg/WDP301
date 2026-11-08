@@ -45,12 +45,13 @@ const branchIdField = z.preprocess(
 
 const positionField = optionalText("Position", { max: STAFF_POSITION_MAX_LENGTH });
 
-// BR-27 / UC35 7c / UC37 6a: at least one role.
+// BR-27 / UC35 7c / UC37 6a: a staff account holds exactly one role (Admin, Manager, Staff or a
+// custom role), so it never mixes the workspaces of two roles.
 const roleIdsField = z
   .array(objectIdField("Role"), { error: STAFF_MESSAGE.ROLE_REQUIRED })
-  .min(1, STAFF_MESSAGE.ROLE_REQUIRED)
-  .max(20, maxLengthMessage(20))
-  .transform((ids) => [...new Set(ids.map((id) => id.toLowerCase()))]);
+  .transform((ids) => [...new Set(ids.map((id) => id.toLowerCase()))])
+  .refine((ids) => ids.length >= 1, STAFF_MESSAGE.ROLE_REQUIRED)
+  .refine((ids) => ids.length <= 1, STAFF_MESSAGE.ONE_ROLE_ONLY);
 
 const directPermissionIdsField = objectIdList("Permission");
 

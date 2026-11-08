@@ -21,10 +21,12 @@ const ROLE_PREFIX_RULES = [
   { prefix: "/staff", role: "STAFF" },
 ];
 
+// Role names plus the base role of each custom role: a custom role built on STAFF or MANAGER
+// opens the same workspace as its base role (server: role-permission-scope.js).
 export function getAccountRoleNames(account) {
   return new Set(
     (account?.roles ?? [])
-      .map((item) => (typeof item === "string" ? item : item?.name))
+      .flatMap((item) => (typeof item === "string" ? [item] : [item?.name, item?.baseRole]))
       .filter(Boolean),
   );
 }

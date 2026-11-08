@@ -9,6 +9,9 @@ const roleSchema = new mongoose.Schema(
   {
     name: String,
     description: String,
+    // Custom roles only: the system role (STAFF or MANAGER) it is built on and acts as. Its
+    // permissions must stay within that role's ceiling (role-permission-scope.js).
+    baseRole: { type: String, enum: ["STAFF", "MANAGER"] },
     permissionIds: [
       {
         type: mongoose.Schema.Types.ObjectId,

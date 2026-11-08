@@ -22,6 +22,9 @@ export const STAFF_ERROR = Object.freeze({
   ROLE_INVALID: "STAFF_ROLE_INVALID",
   PERMISSION_INVALID: "PERMISSION_INVALID",
   BRANCH_INVALID: "STAFF_BRANCH_INVALID",
+  // Staff and Managers work at one cinema; a system Admin is not tied to any branch.
+  BRANCH_REQUIRED: "STAFF_BRANCH_REQUIRED",
+  BRANCH_NOT_ALLOWED: "STAFF_BRANCH_NOT_ALLOWED",
   CANNOT_DISABLE_SELF: "CANNOT_DISABLE_SELF",
   CANNOT_REMOVE_OWN_ADMIN_ROLE: "CANNOT_REMOVE_OWN_ADMIN_ROLE",
   STATUS_NOT_CHANGEABLE: "STAFF_STATUS_NOT_CHANGEABLE",
@@ -36,4 +39,9 @@ export const STAFF_MESSAGE = Object.freeze({
   USERNAME_TAKEN: "This username is already registered.",
   PHONE_TAKEN: "This phone number is already registered.",
   ROLE_REQUIRED: "At least one role is required.",
+  ONE_ROLE_ONLY: "A staff account can have only one role.",
+  BRANCH_REQUIRED: "Select the cinema branch this employee works at.",
+  BRANCH_NOT_ALLOWED: "A system administrator is not assigned to a cinema branch.",
+  BRANCH_REQUIRED_FOR_ROLE:
+    "This role works at one cinema. Assign a branch in Edit details before giving it to this account.",
 });

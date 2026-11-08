@@ -3,15 +3,21 @@ import { useMemo, useState } from 'react'
 import { groupPermissions, redundancyLabel, toggleId } from '../utils/accessControl'
 
 // Picks from the predefined permission list only (BR-33). `inherited` (permissionId -> role
-// names) marks grants a selected role already provides (UC37 4a); they stay selectable.
+// names) marks grants a selected role already provides (UC37 4a): they show as ticked and locked,
+// because the role grants them; only a redundant direct grant of the same permission can be
+// unticked. `value` holds the direct grants only, so role changes keep applying (BR-34).
 function PermissionPicker({ permissions, value, onChange, inherited, disabled = false, emptyHint, idPrefix = 'permission' }) {
   const [query, setQuery] = useState('')
   const groups = useMemo(() => groupPermissions(permissions, query), [permissions, query])
   const selected = new Set(value)
+  const fromRole = (id) => (inherited?.get(id)?.length ?? 0) > 0
+  const granted = (id) => selected.has(id) || fromRole(id)
+  const grantedCount = permissions.filter(({ id }) => granted(id)).length
 
   const setGroup = (groupPermissionIds, checked) => {
     const next = new Set(value)
-    for (const id of groupPermissionIds) {
+    // Role grants are not copied into direct grants.
+    for (const id of groupPermissionIds.filter((permissionId) => !fromRole(permissionId))) {
       if (checked) next.add(id)
       else next.delete(id)
     }
@@ -33,11 +39,13 @@ function PermissionPicker({ permissions, value, onChange, inherited, disabled = 
           />
         </label>
         <p className="shrink-0 text-xs font-semibold text-on-surface-variant">
-          {value.length} of {permissions.length} selected
+          {inherited
+            ? `${grantedCount} of ${permissions.length} granted (${value.length} direct)`
+            : `${value.length} of ${permissions.length} selected`}
         </p>
       </div>
 
-      {value.length === 0 && emptyHint && (
+      {grantedCount === 0 && emptyHint && (
         <p className="flex items-start gap-2 rounded-lg border border-amber-400/20 bg-amber-400/10 p-3 text-xs text-amber-200">
           <Info className="mt-0.5 size-4 shrink-0" />
           {emptyHint}
@@ -52,7 +60,8 @@ function PermissionPicker({ permissions, value, onChange, inherited, disabled = 
         <div className="space-y-3">
           {groups.map((group) => {
             const ids = group.permissions.map(({ id }) => id)
-            const allChecked = ids.every((id) => selected.has(id))
+            const allChecked = ids.every(granted)
+            const allFromRole = ids.every((id) => fromRole(id) && !selected.has(id))
 
             return (
               <fieldset key={group.group} className="rounded-xl border border-white/5 bg-surface-container/60">
@@ -61,7 +70,7 @@ function PermissionPicker({ permissions, value, onChange, inherited, disabled = 
                   <p className="text-xs font-bold uppercase tracking-wider text-on-surface-variant">{group.label}</p>
                   <button
                     type="button"
-                    disabled={disabled}
+                    disabled={disabled || allFromRole}
                     onClick={() => setGroup(ids, !allChecked)}
                     className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:text-white disabled:opacity-40"
                   >
@@ -73,16 +82,22 @@ function PermissionPicker({ permissions, value, onChange, inherited, disabled = 
                   {group.permissions.map((permission) => {
                     const inputId = `${idPrefix}-${permission.id}`
                     const roleNames = inherited?.get(permission.id) ?? []
-                    const isChecked = selected.has(permission.id)
+                    const isDirect = selected.has(permission.id)
+                    const isChecked = isDirect || roleNames.length > 0
+                    // Granted by a role only: shown ticked, cannot be unticked here.
+                    const lockedByRole = roleNames.length > 0 && !isDirect
 
                     return (
                       <li key={permission.id}>
-                        <label htmlFor={inputId} className="flex cursor-pointer items-start gap-3 px-4 py-2.5 hover:bg-surface-container-high/50">
+                        <label
+                          htmlFor={inputId}
+                          className={`flex items-start gap-3 px-4 py-2.5 ${lockedByRole ? 'cursor-default' : 'cursor-pointer hover:bg-surface-container-high/50'}`}
+                        >
                           <input
                             id={inputId}
                             type="checkbox"
                             checked={isChecked}
-                            disabled={disabled}
+                            disabled={disabled || lockedByRole}
                             onChange={() => onChange(toggleId(value, permission.id))}
                             className="mt-1 size-4 accent-primary-container"
                           />
@@ -93,9 +108,9 @@ function PermissionPicker({ permissions, value, onChange, inherited, disabled = 
                             )}
                             {roleNames.length > 0 && (
                               <span
-                                className={`mt-1 inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${isChecked ? 'bg-amber-400/15 text-amber-200' : 'bg-secondary/10 text-secondary'}`}
+                                className={`mt-1 inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${isDirect ? 'bg-amber-400/15 text-amber-200' : 'bg-secondary/10 text-secondary'}`}
                               >
-                                {isChecked ? redundancyLabel(roleNames) : `Included in ${roleNames.join(', ')}`}
+                                {isDirect ? redundancyLabel(roleNames) : `Granted by ${roleNames.join(', ')}`}
                               </span>
                             )}
                           </span>

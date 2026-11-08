@@ -1,13 +1,14 @@
 import bcrypt from "bcrypt";
-import crypto from "node:crypto";
-import { env } from "../../config/env.js";
 import { AppError } from "../../utils/AppError.js";
+import { generatePassword } from "../../utils/password-generator.js";
 import { AUDIT_ACTION, AUDIT_TARGET } from "../audit/audit.constants.js";
 import { recordAuditEvent } from "../audit/audit.service.js";
 import { sendStaffWelcomeEmail } from "../auth/email.service.js";
 import { getBranchSummariesByIds, listBranches } from "../branch/branch.service.js";
 import { NON_STAFF_ROLE_NAMES, SYSTEM_ROLE } from "../role-permission/role.constants.js";
+import { actorRoleNames } from "../role-permission/role-permission-scope.js";
 import {
+  assertWithinRolesCeiling,
   getAllRoles,
   getPermissionsByIds,
   getRolesByIds,
@@ -70,7 +71,31 @@ const resolveAccess = async (roleIds, directPermissionIds) => {
   }
 
   const permissions = await requireExistingPermissions(directPermissionIds, "directPermissionIds");
+  // Direct grants may only give back permissions within the ceilings of the selected roles.
+  assertWithinRolesCeiling(roles, permissions, "directPermissionIds");
   return { roles, permissions };
+};
+
+// Branch rule by role: STAFF and MANAGER (and custom roles built on them) work at one cinema, so a
+// branch is required; a system ADMIN manages every branch and has none.
+const branchRuleFor = (roles) => {
+  const actors = actorRoleNames(roles.filter(isStaffRole));
+  if (actors.has(SYSTEM_ROLE.STAFF) || actors.has(SYSTEM_ROLE.MANAGER)) return "REQUIRED";
+  if (actors.has(SYSTEM_ROLE.ADMIN)) return "NONE";
+  return "OPTIONAL";
+};
+
+const branchError = (code, message, field = "branchId") =>
+  new AppError(400, message, [{ field, message }], code);
+
+const assertBranchMatchesRole = (roles, branchId) => {
+  const rule = branchRuleFor(roles);
+  if (rule === "REQUIRED" && !branchId) {
+    throw branchError(STAFF_ERROR.BRANCH_REQUIRED, STAFF_MESSAGE.BRANCH_REQUIRED);
+  }
+  if (rule === "NONE" && branchId) {
+    throw branchError(STAFF_ERROR.BRANCH_NOT_ALLOWED, STAFF_MESSAGE.BRANCH_NOT_ALLOWED);
+  }
 };
 
 const assertBranchExists = async (branchId) => {
@@ -107,6 +132,7 @@ const serializeRoleRef = (role) => ({
   id: role._id.toString(),
   name: role.name,
   isSystem: isSystemRoleName(role.name),
+  baseRole: role.baseRole ?? null,
   assignable: isStaffRole(role),
 });
 
@@ -244,6 +270,7 @@ export const getStaffFormOptions = async () => {
       name: role.name,
       description: role.description || null,
       isSystem: isSystemRoleName(role.name),
+      baseRole: role.baseRole ?? null,
       permissionIds: idsOf(role.permissionIds),
     })),
     permissions,
@@ -251,13 +278,13 @@ export const getStaffFormOptions = async () => {
   };
 };
 
-const sendWelcome = async (account) => {
+const sendWelcome = async (account, temporaryPassword) => {
   try {
     await sendStaffWelcomeEmail({
       email: account.email,
       fullName: account.profile?.fullName || account.username,
       username: account.username,
-      setPasswordUrl: `${env.clientUrl}/forgot-password`,
+      temporaryPassword,
     });
     return true;
   } catch (error) {
@@ -269,12 +296,14 @@ const sendWelcome = async (account) => {
 // UC35 Create Staff Account.
 export const createStaffAccount = async (actorAccountId, input) => {
   const { roles, permissions } = await resolveAccess(input.roleIds, input.directPermissionIds);
+  assertBranchMatchesRole(roles, input.branchId);
   await assertBranchExists(input.branchId);
   await assertIdentitiesAvailable(input);
 
-  // The Admin never sees or sets a password; this hash is random and unusable until the staff
-  // member chooses a password through Forgot Password (UC35 business rule, owner decision).
-  const passwordHash = await bcrypt.hash(crypto.randomBytes(32).toString("hex"), BCRYPT_ROUNDS);
+  // The system generates the password and emails it to the staff member only; it is never
+  // returned to the Admin or logged. The staff member may change it later in Profile.
+  const temporaryPassword = generatePassword(8);
+  const passwordHash = await bcrypt.hash(temporaryPassword, BCRYPT_ROUNDS);
   const employeeProfile = {
     ...(input.branchId ? { branchId: input.branchId } : {}),
     ...(input.position ? { position: input.position } : {}),
@@ -316,17 +345,17 @@ export const createStaffAccount = async (actorAccountId, input) => {
     },
   });
 
-  const emailSent = await sendWelcome(account);
+  const emailSent = await sendWelcome(account, temporaryPassword);
 
   return {
     account: await getStaffDetail(account._id),
-    credentialSetup: { method: "PASSWORD_RESET", emailSent },
+    credentialSetup: { method: "GENERATED_PASSWORD", emailSent },
   };
 };
 
 // UC36 Update Staff Account (personal/contact information).
 export const updateStaffAccount = async (actorAccountId, accountId, input) => {
-  const { account } = await requireStaffAccount(accountId);
+  const { account, roles } = await requireStaffAccount(accountId);
   const set = {};
   const unset = {};
   const audit = {};
@@ -349,6 +378,7 @@ export const updateStaffAccount = async (actorAccountId, accountId, input) => {
 
   const currentBranchId = account.employeeProfile?.branchId ? String(account.employeeProfile.branchId) : null;
   if (input.branchId !== undefined && (input.branchId ?? null) !== currentBranchId) {
+    assertBranchMatchesRole(roles, input.branchId);
     if (input.branchId) set["employeeProfile.branchId"] = input.branchId;
     else unset["employeeProfile.branchId"] = "";
     track("branchId", currentBranchId, input.branchId);
@@ -457,6 +487,15 @@ export const assignStaffAccess = async (actorAccountId, accountId, input) => {
   const nextRoleIds = [...new Set([...input.roleIds, ...keptRoleIds])];
   const currentRoleIds = idsOf(account.roleIds);
 
+  // Moving to STAFF/MANAGER needs a branch already on the account; moving to ADMIN clears it.
+  const currentBranchId = account.employeeProfile?.branchId ? String(account.employeeProfile.branchId) : null;
+  const branchRule = branchRuleFor(selectedRoles);
+  const roleChanged = input.roleIds.some((id) => !currentRoleIds.includes(id));
+  if (branchRule === "REQUIRED" && !currentBranchId && roleChanged) {
+    throw branchError(STAFF_ERROR.BRANCH_REQUIRED, STAFF_MESSAGE.BRANCH_REQUIRED_FOR_ROLE, "roleIds");
+  }
+  const clearBranch = branchRule === "NONE" && Boolean(currentBranchId);
+
   const rolesAdded = nextRoleIds.filter((id) => !currentRoleIds.includes(id));
   const rolesRemoved = currentRoleIds.filter((id) => !nextRoleIds.includes(id));
   const permissionsAdded = directPermissionIds.filter((id) => !currentDirectIds.includes(id));
@@ -468,6 +507,7 @@ export const assignStaffAccess = async (actorAccountId, accountId, input) => {
 
   await updateAccountById(account._id, {
     set: { roleIds: nextRoleIds, directPermissionIds, updatedBy: actorAccountId },
+    ...(clearBranch ? { unset: { "employeeProfile.branchId": "" } } : {}),
   });
 
   const roleById = new Map([...currentRoles, ...selectedRoles].map((role) => [role._id.toString(), role]));
@@ -489,6 +529,7 @@ export const assignStaffAccess = async (actorAccountId, accountId, input) => {
       rolesRemoved: namesFor(rolesRemoved, roleById),
       directPermissionsAdded: namesFor(permissionsAdded, permissionById),
       directPermissionsRemoved: namesFor(permissionsRemoved, permissionById),
+      ...(clearBranch ? { branchId: { from: currentBranchId, to: null } } : {}),
     },
   });
 

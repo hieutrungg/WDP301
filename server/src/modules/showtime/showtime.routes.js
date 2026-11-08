@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { requireAuth } from "../../middlewares/authMiddleware.js";
-import { requireRole } from "../../middlewares/permissionMiddleware.js";
+import { requirePermission, requireRole } from "../../middlewares/permissionMiddleware.js";
 import { validate } from "../../middlewares/validateMiddleware.js";
 import { cancelShowtime, createShowtime, getShowtimeById, listManagerShowtimes, listMovieShowtimes, listShowtimes, rescheduleShowtime } from "./showtime.controller.js";
 import { SHOWTIME_ERROR } from "./showtime.constants.js";
@@ -8,10 +8,12 @@ import { createShowtimeSchema, managerShowtimeQueryValidator, movieShowtimeParam
 
 const router = Router();
 
-// UC17 names MANAGER as the actor; no separate showtime permission code is defined yet.
+// UC17 names MANAGER as the actor; each action also needs its showtime.* permission, so an Admin
+// can withdraw it from the MANAGER role (or a custom role built on MANAGER).
 router.post(
   "/showtimes",
   requireAuth,
+  requirePermission("showtime.create"),
   requireRole("MANAGER"),
   validate(createShowtimeSchema, { code: SHOWTIME_ERROR.INVALID_SHOWTIME }),
   createShowtime,
@@ -19,6 +21,7 @@ router.post(
 router.get(
   "/showtimes/manage",
   requireAuth,
+  requirePermission("showtime.view"),
   requireRole("MANAGER"),
   managerShowtimeQueryValidator,
   listManagerShowtimes,
@@ -26,6 +29,7 @@ router.get(
 router.patch(
   "/showtimes/:showtimeId",
   requireAuth,
+  requirePermission("showtime.update"),
   requireRole("MANAGER"),
   showtimeIdParamsValidator,
   validate(rescheduleShowtimeSchema, { code: SHOWTIME_ERROR.INVALID_SHOWTIME }),
@@ -34,6 +38,7 @@ router.patch(
 router.post(
   "/showtimes/:showtimeId/cancel",
   requireAuth,
+  requirePermission("showtime.cancel"),
   requireRole("MANAGER"),
   showtimeIdParamsValidator,
   cancelShowtime,

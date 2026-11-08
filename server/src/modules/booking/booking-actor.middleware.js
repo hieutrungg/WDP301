@@ -2,11 +2,12 @@ import {
   requirePermission,
   requireRole,
 } from "../../middlewares/permissionMiddleware.js";
+import { actorRoleNames } from "../role-permission/role-permission-scope.js";
 
 export const requireBookingActor = (req, res, next) =>
   requireRole("CUSTOMER", "STAFF")(req, res, (roleError) => {
     if (roleError) return next(roleError);
-    const roles = new Set(req.auth.account.roles.map(({ name }) => name));
+    const roles = actorRoleNames(req.auth.account.roles);
     const permission = roles.has("STAFF")
       ? "ticket.sell_counter"
       : "booking.create";
