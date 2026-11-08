@@ -1,3 +1,5 @@
+import { actorRoleNames } from "../role-permission/role-permission-scope.js";
+
 export const createBookingController = (service) => ({
   cancel: async (req, res, next) => {
     try {
@@ -12,9 +14,8 @@ export const createBookingController = (service) => ({
   },
   createPending: async (req, res, next) => {
     try {
-      const isStaff = req.auth.account?.roles?.some(
-        ({ name }) => name === "STAFF",
-      );
+      // A custom role built on STAFF also sells at the counter.
+      const isStaff = actorRoleNames(req.auth.account?.roles ?? []).has("STAFF");
       const data = await service.createPendingBookingFromHold({
         ...req.body,
         ownerId: req.auth.accountId,

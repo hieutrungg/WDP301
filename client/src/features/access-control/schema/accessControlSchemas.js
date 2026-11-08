@@ -30,21 +30,19 @@ const phone = text('Phone number', { max: 20 }).refine(
   ifPresent((value) => /^(?:\+84|0)\d{9,10}$/.test(value.replace(/[\s.-]/g, ''))),
   invalid('Phone number'),
 )
-const position = z.string().trim().max(60, maxLength(60))
 
-export const ROLE_REQUIRED_MESSAGE = 'At least one role is required.'
+export const ROLE_REQUIRED_MESSAGE = 'Select a role.'
 
 export const staffProfileSchema = z.object({
   fullName,
   email,
   phone,
   branchId: z.string(),
-  position,
 })
 
 export const createStaffSchema = staffProfileSchema.extend({
   username,
-  roleIds: z.array(z.string()).min(1, ROLE_REQUIRED_MESSAGE),
+  roleIds: z.array(z.string()).length(1, ROLE_REQUIRED_MESSAGE),
   directPermissionIds: z.array(z.string()),
 })
 
@@ -54,7 +52,6 @@ export const emptyStaffForm = {
   username: '',
   phone: '',
   branchId: '',
-  position: '',
   roleIds: [],
   directPermissionIds: [],
 }
@@ -65,7 +62,6 @@ export function toStaffProfileForm(account) {
     email: account.email ?? '',
     phone: account.phone ?? '',
     branchId: account.branch?.id ?? '',
-    position: account.position ?? '',
   }
 }
 

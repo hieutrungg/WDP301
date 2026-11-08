@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { requireAuth } from "../../middlewares/authMiddleware.js";
-import { requireRole } from "../../middlewares/permissionMiddleware.js";
+import { requirePermission, requireRole } from "../../middlewares/permissionMiddleware.js";
 import { validate } from "../../middlewares/validateMiddleware.js";
 import {
   objectId,
@@ -27,7 +27,12 @@ export function createPromotionRouter(service = promotionService) {
     source: "query",
     code: "INVALID_PROMOTION",
   });
-  router.use(["/promotions", "/vouchers"], requireAuth, requireRole("MANAGER"));
+  router.use(
+    ["/promotions", "/vouchers"],
+    requireAuth,
+    requirePermission("promotion.manage"),
+    requireRole("MANAGER"),
+  );
   router.get("/promotions", query, c.list);
   router.post("/promotions", body(createPromotionSchema), c.create);
   router.get("/promotions/:promotionId", params("promotionId"), c.get);

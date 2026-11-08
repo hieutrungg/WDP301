@@ -15,6 +15,7 @@ import {
 } from "../account/account.repository.js";
 import { findRoleByName } from "../role-permission/role.repository.js";
 import { getRolesByIds } from "../role-permission/role.service.js";
+import { actorRoleNames } from "../role-permission/role-permission-scope.js";
 import { getBranchSummariesByIds } from "../branch/branch.service.js";
 import {
   createVerification,
@@ -137,6 +138,8 @@ const serializeAccount = (account) => {
       id: role._id.toString(),
       name: role.name,
       description: role.description,
+      // A custom role acts as its base role (STAFF/MANAGER) in route and client role checks.
+      baseRole: role.baseRole ?? null,
     })),
     permissions: [...permissionMap.values()],
   };
@@ -163,7 +166,8 @@ const issueAccessToken = (accountId, rememberMe) =>
 
 const assertInternalAccountBranch = async (account, branchId) => {
   const roles = await getRolesByIds(account.roleIds ?? []);
-  if (!roles.some(({ name }) => name === "STAFF" || name === "MANAGER")) {
+  const actors = actorRoleNames(roles);
+  if (!actors.has("STAFF") && !actors.has("MANAGER")) {
     throw new AppError(
       403,
       "Internal sign-in is available to Staff and Managers only",

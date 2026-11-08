@@ -5,7 +5,13 @@ import { getApiErrorMessage, getApiFieldErrors } from '../../../lib/api/apiError
 import { assignStaffAccessRequest } from '../api/accessControlApi'
 import { useStaffDetail, useStaffFormOptions } from '../hooks/useAccessControl'
 import { ROLE_REQUIRED_MESSAGE } from '../schema/accessControlSchemas'
-import { effectivePermissionIds, inheritedPermissionMap, sameIdSet } from '../utils/accessControl'
+import {
+  allowedIdsForRoles,
+  effectivePermissionIds,
+  inheritedPermissionMap,
+  sameIdSet,
+  visiblePermissions,
+} from '../utils/accessControl'
 import AdminOverlay from './AdminOverlay'
 import ConfirmDialog from './ConfirmDialog'
 import { primaryButton, secondaryButton } from './ListParts'
@@ -33,6 +39,15 @@ function StaffAccessForm({ account, options, isSelf, onClose, onSaved }) {
   const effective = effectivePermissionIds(options.roles, roleIds, directIds)
   const changed = !sameIdSet(roleIds, account.roleIds) || !sameIdSet(directIds, account.directPermissionIds)
   const redundantCount = directIds.filter((id) => inherited.has(id)).length
+  // Direct grants stay within the ceilings of the selected roles (server rule).
+  const allowedIds = allowedIdsForRoles(options.permissions, options.roles, roleIds)
+  const shownPermissions = visiblePermissions(options.permissions, allowedIds, directIds)
+  const changeRoles = (ids) => {
+    setRoleIds(ids)
+    setRoleError(ids.length === 0 ? ROLE_REQUIRED_MESSAGE : '')
+    const nextAllowed = allowedIdsForRoles(options.permissions, options.roles, ids)
+    setDirectIds((current) => current.filter((id) => nextAllowed.has(id)))
+  }
 
   const summary = () => {
     const points = []
@@ -108,19 +123,16 @@ function StaffAccessForm({ account, options, isSelf, onClose, onSaved }) {
             <div className="flex items-center gap-2">
               <ShieldCheck className="size-4 text-secondary" />
               <h3 id="access-roles-heading" className="text-sm font-semibold text-on-surface">
-                Assigned roles
+                Assigned role
               </h3>
             </div>
-            <p className="text-xs text-on-surface-variant">The account must keep at least one role.</p>
+            <p className="text-xs text-on-surface-variant">Each staff account has exactly one role.</p>
             <RolePicker
               roles={options.roles}
               value={roleIds}
               lockedIds={lockedIds}
               error={roleError}
-              onChange={(ids) => {
-                setRoleIds(ids)
-                setRoleError(ids.length === 0 ? ROLE_REQUIRED_MESSAGE : '')
-              }}
+              onChange={changeRoles}
             />
           </section>
 
@@ -132,7 +144,8 @@ function StaffAccessForm({ account, options, isSelf, onClose, onSaved }) {
               </h3>
             </div>
             <p className="text-xs text-on-surface-variant">
-              Granted to this account in addition to its roles. Untick a permission to revoke the direct grant.
+              Granted to this account in addition to its roles, only within the permissions of its roles. Untick a
+              permission to revoke the direct grant.
             </p>
             {redundantCount > 0 && (
               <p className="flex items-start gap-2 rounded-lg border border-amber-400/20 bg-amber-400/10 p-3 text-xs text-amber-200">
@@ -142,7 +155,7 @@ function StaffAccessForm({ account, options, isSelf, onClose, onSaved }) {
               </p>
             )}
             <PermissionPicker
-              permissions={options.permissions}
+              permissions={shownPermissions}
               value={directIds}
               onChange={setDirectIds}
               inherited={inherited}

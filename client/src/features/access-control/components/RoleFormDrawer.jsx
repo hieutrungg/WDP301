@@ -1,6 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { History, KeyRound, Lock, RefreshCw, ShieldCheck, ShieldPlus, Users } from 'lucide-react'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { toast } from 'sonner'
 import { getApiErrorMessage, getApiFieldErrors } from '../../../lib/api/apiError'
@@ -9,12 +9,14 @@ import { usePermissionCatalog, useRoleDetail } from '../hooks/useAccessControl'
 import { roleInfoSchema, toRoleForm } from '../schema/accessControlSchemas'
 import {
   affectedAccountsMessage,
+  BASE_ROLES,
   formatAdminDateTime,
   getApiErrorCode,
   NO_PERMISSIONS_MESSAGE,
   personLabel,
   roleSaveConfirmations,
   sameIdSet,
+  visiblePermissions,
 } from '../utils/accessControl'
 import AdminOverlay from './AdminOverlay'
 import ConfirmDialog from './ConfirmDialog'
@@ -29,7 +31,8 @@ const CONFIRMATION_CODES = {
 
 const TITLES = {
   create: ['Create role', 'Name the role and choose what its holders are allowed to do.'],
-  edit: ['Update role', 'Change the role details and/or its permissions.'],
+  // UC46 Update Role and UC47 Assign Permissions share this one form (single Edit action).
+  edit: ['Update role', 'Change the role details and grant or revoke its permissions.'],
   permissions: ['Assign permissions to role', 'Grant or revoke permissions from the predefined list.'],
 }
 
@@ -40,6 +43,25 @@ function RoleForm({ mode, role, permissions, onClose, onSaved }) {
   const initialInfo = toRoleForm(role)
   const initialPermissionIds = role?.permissionIds ?? []
   const [permissionIds, setPermissionIds] = useState(initialPermissionIds)
+  // A custom role is built on STAFF or MANAGER and can only hold permissions of that base role.
+  const [baseRole, setBaseRole] = useState('STAFF')
+  const allowedIds = useMemo(
+    () =>
+      new Set(
+        isCreate
+          ? permissions.filter((permission) => (permission.scopes ?? []).includes(baseRole)).map(({ id }) => id)
+          : (role?.allowedPermissionIds ?? permissions.map(({ id }) => id)),
+      ),
+    [isCreate, permissions, baseRole, role],
+  )
+  const shownPermissions = visiblePermissions(permissions, allowedIds, permissionIds)
+  const changeBaseRole = (next) => {
+    setBaseRole(next)
+    const nextAllowed = new Set(
+      permissions.filter((permission) => (permission.scopes ?? []).includes(next)).map(({ id }) => id),
+    )
+    setPermissionIds((ids) => ids.filter((id) => nextAllowed.has(id)))
+  }
   const [permissionError, setPermissionError] = useState('')
   const [serverError, setServerError] = useState('')
   const [confirmation, setConfirmation] = useState(null)
@@ -55,7 +77,7 @@ function RoleForm({ mode, role, permissions, onClose, onSaved }) {
   const permissionsChanged = !sameIdSet(permissionIds, initialPermissionIds)
 
   const buildPayload = (values) => {
-    if (isCreate) return { name: values.name, description: values.description, permissionIds }
+    if (isCreate) return { name: values.name, baseRole, description: values.description, permissionIds }
     if (mode === 'permissions') return { permissionIds }
 
     const payload = {}
@@ -209,6 +231,34 @@ function RoleForm({ mode, role, permissions, onClose, onSaved }) {
                 />
               </FormField>
 
+              {isCreate ? (
+                <FormField
+                  id="role-base"
+                  label="Base role"
+                  required
+                  hint="The new role works like this role and can only hold its permissions."
+                >
+                  <select
+                    id="role-base"
+                    value={baseRole}
+                    onChange={(event) => changeBaseRole(event.target.value)}
+                    className={`${inputClass} h-12`}
+                  >
+                    {BASE_ROLES.map((name) => (
+                      <option key={name} value={name}>
+                        {name}
+                      </option>
+                    ))}
+                  </select>
+                </FormField>
+              ) : (
+                role?.baseRole && (
+                  <p className="rounded-lg bg-surface-container-lowest/70 px-3 py-2 text-xs text-on-surface-variant">
+                    Base role: <span className="font-semibold text-on-surface">{role.baseRole}</span> (cannot be changed)
+                  </p>
+                )
+              )}
+
               <FormField id="role-description" label="Description" error={errors.description}>
                 <textarea
                   id="role-description"
@@ -231,9 +281,14 @@ function RoleForm({ mode, role, permissions, onClose, onSaved }) {
                 Permissions
               </h3>
             </div>
+            {!locked && (
+              <p className="text-xs text-on-surface-variant">
+                Only permissions of the {isCreate ? baseRole : (role?.baseRole ?? role?.name)} role can be granted.
+              </p>
+            )}
             {permissionError && <p className="text-xs text-red-300">{permissionError}</p>}
             <PermissionPicker
-              permissions={permissions}
+              permissions={shownPermissions}
               value={permissionIds}
               onChange={(ids) => {
                 setPermissionIds(ids)

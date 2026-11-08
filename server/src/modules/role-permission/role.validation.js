@@ -14,6 +14,7 @@ import {
   ROLE_PAGE_LIMIT_MAX,
   ROLE_SORT_FIELDS,
 } from "./role.constants.js";
+import { ROLE_BASE_ROLES } from "./role-permission-scope.js";
 
 const roleNameField = requiredText("Role name", { min: 2, max: ROLE_NAME_MAX_LENGTH })
   .transform((value) => value.replace(/\s+/g, " "))
@@ -42,8 +43,10 @@ export const listRolesQuerySchema = z.strictObject({
 });
 
 // UC45. `confirmNoPermissions` records the CR-05 confirmation for a role with no access rights.
+// `baseRole` is the system role the custom role is built on; it cannot be changed afterwards.
 export const createRoleSchema = z.strictObject({
   name: roleNameField,
+  baseRole: z.enum(ROLE_BASE_ROLES, { error: "Select the base role: STAFF or MANAGER." }),
   description: descriptionField.optional(),
   permissionIds: permissionIdsField.default([]),
   confirmNoPermissions: confirmField,

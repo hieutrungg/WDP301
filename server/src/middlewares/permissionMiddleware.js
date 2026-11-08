@@ -1,6 +1,7 @@
 import { getCurrentAccount } from "../modules/auth/auth.service.js";
 import { AppError } from "../utils/AppError.js";
 import { routeNotFoundError } from "./notFoundMiddleware.js";
+import { actorRoleNames } from "../modules/role-permission/role-permission-scope.js";
 
 const isNonEmptyString = (value) => typeof value === "string" && value.trim().length > 0;
 
@@ -43,7 +44,8 @@ export const requireRole =
       }
 
       const account = req.auth.account ?? (await getCurrentAccount(req.auth.accountId));
-      const roles = new Set(account.roles.map(({ name }) => name));
+      // A custom role counts as its base role (role-permission-scope.js).
+      const roles = actorRoleNames(account.roles);
 
       if (
         roleNames.length === 0 ||

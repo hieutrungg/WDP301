@@ -572,18 +572,16 @@ test(
         "HTTP Manager/Customer/Guest/wrong role/locked/revoked permissions",
         async () => {
           const permissionId = oid(),
+            promotionManageId = oid(),
             managerRole = oid(),
             customerRole = oid(),
             staffRole = oid();
-          await db
-            .collection("permissions")
-            .insertOne({
-              _id: permissionId,
-              name: "booking.create",
-              description: "Book",
-            });
+          await db.collection("permissions").insertMany([
+            { _id: permissionId, name: "booking.create", description: "Book" },
+            { _id: promotionManageId, name: "promotion.manage", description: "Manage promotions" },
+          ]);
           await db.collection("roles").insertMany([
-            { _id: managerRole, name: "MANAGER", permissionIds: [] },
+            { _id: managerRole, name: "MANAGER", permissionIds: [promotionManageId] },
             {
               _id: customerRole,
               name: "CUSTOMER",
@@ -636,6 +634,15 @@ test(
           assert.equal((await request("/promotions")).status, 401);
           assert.equal((await request("/promotions", c)).status, 404);
           assert.equal((await request("/promotions", s)).status, 404);
+          assert.equal((await request("/promotions", m)).status, 200);
+          // Withdrawing promotion.manage from MANAGER blocks the next request; restoring it works.
+          await db
+            .collection("roles")
+            .updateOne({ _id: managerRole }, { $set: { permissionIds: [] } });
+          assert.equal((await request("/promotions", m)).status, 404);
+          await db
+            .collection("roles")
+            .updateOne({ _id: managerRole }, { $set: { permissionIds: [promotionManageId] } });
           assert.equal((await request("/promotions", m)).status, 200);
           const { v } = await campaign();
           const f = await fixture(c);

@@ -23,6 +23,12 @@ import {
   findRolesByIds,
   updateRoleById,
 } from "./role.repository.js";
+import {
+  actorRoleOf,
+  allowedPermissionNames,
+  outOfScope,
+  permissionScopes,
+} from "./role-permission-scope.js";
 
 const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const sameName = (left, right) => left.localeCompare(right, "en", { sensitivity: "base" }) === 0;
@@ -40,18 +46,60 @@ export const serializePermission = (permission) => ({
   group: permissionGroup(permission.name),
 });
 
-const serializeRole = (role, { activeAccountCount = 0 } = {}) => ({
+// The ceiling of a role: its own system role, or the base role of a custom role. A legacy custom
+// role without a base role gets an empty ceiling, so it must be recreated with a base role.
+const roleCeiling = (role) => {
+  if (!isSystemRoleName(role.name) && !role.baseRole) return new Set();
+  return allowedPermissionNames([actorRoleOf(role)]);
+};
+
+const allowedIdsFor = (role, allPermissions) => {
+  const allowed = roleCeiling(role);
+  return allPermissions
+    .filter(({ name }) => !allowed || allowed.has(name))
+    .map(({ _id }) => _id.toString());
+};
+
+const serializeRole = (role, { activeAccountCount = 0, allPermissions = [] } = {}) => ({
   id: role._id.toString(),
   name: role.name,
   description: role.description || null,
   isSystem: isSystemRoleName(role.name),
   isLocked: isLockedRoleName(role.name),
+  baseRole: role.baseRole ?? null,
   permissionIds: (role.permissionIds ?? []).map(String),
   permissionCount: (role.permissionIds ?? []).length,
+  // Permissions an Admin may grant to this role (its ceiling); the UI offers only these.
+  allowedPermissionIds: allowedIdsFor(role, allPermissions),
   activeAccountCount,
   createdAt: role.createdAt ?? null,
   updatedAt: role.updatedAt ?? null,
 });
+
+const outOfScopeError = (names, field) => {
+  const message = `These permissions are outside the role's scope and cannot be granted: ${names.join(", ")}.`;
+  return new AppError(400, message, [{ field, message }], ROLE_ERROR.PERMISSION_OUT_OF_SCOPE);
+};
+
+const assertWithinCeiling = (role, permissions) => {
+  const rejected = outOfScope(permissions.map(({ name }) => name), roleCeiling(role));
+  if (rejected.length > 0) throw outOfScopeError(rejected, "permissionIds");
+};
+
+/**
+ * Staff management: direct grants must stay within the ceilings of the roles the account holds.
+ * @param {Array<{name: string, baseRole?: string}>} roles
+ * @param {Array<{name: string}>} permissions
+ * @param {string} field
+ */
+export const assertWithinRolesCeiling = (roles, permissions, field = "directPermissionIds") => {
+  const actors = roles.map((role) => (isSystemRoleName(role.name) || role.baseRole ? actorRoleOf(role) : null));
+  const rejected = outOfScope(
+    permissions.map(({ name }) => name),
+    allowedPermissionNames(actors.filter(Boolean)),
+  );
+  if (rejected.length > 0) throw outOfScopeError(rejected, field);
+};
 
 const notFound = () => new AppError(404, "Role not found.", [], ROLE_ERROR.ROLE_NOT_FOUND);
 
@@ -100,7 +148,12 @@ const assertConfirmed = ({ permissionIds, activeAccountCount, confirmNoPermissio
 const activeCountFor = async (roleId) =>
   (await countActiveAccountsByRoleIds([roleId])).get(String(roleId)) ?? 0;
 
-export const listPermissions = async () => (await findAllPermissions()).map(serializePermission);
+// `scopes`: the system roles whose ceiling contains the permission (used by the create-role form).
+export const listPermissions = async () =>
+  (await findAllPermissions()).map((permission) => ({
+    ...serializePermission(permission),
+    scopes: permissionScopes(permission.name),
+  }));
 
 export const listRoles = async ({ q, kind, page, limit, sort, order }) => {
   const filter = {};
@@ -112,15 +165,16 @@ export const listRoles = async ({ q, kind, page, limit, sort, order }) => {
   if (kind === "custom") filter.name = { $nin: SYSTEM_ROLE_NAMES };
 
   const direction = order === "desc" ? -1 : 1;
-  const [roles, total] = await Promise.all([
+  const [roles, total, allPermissions] = await Promise.all([
     findRoles({ filter, sort: { [sort]: direction, _id: direction }, skip: (page - 1) * limit, limit }),
     countRoles(filter),
+    findAllPermissions(),
   ]);
   const counts = await countActiveAccountsByRoleIds(roles.map(({ _id }) => _id));
 
   return {
     items: roles.map((role) =>
-      serializeRole(role, { activeAccountCount: counts.get(role._id.toString()) ?? 0 }),
+      serializeRole(role, { activeAccountCount: counts.get(role._id.toString()) ?? 0, allPermissions }),
     ),
     meta: { page, limit, total, totalPages: Math.ceil(total / limit) },
   };
@@ -130,14 +184,15 @@ export const getRole = async (roleId) => {
   const role = await findRoleById(roleId);
   if (!role) throw notFound();
 
-  const [permissions, activeAccountCount, people] = await Promise.all([
+  const [permissions, activeAccountCount, people, allPermissions] = await Promise.all([
     findPermissionsByIds(role.permissionIds ?? []),
     activeCountFor(role._id),
     getAccountSummariesByIds([role.createdBy, role.updatedBy].filter(Boolean)),
+    findAllPermissions(),
   ]);
 
   return {
-    ...serializeRole(role, { activeAccountCount }),
+    ...serializeRole(role, { activeAccountCount, allPermissions }),
     // Dangling ids (a permission removed from the catalog) are not reported as granted.
     permissionIds: permissions.map(({ _id }) => _id.toString()),
     permissionCount: permissions.length,
@@ -153,15 +208,20 @@ export const getAllRoles = () => findAllRoles();
 export const getPermissionsByIds = (permissionIds) => findPermissionsByIds(permissionIds);
 
 // UC45 Create Role.
-export const createRole = async (actorAccountId, { name, description, permissionIds, confirmNoPermissions }) => {
+export const createRole = async (
+  actorAccountId,
+  { name, baseRole, description, permissionIds, confirmNoPermissions },
+) => {
   await assertNameAvailable(name);
   const permissions = await requireExistingPermissions(permissionIds);
+  assertWithinCeiling({ name, baseRole }, permissions);
   assertConfirmed({ permissionIds, activeAccountCount: 0, confirmNoPermissions });
 
   let role;
   try {
     role = await insertRole({
       name,
+      baseRole,
       description: description ?? undefined,
       permissionIds,
       createdBy: actorAccountId,
@@ -178,7 +238,12 @@ export const createRole = async (actorAccountId, { name, description, permission
     targetType: AUDIT_TARGET.ROLE,
     targetId: role._id,
     summary: `Created role ${name}`,
-    changes: { name, description: description ?? null, permissions: permissions.map((p) => p.name).sort() },
+    changes: {
+      name,
+      baseRole,
+      description: description ?? null,
+      permissions: permissions.map((p) => p.name).sort(),
+    },
   });
 
   return getRole(role._id);
@@ -225,8 +290,13 @@ const changeRole = async (actorAccountId, roleId, input, action) => {
   const currentIds = (role.permissionIds ?? []).map(String);
   let nextIds;
   if (input.permissionIds !== undefined) {
-    await requireExistingPermissions(input.permissionIds);
+    const requested = await requireExistingPermissions(input.permissionIds);
     const { added, removed } = diffIds(currentIds, input.permissionIds);
+    // Only newly added grants are checked, so removing permissions always works even if a role
+    // still carries a legacy grant outside its ceiling.
+    if (added.length) {
+      assertWithinCeiling(role, requested.filter(({ _id }) => added.includes(_id.toString())));
+    }
     if (added.length || removed.length) {
       nextIds = input.permissionIds;
       changes.permissionIds = nextIds;

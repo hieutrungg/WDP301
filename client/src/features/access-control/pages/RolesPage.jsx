@@ -34,7 +34,7 @@ function readFilters(searchParams) {
   }
 }
 
-function RoleRow({ role, onEdit, onPermissions }) {
+function RoleRow({ role, onEdit }) {
   return (
     <li className="grid gap-3 border-t border-white/5 px-5 py-4 first:border-t-0 lg:grid-cols-[minmax(0,1.6fr)_7rem_8rem_10rem_auto] lg:items-center">
       <div className="min-w-0">
@@ -42,6 +42,11 @@ function RoleRow({ role, onEdit, onPermissions }) {
           <RoleChip name={role.name} isSystem={role.isSystem} />
           {role.isSystem && (
             <span className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">System role</span>
+          )}
+          {role.baseRole && (
+            <span className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
+              Based on {role.baseRole}
+            </span>
           )}
           {role.isLocked && <Lock className="size-3.5 text-on-surface-variant" aria-label="Locked" />}
         </div>
@@ -61,12 +66,6 @@ function RoleRow({ role, onEdit, onPermissions }) {
           {role.isLocked ? <Lock className="size-4" /> : <Pencil className="size-4" />}
           {role.isLocked ? 'View' : 'Edit'}
         </button>
-        {!role.isLocked && (
-          <button type="button" onClick={() => onPermissions(role)} className={`${secondaryButton} px-3 py-2`}>
-            <KeyRound className="size-4" />
-            Permissions
-          </button>
-        )}
       </div>
     </li>
   )
@@ -147,7 +146,6 @@ function RolesPage() {
               key={role.id}
               role={role}
               onEdit={(target) => setDrawer({ mode: 'edit', roleId: target.id })}
-              onPermissions={(target) => setDrawer({ mode: 'permissions', roleId: target.id })}
             />
           ))}
         </ul>
