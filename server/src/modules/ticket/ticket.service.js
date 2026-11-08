@@ -214,7 +214,8 @@ export const createTicketService = ({
       throw ticketError(404, "Ticket not found", TICKET_ERROR.TICKET_NOT_FOUND);
     }
     if (idString(ticket.customerAccountId) !== idString(ownerId)) {
-      throw ticketError(403, "You do not have access to this ticket", TICKET_ERROR.TICKET_FORBIDDEN);
+      // Same 404 as an unknown id, so ticket ids of other customers cannot be probed.
+      throw ticketError(404, "Ticket not found", TICKET_ERROR.TICKET_NOT_FOUND);
     }
     return toTicketDto(ticket);
   };

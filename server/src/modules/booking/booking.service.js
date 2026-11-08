@@ -325,11 +325,8 @@ export const createBookingService = ({
       ownerId &&
       objectIdString(booking.customerAccountId) !== objectIdString(ownerId)
     ) {
-      throw error(
-        403,
-        "You do not have access to this booking",
-        BOOKING_ERROR.BOOKING_FORBIDDEN,
-      );
+      // Same 404 as an unknown id, so booking ids of other customers cannot be probed.
+      throw error(404, "Booking not found", BOOKING_ERROR.BOOKING_NOT_FOUND);
     }
 
     return booking;

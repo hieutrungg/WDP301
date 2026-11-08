@@ -634,8 +634,8 @@ test(
             return { status: response.status, body: await response.json() };
           };
           assert.equal((await request("/promotions")).status, 401);
-          assert.equal((await request("/promotions", c)).status, 403);
-          assert.equal((await request("/promotions", s)).status, 403);
+          assert.equal((await request("/promotions", c)).status, 404);
+          assert.equal((await request("/promotions", s)).status, 404);
           assert.equal((await request("/promotions", m)).status, 200);
           const { v } = await campaign();
           const f = await fixture(c);
@@ -647,7 +647,7 @@ test(
           assert.equal(
             (await request(`/bookings/${f.bookingId}/voucher`, s, "PUT", input))
               .status,
-            403,
+            404,
           );
           assert.equal(
             (
@@ -669,7 +669,7 @@ test(
           assert.equal(
             (await request(`/bookings/${f.bookingId}/voucher`, c, "PUT", input))
               .status,
-            403,
+            404,
           );
           await db
             .collection("accounts")

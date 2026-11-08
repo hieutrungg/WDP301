@@ -171,11 +171,11 @@ test("every inventory route is default-deny", async () => {
     assert.equal(anonymous.response.status, 401, `${method} ${path} anonymous`);
 
     const customer = await request(path, { method, cookie: cookies.customer });
-    assert.equal(customer.response.status, 403, `${method} ${path} customer`);
+    assert.equal(customer.response.status, 404, `${method} ${path} customer`);
 
     // Admin holds the permissions but is not an actor of these screens.
     const admin = await request(path, { method, cookie: cookies.admin });
-    assert.equal(admin.response.status, 403, `${method} ${path} admin`);
+    assert.equal(admin.response.status, 404, `${method} ${path} admin`);
   }
 });
 
@@ -184,7 +184,7 @@ test("Manager can read stock but cannot receive goods", async () => {
   assert.equal(read.response.status, 200);
 
   const write = await stockIn({ items: [{ concessionId: items.caramel.id, quantity: 5 }] }, cookies.manager);
-  assert.equal(write.response.status, 403);
+  assert.equal(write.response.status, 404);
   assert.equal(await quantityOf(branchA, items.caramel._id), 20);
 });
 

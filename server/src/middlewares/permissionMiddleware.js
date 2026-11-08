@@ -1,5 +1,6 @@
 import { getCurrentAccount } from "../modules/auth/auth.service.js";
 import { AppError } from "../utils/AppError.js";
+import { routeNotFoundError } from "./notFoundMiddleware.js";
 
 const isNonEmptyString = (value) => typeof value === "string" && value.trim().length > 0;
 
@@ -20,7 +21,8 @@ export const requirePermission =
         permissionNames.length === 0 ||
         !permissionNames.every((name) => isNonEmptyString(name) && granted.has(name))
       ) {
-        throw new AppError(403, "You do not have permission to perform this action", [], "FORBIDDEN");
+        // 404, not 403: a denied caller must not learn that this protected route exists.
+        throw routeNotFoundError();
       }
 
       req.auth.account = account;
@@ -48,7 +50,8 @@ export const requireRole =
         !roleNames.every(isNonEmptyString) ||
         !roleNames.some((name) => roles.has(name))
       ) {
-        throw new AppError(403, "You do not have permission to perform this action", [], "FORBIDDEN");
+        // 404, not 403: a denied caller must not learn that this protected route exists.
+        throw routeNotFoundError();
       }
 
       req.auth.account = account;

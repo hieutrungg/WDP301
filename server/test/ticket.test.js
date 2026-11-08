@@ -303,13 +303,13 @@ test("HTTP ticket routes enforce authentication and BR-36 ownership", async (t) 
   assert.equal((await get(`/${firstTicket.ticketId}`)).status, 401);
 
   const foreignList = await get(`/bookings/${booking.bookingId}`, harness.otherOwnerId);
-  assert.equal(foreignList.status, 403);
-  assert.equal(foreignList.body.code, BOOKING_ERROR.BOOKING_FORBIDDEN);
+  assert.equal(foreignList.status, 404);
+  assert.equal(foreignList.body.code, BOOKING_ERROR.BOOKING_NOT_FOUND);
   assert.equal(foreignList.body.tickets, undefined);
 
   const foreignTicket = await get(`/${firstTicket.ticketId}`, harness.otherOwnerId);
-  assert.equal(foreignTicket.status, 403);
-  assert.equal(foreignTicket.body.code, TICKET_ERROR.TICKET_FORBIDDEN);
+  assert.equal(foreignTicket.status, 404);
+  assert.equal(foreignTicket.body.code, TICKET_ERROR.TICKET_NOT_FOUND);
   assert.equal(foreignTicket.body.data, undefined);
 
   const missingBooking = await get(`/bookings/${new mongoose.Types.ObjectId()}`, harness.ownerId);

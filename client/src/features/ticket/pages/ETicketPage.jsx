@@ -92,11 +92,11 @@ function ETicketPage() {
     <main className="min-h-screen bg-[#0d0e12] px-4 pb-16 pt-6 text-on-surface sm:px-6">
       <div className="mx-auto flex max-w-md items-center justify-between gap-3">
         <Link
-          to={`/bookings/${ticket.bookingId}/confirmation`}
+          to="/my-tickets"
           className="inline-flex items-center gap-1.5 text-xs font-semibold text-on-surface-variant transition hover:text-white"
         >
           <ArrowLeft className="size-4" />
-          Booking details
+          My Tickets
         </Link>
         {siblings.total > 1 && (
           <span className="font-mono text-xs text-on-surface-variant">

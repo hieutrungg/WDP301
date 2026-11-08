@@ -163,7 +163,7 @@ before(async () => {
   app.get("/api/test/permission-without-auth", requirePermission("movie.view"), okHandler);
   app.get("/api/test/role-without-auth", requireRole("STAFF"), okHandler);
 
-  // Edge-case misconfigured middleware routes (must fail closed with 403 FORBIDDEN).
+  // Edge-case misconfigured middleware routes (must fail closed with 404 FORBIDDEN).
   app.get("/api/test/empty-permission", requireAuth, requirePermission(), okHandler);
   app.get("/api/test/blank-permission", requireAuth, requirePermission("   "), okHandler);
   app.get(
@@ -215,7 +215,7 @@ after(async () => {
   }
 });
 
-test("A. Authentication boundary and error contract (HTTP 401 / 403 / 500)", async (t) => {
+test("A. Authentication boundary and error contract (HTTP 401 / 404 / 500)", async (t) => {
   await t.test("rejects unauthenticated requests with 401 before querying the database", async () => {
     const noCookie = await request("/api/test/movie-create");
     assert.equal(noCookie.status, 401);
@@ -283,17 +283,17 @@ test("A. Authentication boundary and error contract (HTTP 401 / 403 / 500)", asy
     assert.equal(lookupCount, 1);
   });
 
-  await t.test("returns 403 FORBIDDEN when authenticated account lacks the required permission", async () => {
+  await t.test("returns 404 FORBIDDEN when authenticated account lacks the required permission", async () => {
     const customer = registerAccount({
       roleIds: [makeRole("CUSTOMER", [PERMISSIONS.MOVIE_VIEW])],
     });
 
     const result = await request("/api/test/movie-create", { token: tokenFor(customer) });
-    assert.equal(result.status, 403);
+    assert.equal(result.status, 404);
     assert.deepEqual(result.body, {
       success: false,
-      code: "FORBIDDEN",
-      message: "You do not have permission to perform this action",
+      code: "NOT_FOUND",
+      message: "Route not found",
       errors: [],
     });
   });
@@ -355,16 +355,16 @@ test("B. Role-based permission grants — BR-06 & UC37", async (t) => {
     });
 
     const result = await request("/api/test/movie-create", { token: tokenFor(staffUser) });
-    assert.equal(result.status, 403);
-    assert.equal(result.body.code, "FORBIDDEN");
+    assert.equal(result.status, 404);
+    assert.equal(result.body.code, "NOT_FOUND");
   });
 
   await t.test("denies an account with no roles and no direct grants", async () => {
     const emptyUser = registerAccount({ roleIds: [], directPermissionIds: [] });
 
     const result = await request("/api/test/movie-create", { token: tokenFor(emptyUser) });
-    assert.equal(result.status, 403);
-    assert.equal(result.body.code, "FORBIDDEN");
+    assert.equal(result.status, 404);
+    assert.equal(result.body.code, "NOT_FOUND");
   });
 
   await t.test("ignores client-supplied or JWT-embedded fake role/permission claims", async () => {
@@ -391,8 +391,8 @@ test("B. Role-based permission grants — BR-06 & UC37", async (t) => {
       },
     });
 
-    assert.equal(result.status, 403);
-    assert.equal(result.body.code, "FORBIDDEN");
+    assert.equal(result.status, 404);
+    assert.equal(result.body.code, "NOT_FOUND");
   });
 });
 
@@ -455,8 +455,8 @@ test("C. Direct permission grants (Role Grants ∪ Direct Grants) — BR-06 & UC
     user.directPermissionIds = [];
 
     const reportAfterRevoke = await request("/api/test/report-export", { token });
-    assert.equal(reportAfterRevoke.status, 403);
-    assert.equal(reportAfterRevoke.body.code, "FORBIDDEN");
+    assert.equal(reportAfterRevoke.status, 404);
+    assert.equal(reportAfterRevoke.body.code, "NOT_FOUND");
 
     const movieAfterRevoke = await request("/api/test/movie-create", { token });
     assert.equal(movieAfterRevoke.status, 200);
@@ -513,8 +513,8 @@ test("E. Immediate permission revocation and grant updates — UC46, UC47 & BR-3
 
     managerRole.permissionIds = [];
     const afterRevoke = await request("/api/test/movie-create", { token });
-    assert.equal(afterRevoke.status, 403);
-    assert.equal(afterRevoke.body.code, "FORBIDDEN");
+    assert.equal(afterRevoke.status, 404);
+    assert.equal(afterRevoke.body.code, "NOT_FOUND");
   });
 
   await t.test("removing a role from an account revokes only that role's permissions on the next request", async () => {
@@ -529,7 +529,7 @@ test("E. Immediate permission revocation and grant updates — UC46, UC47 & BR-3
     // Unassign MANAGER role; STAFF role remains.
     account.roleIds = [staffRole];
 
-    assert.equal((await request("/api/test/movie-create", { token })).status, 403);
+    assert.equal((await request("/api/test/movie-create", { token })).status, 404);
     assert.equal((await request("/api/test/report-export", { token })).status, 200);
   });
 
@@ -542,14 +542,14 @@ test("E. Immediate permission revocation and grant updates — UC46, UC47 & BR-3
 
     assert.equal((await request("/api/test/movie-create", { token: tokenOne })).status, 200);
     assert.equal((await request("/api/test/movie-create", { token: tokenTwo })).status, 200);
-    assert.equal((await request("/api/test/report-export", { token: tokenOne })).status, 403);
-    assert.equal((await request("/api/test/report-export", { token: tokenTwo })).status, 403);
+    assert.equal((await request("/api/test/report-export", { token: tokenOne })).status, 404);
+    assert.equal((await request("/api/test/report-export", { token: tokenTwo })).status, 404);
 
     // Replace role permissions: revoke movie.create and grant report.export.
     sharedRole.permissionIds = [PERMISSIONS.REPORT_EXPORT];
 
-    assert.equal((await request("/api/test/movie-create", { token: tokenOne })).status, 403);
-    assert.equal((await request("/api/test/movie-create", { token: tokenTwo })).status, 403);
+    assert.equal((await request("/api/test/movie-create", { token: tokenOne })).status, 404);
+    assert.equal((await request("/api/test/movie-create", { token: tokenTwo })).status, 404);
     assert.equal((await request("/api/test/report-export", { token: tokenOne })).status, 200);
     assert.equal((await request("/api/test/report-export", { token: tokenTwo })).status, 200);
   });
@@ -558,7 +558,7 @@ test("E. Immediate permission revocation and grant updates — UC46, UC47 & BR-3
     const account = registerAccount({ roleIds: [], directPermissionIds: [] });
     const token = tokenFor(account);
 
-    assert.equal((await request("/api/test/movie-create", { token })).status, 403);
+    assert.equal((await request("/api/test/movie-create", { token })).status, 404);
 
     account.directPermissionIds = [PERMISSIONS.MOVIE_CREATE];
     assert.equal((await request("/api/test/movie-create", { token })).status, 200);
@@ -570,7 +570,7 @@ test("E. Immediate permission revocation and grant updates — UC46, UC47 & BR-3
 });
 
 test("F. Middleware edge cases and default-deny semantics", async (t) => {
-  await t.test("fails closed (403 FORBIDDEN) when requirePermission or requireRole is misconfigured", async () => {
+  await t.test("fails closed (404 FORBIDDEN) when requirePermission or requireRole is misconfigured", async () => {
     const admin = registerAccount({
       roleIds: [
         makeRole("ADMIN", Object.values(PERMISSIONS)),
@@ -591,8 +591,8 @@ test("F. Middleware edge cases and default-deny semantics", async (t) => {
       "/api/test/non-string-role",
     ]) {
       const result = await request(path, { token });
-      assert.equal(result.status, 403, `expected 403 fail-closed on ${path}`);
-      assert.equal(result.body.code, "FORBIDDEN", `expected FORBIDDEN code on ${path}`);
+      assert.equal(result.status, 404, `expected 404 fail-closed on ${path}`);
+      assert.equal(result.body.code, "NOT_FOUND", `expected NOT_FOUND code on ${path}`);
     }
   });
 
@@ -604,8 +604,8 @@ test("F. Middleware edge cases and default-deny semantics", async (t) => {
     const partialResult = await request("/api/test/multi-permission", {
       token: tokenFor(partialUser),
     });
-    assert.equal(partialResult.status, 403);
-    assert.equal(partialResult.body.code, "FORBIDDEN");
+    assert.equal(partialResult.status, 404);
+    assert.equal(partialResult.body.code, "NOT_FOUND");
 
     const staffInventory = registerAccount({
       username: "staff_inv",
@@ -625,12 +625,12 @@ test("F. Middleware edge cases and default-deny semantics", async (t) => {
     assert.equal(staffResult.status, 200);
     assert.equal(lookupCount, 1);
 
-    // ADMIN holds inventory.view but neither STAFF nor MANAGER role -> 403.
+    // ADMIN holds inventory.view but neither STAFF nor MANAGER role -> 404.
     const adminResult = await request("/api/test/permission-and-role", {
       token: tokenFor(adminInventory),
     });
-    assert.equal(adminResult.status, 403);
-    assert.equal(adminResult.body.code, "FORBIDDEN");
+    assert.equal(adminResult.status, 404);
+    assert.equal(adminResult.body.code, "NOT_FOUND");
 
     // requireRole used directly after requireAuth loads the account itself.
     lookupCount = 0;

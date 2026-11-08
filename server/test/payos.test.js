@@ -427,8 +427,8 @@ test("HTTP: verify is owner-only behind auth, the webhook is public but signatur
 
   assert.equal((await post(verifyPath)).status, 401);
   const foreign = await post(verifyPath, { accountId: harness.otherOwnerId });
-  assert.equal(foreign.status, 403);
-  assert.equal(foreign.body.code, PAYMENT_ERROR_CODE.PAYMENT_FORBIDDEN);
+  assert.equal(foreign.status, 404);
+  assert.equal(foreign.body.code, PAYMENT_ERROR_CODE.PAYMENT_NOT_FOUND);
   const owned = await post(verifyPath, { accountId: harness.ownerId });
   assert.equal(owned.status, 200);
   assert.equal(owned.body.data.providerStatus, "PENDING");

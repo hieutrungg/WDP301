@@ -23,7 +23,7 @@ export const createRefundService = ({ repository, provider, clock = () => new Da
     const now = clock();
     const data = await repository.loadEligibility(bookingId);
     if (!data) throw fail(404, "Booking not found", REFUND_ERROR.BOOKING_NOT_FOUND);
-    if (id(data.booking.customerAccountId) !== id(customerAccountId)) throw fail(403, "This booking does not belong to you", REFUND_ERROR.BOOKING_FORBIDDEN);
+    if (id(data.booking.customerAccountId) !== id(customerAccountId)) throw fail(404, "Booking not found", REFUND_ERROR.BOOKING_NOT_FOUND);
     if (data.booking.status !== BOOKING_STATUS.CONFIRMED || data.payment?.status !== PAYMENT_STATUS.PAID) throw fail(409, "Only a confirmed paid booking can be refunded");
     if (!data.showtime) throw fail(409, "Showtime is unavailable for refund evaluation");
     if (data.checkedIn) throw fail(409, "Checked-in tickets cannot be refunded through the normal flow");

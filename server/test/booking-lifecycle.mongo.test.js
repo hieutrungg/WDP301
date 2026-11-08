@@ -362,7 +362,7 @@ test(
               bookingId: f.bookingId,
               ownerId: oid(),
             }),
-            { code: "BOOKING_FORBIDDEN" },
+            { code: "BOOKING_NOT_FOUND" },
           );
         },
       );

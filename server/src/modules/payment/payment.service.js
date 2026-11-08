@@ -236,10 +236,11 @@ export const createPaymentService = ({
       ownerId &&
       String(payment.customerAccountId) !== String(ownerId)
     ) {
+      // Same 404 as an unknown id, so payment ids of other customers cannot be probed.
       throw paymentError(
-        403,
-        "Payment belongs to another customer",
-        PAYMENT_ERROR_CODE.PAYMENT_FORBIDDEN,
+        404,
+        "Payment not found",
+        PAYMENT_ERROR_CODE.PAYMENT_NOT_FOUND,
       );
     }
   };

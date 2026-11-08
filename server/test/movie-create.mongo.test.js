@@ -42,10 +42,10 @@ test("MOV-101 Mongo/HTTP authorization, persistence and duplicate concurrency", 
       "Content-Type": "application/json", ...(account ? { Cookie: cookie(account) } : {}),
     }, body: JSON.stringify(body) });
 
-    await t.test("401 anonymous, 403 missing permission and wrong actor", async () => {
+    await t.test("401 anonymous, 404 missing permission and wrong actor", async () => {
       assert.equal((await post(input)).status, 401);
-      assert.equal((await post(input, noPermission)).status, 403);
-      assert.equal((await post(input, otherRole)).status, 403);
+      assert.equal((await post(input, noPermission)).status, 404);
+      assert.equal((await post(input, otherRole)).status, 404);
     });
     await t.test("server returns field errors before persistence", async () => {
       const response = await post({ ...input, duration: -1 }, allowed);
@@ -91,7 +91,7 @@ test("MOV-101 Mongo/HTTP authorization, persistence and duplicate concurrency", 
       assert.equal((await fetch(`${root}/${data.id}`)).status, 404);
       noPermission.directPermissionIds = [];
       await noPermission.save();
-      assert.equal((await post({ ...input, title: "Revoked film" }, noPermission)).status, 403);
+      assert.equal((await post({ ...input, title: "Revoked film" }, noPermission)).status, 404);
     });
     await t.test("locked account cannot create", async () => {
       noPermission.status = "LOCKED";

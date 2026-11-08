@@ -50,8 +50,8 @@ test("REV-102 Mongo/HTTP eligibility, migration safety and concurrent submission
     await t.test("backend guards enforce Guest/Staff/locked-account boundaries", async () => {
       assert.equal((await get(movieId, null)).status, 401);
       assert.equal((await post({ rating: 3 }, null)).status, 401);
-      assert.equal((await get(movieId, staffId)).status, 403);
-      assert.equal((await post({ rating: 3 }, staffId)).status, 403);
+      assert.equal((await get(movieId, staffId)).status, 404);
+      assert.equal((await post({ rating: 3 }, staffId)).status, 404);
       await db.collection("accounts").updateOne({ _id: customerId }, { $set: { status: "LOCKED" } });
       assert.equal((await post()).status, 403);
       await db.collection("accounts").updateOne({ _id: customerId }, { $set: { status: "ACTIVE" } });
@@ -145,7 +145,7 @@ test("REV-102 Mongo/HTTP eligibility, migration safety and concurrent submission
     await t.test("own review read/edit guards, immutable identity/date and public readback", async () => {
       const before = await db.collection("movie_reviews").findOne({ movieId, customerAccountId: customerId });
       for (const actor of [null, staffId]) {
-        const status = actor ? 403 : 401;
+        const status = actor ? 404 : 401;
         assert.equal((await own("GET", undefined, actor)).status, status);
         assert.equal((await own("PATCH", { rating: 4 }, actor)).status, status);
       }
