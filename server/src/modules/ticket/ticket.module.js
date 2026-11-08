@@ -1,6 +1,7 @@
 import { recordAuditEvent } from "../audit/audit.service.js";
 import { bookingService } from "../booking/booking.module.js";
 import { createTicketController } from "./ticket.controller.js";
+import { createTicketEmailNotifier } from "./ticket-email.notifier.js";
 import { ticketRepository } from "./ticket.repository.js";
 import { createTicketRouter } from "./ticket.routes.js";
 import { createTicketService } from "./ticket.service.js";
@@ -16,6 +17,7 @@ export const ticketService = createTicketService({
   ticketRepository,
   bookingReader,
   auditLog: recordAuditEvent,
+  notifyTicketsIssued: createTicketEmailNotifier(),
 });
 
 export const ticketRoutes = createTicketRouter(createTicketController(ticketService));

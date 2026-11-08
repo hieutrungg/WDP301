@@ -130,11 +130,9 @@ export const createSeatHoldService = ({
   const releaseSeatHold = async ({ holdId, ownerId }) => {
     const now = clock();
     const result = await repository.release({ holdId, ownerId, now });
-    if (result.outcome === "NOT_FOUND") {
+    // Another customer's hold answers like an unknown one, so hold ids cannot be probed.
+    if (result.outcome === "NOT_FOUND" || result.outcome === "FORBIDDEN") {
       throw error(404, "Seat hold not found", SEAT_HOLD_ERROR.HOLD_NOT_FOUND);
-    }
-    if (result.outcome === "FORBIDDEN") {
-      throw error(403, "You cannot release this seat hold", SEAT_HOLD_ERROR.HOLD_FORBIDDEN);
     }
     return {
       holdId: result.hold._id.toString(),

@@ -355,7 +355,7 @@ test(
               bookingId: b.bookingId,
               ownerId: oid(),
             }),
-            { statusCode: 403 },
+            { statusCode: 404 },
           );
           await f.booking.cancelPendingCheckout({
             bookingId: b.bookingId,
@@ -578,11 +578,11 @@ test(
             assert.equal((await request("/quote/quote", input)).status, 401);
             assert.equal(
               (await request("/quote/quote", input, noGrant)).status,
-              403,
+              404,
             );
             assert.equal(
               (await request("/quote/quote", input, staffAccount)).status,
-              403,
+              404,
             );
             assert.equal(
               (
@@ -612,7 +612,7 @@ test(
             void ownerId;
             assert.equal(
               (await request("/bookings", command, staffAccount)).status,
-              403,
+              404,
             );
             const created = await request("/bookings", command, f.owner);
             assert.equal(created.status, 201);

@@ -187,10 +187,10 @@ test("room seat layout authorization", async (t) => {
     assert.equal(response.status, 401);
   });
 
-  await t.test("rejects accounts without room.view with 403", async () => {
+  await t.test("rejects accounts without room.view with 404", async () => {
     const { response, body } = await request(layoutPath(legacyRoom._id), { cookie: customerCookie });
-    assert.equal(response.status, 403);
-    assert.equal(body.code, "FORBIDDEN");
+    assert.equal(response.status, 404);
+    assert.equal(body.code, "NOT_FOUND");
   });
 
   await t.test("lets room.view read but not write", async () => {
@@ -202,14 +202,14 @@ test("room seat layout authorization", async (t) => {
       cookie: staffCookie,
       body: layoutBody(["A"], ["SS"], { expectedLayoutVersion: 1 }),
     });
-    assert.equal(write.response.status, 403);
+    assert.equal(write.response.status, 404);
 
     const create = await request(layoutPath(emptyRoom._id), {
       method: "POST",
       cookie: staffCookie,
       body: layoutBody(["A"], ["SS"]),
     });
-    assert.equal(create.response.status, 403);
+    assert.equal(create.response.status, 404);
   });
 });
 
@@ -253,15 +253,15 @@ test("only the MANAGER role may write seat layouts", async (t) => {
       cookie: adminCookie,
       body: layoutBody(["A"], ["SS"], { expectedLayoutVersion: 1 }),
     });
-    assert.equal(update.response.status, 403);
-    assert.equal(update.body.code, "FORBIDDEN");
+    assert.equal(update.response.status, 404);
+    assert.equal(update.body.code, "NOT_FOUND");
 
     const create = await request(layoutPath(emptyRoom._id), {
       method: "POST",
       cookie: adminCookie,
       body: layoutBody(["A"], ["SS"]),
     });
-    assert.equal(create.response.status, 403);
+    assert.equal(create.response.status, 404);
     assert.equal(await Room.countDocuments({ _id: emptyRoom._id, "seats.0": { $exists: true } }), 0);
   });
 });

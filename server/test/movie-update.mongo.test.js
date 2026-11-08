@@ -51,7 +51,7 @@ test("MOV-102 Mongo/HTTP management reads, authorization, sparse updates and con
 
     await t.test("all management reads and mutations require current Manager role and update permission", async () => {
       for (const account of [undefined, noPermission, otherRole]) {
-        const expected = account ? 403 : 401;
+        const expected = account ? 404 : 401;
         assert.equal((await get("/manage", account)).status, expected);
         assert.equal((await get(`/${draft._id}/manage`, account)).status, expected);
         assert.equal((await patch(draft._id, { title: "Unauthorized" }, account)).status, expected);
@@ -268,8 +268,8 @@ test("MOV-102 Mongo/HTTP management reads, authorization, sparse updates and con
       assert.equal((await patch(archived._id, { synopsis: "Archived metadata update" }, directGrant)).status, 200);
       directGrant.directPermissionIds = [];
       await directGrant.save();
-      assert.equal((await get(`/${archived._id}/manage`, directGrant)).status, 403);
-      assert.equal((await patch(archived._id, { synopsis: "Must reject" }, directGrant)).status, 403);
+      assert.equal((await get(`/${archived._id}/manage`, directGrant)).status, 404);
+      assert.equal((await patch(archived._id, { synopsis: "Must reject" }, directGrant)).status, 404);
       allowed.status = "LOCKED";
       await allowed.save();
       assert.equal((await get("/manage", allowed)).status, 403);

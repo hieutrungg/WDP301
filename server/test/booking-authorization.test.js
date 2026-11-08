@@ -57,8 +57,8 @@ test("Booking route enforces current account status and role/direct grants", asy
   });
   await t.test("an account without booking.create is forbidden", async () => {
     const result = await request();
-    assert.equal(result.status, 403);
-    assert.equal(result.body.code, "FORBIDDEN");
+    assert.equal(result.status, 404);
+    assert.equal(result.body.code, "NOT_FOUND");
     assert.equal(creates, 0);
   });
   await t.test("a role grant permits creation", async () => {
@@ -68,7 +68,7 @@ test("Booking route enforces current account status and role/direct grants", asy
   });
   await t.test("revocation takes effect with the same JWT on the next request", async () => {
     account.roleIds[0].permissionIds = [];
-    assert.equal((await request()).status, 403);
+    assert.equal((await request()).status, 404);
     assert.equal(creates, 1);
   });
   await t.test("a direct grant permits creation without a role grant", async () => {

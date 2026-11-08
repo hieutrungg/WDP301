@@ -114,28 +114,28 @@ test("branch management authorization", async (t) => {
     assert.equal(response.status, 401);
   });
 
-  await t.test("rejects accounts without branch.manage with 403", async () => {
+  await t.test("rejects accounts without branch.manage with 404", async () => {
     const { response, body } = await request("/branches", { cookie: customerCookie });
-    assert.equal(response.status, 403);
-    assert.equal(body.code, "FORBIDDEN");
+    assert.equal(response.status, 404);
+    assert.equal(body.code, "NOT_FOUND");
   });
 
   await t.test("rejects a MANAGER even though it holds branch.manage", async () => {
     const read = await request("/branches", { cookie: managerCookie });
-    assert.equal(read.response.status, 403);
-    assert.equal(read.body.code, "FORBIDDEN");
+    assert.equal(read.response.status, 404);
+    assert.equal(read.body.code, "NOT_FOUND");
 
     const write = await request("/branches", {
       method: "POST",
       cookie: managerCookie,
       body: { branchName: "Manager Attempt", address: "1 Test Street, HCMC" },
     });
-    assert.equal(write.response.status, 403);
+    assert.equal(write.response.status, 404);
   });
 
   await t.test("a direct grant alone does not replace the ADMIN role", async () => {
     const { response } = await request("/branches", { cookie: directGrantCookie });
-    assert.equal(response.status, 403);
+    assert.equal(response.status, 404);
   });
 
   await t.test("applies an account lock on the very next request", async () => {

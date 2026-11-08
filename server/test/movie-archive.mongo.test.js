@@ -52,19 +52,19 @@ test("MOV-103 isolated Mongo/HTTP archive and scheduling concurrency", { skip: !
     const get = (path, account) => fetch(`${root}${path}`, { headers: account ? { Cookie: cookie(account) } : {} });
     const collection = (name) => mongoose.connection.db.collection(name);
 
-    await t.test("401/403, current direct grants/revocation/account lock, and no expanded read permission", async () => {
+    await t.test("401/404, current direct grants/revocation/account lock, and no expanded read permission", async () => {
       const movie = await makeMovie();
-      for (const [account, expected] of [[null, 401], [wrongActor, 403], [ungranted, 403]]) {
+      for (const [account, expected] of [[null, 401], [wrongActor, 404], [ungranted, 404]]) {
         assert.equal((await archive(movie.id, account)).status, expected);
       }
-      assert.equal((await get("/manage", direct)).status, 403, "archive grant must not grant catalog read");
+      assert.equal((await get("/manage", direct)).status, 404, "archive grant must not grant catalog read");
       assert.equal((await archive(movie.id, direct)).status, 200);
       await Account.updateOne({ _id: direct._id }, { $set: { directPermissionIds: [] } });
-      assert.equal((await archive(movie.id, direct)).status, 403);
+      assert.equal((await archive(movie.id, direct)).status, 404);
       await Account.updateOne({ _id: direct._id }, { $set: { directPermissionIds: [archivePermission._id], status: "LOCKED" } });
       assert.equal((await archive(movie.id, direct)).status, 403);
       await Role.updateOne({ _id: managerRole._id }, { $pull: { permissionIds: archivePermission._id } });
-      assert.equal((await archive(movie.id)).status, 403);
+      assert.equal((await archive(movie.id)).status, 404);
       await Role.updateOne({ _id: managerRole._id }, { $addToSet: { permissionIds: archivePermission._id } });
     });
 

@@ -128,13 +128,13 @@ test("BR-26 / BR-32: only the ADMIN role reaches staff and role management", asy
     }
   });
 
-  await t.test("a MANAGER (holds staff.manage) and a direct-grant account get 403 MSG37", async () => {
+  await t.test("a MANAGER (holds staff.manage) and a direct-grant account get the same 404 as an unknown route", async () => {
     for (const cookie of [managerCookie, directGrantCookie]) {
       for (const path of ["/staff-accounts", "/roles", "/permissions"]) {
         const { response, body } = await request(path, { cookie });
-        assert.equal(response.status, 403, path);
-        assert.equal(body.code, "FORBIDDEN");
-        assert.equal(body.message, "You do not have permission to perform this action");
+        assert.equal(response.status, 404, path);
+        assert.equal(body.code, "NOT_FOUND");
+        assert.equal(body.message, "Route not found");
       }
     }
   });

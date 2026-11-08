@@ -15,6 +15,7 @@ export const createInMemoryHarness = ({
   gateway,
   clientUrl,
   auditLog,
+  notifyTicketsIssued,
 } = {}) => {
   let currentNow = new Date(initialNow);
   const ownerId = objectId();
@@ -252,6 +253,7 @@ export const createInMemoryHarness = ({
     },
     now: () => new Date(currentNow),
     ...(auditLog ? { auditLog } : {}),
+    ...(notifyTicketsIssued ? { notifyTicketsIssued } : {}),
   });
 
   const paymentService = createPaymentService({

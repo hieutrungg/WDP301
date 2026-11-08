@@ -312,7 +312,7 @@ test("9 & 10. Expired booking rejects new payment attempts, and late payment suc
   );
 });
 
-test("11 & 12. Forged payment amount is rejected with 400 and unauthorized booking/payment access is rejected with 403", async () => {
+test("11 & 12. Forged payment amount is rejected with 400 and unauthorized booking/payment access is rejected with 404", async () => {
   const harness = createInMemoryHarness();
   const createdBooking = await harness.bookingService.createPendingBookingFromHold({
     holdId: harness.holdId,
@@ -345,7 +345,7 @@ test("11 & 12. Forged payment amount is rejected with 400 and unauthorized booki
         idempotencyKey: "idem-wrong-owner",
       }),
     (error) => {
-      assert.equal(error.statusCode, 403);
+      assert.equal(error.statusCode, 404);
       return true;
     },
   );
@@ -366,8 +366,8 @@ test("11 & 12. Forged payment amount is rejected with 400 and unauthorized booki
         actorOwnerId: harness.otherOwnerId,
       }),
     (error) => {
-      assert.equal(error.statusCode, 403);
-      assert.equal(error.code, PAYMENT_ERROR_CODE.PAYMENT_FORBIDDEN);
+      assert.equal(error.statusCode, 404);
+      assert.equal(error.code, PAYMENT_ERROR_CODE.PAYMENT_NOT_FOUND);
       return true;
     },
   );

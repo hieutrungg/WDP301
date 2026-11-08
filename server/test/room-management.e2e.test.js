@@ -189,11 +189,11 @@ test("room management authorization", async (t) => {
     assert.equal((await request(`/rooms/${roomId}`, { method: "DELETE" })).response.status, 401);
   });
 
-  await t.test("rejects accounts without room.view with 403", async () => {
+  await t.test("rejects accounts without room.view with 404", async () => {
     const read = await request(`/rooms/${roomId}`, { cookie: customerCookie });
-    assert.equal(read.response.status, 403);
-    assert.equal(read.body.code, "FORBIDDEN");
-    assert.equal((await request("/rooms/summary", { cookie: customerCookie })).response.status, 403);
+    assert.equal(read.response.status, 404);
+    assert.equal(read.body.code, "NOT_FOUND");
+    assert.equal((await request("/rooms/summary", { cookie: customerCookie })).response.status, 404);
   });
 
   await t.test("lets STAFF and ADMIN read but never write", async () => {
@@ -209,8 +209,8 @@ test("room management authorization", async (t) => {
       ];
       for (const [path, method, body] of writes) {
         const result = await request(path, { method, body, cookie });
-        assert.equal(result.response.status, 403, `${method} ${path}`);
-        assert.equal(result.body.code, "FORBIDDEN");
+        assert.equal(result.response.status, 404, `${method} ${path}`);
+        assert.equal(result.body.code, "NOT_FOUND");
       }
     }
 
@@ -700,8 +700,8 @@ test("rooms and seat maps are limited to the actor's branch", async (t) => {
     assert.equal((await request(`/rooms/${eastRoom}/seat-layout`, { cookie: adminCookie })).response.status, 200);
 
     const write = await request(`/rooms/${eastRoom}`, { method: "PATCH", cookie: adminCookie, body: { roomName: "Admin Edit" } });
-    assert.equal(write.response.status, 403);
-    assert.equal(write.body.code, "FORBIDDEN");
+    assert.equal(write.response.status, 404);
+    assert.equal(write.body.code, "NOT_FOUND");
   });
 
   await t.test("refuses a manager who has no branch assigned", async () => {
