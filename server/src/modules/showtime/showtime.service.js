@@ -89,11 +89,11 @@ export const createShowtimePublisher =
     discardSeats = seatAvailability.discardForUnpublishedShowtime,
     deleteDraft = deleteDraftShowtime,
   } = {}) =>
-  async ({ movieId, roomId, startAt: startAtInput }, now = new Date()) => {
+  async ({ movieId, roomId, startAt: startAtInput, branchId }, now = new Date()) => {
     const { draft, room, pricing } = await withMovieForScheduling(
       movieId,
       async (movie, session) => {
-        const roomDetail = await getRoomLayout(roomId);
+        const roomDetail = await getRoomLayout(roomId, branchId);
         const { room, layout } = roomDetail;
 
         if (
@@ -184,10 +184,16 @@ export const createShowtime = createShowtimePublisher({
   withMovieForScheduling: movieService.withMovieForScheduling,
 });
 
-const assertEditableShowtime = async (showtimeId, now) => {
+const assertEditableShowtime = async (showtimeId, now, branchId) => {
   const showtime = await findShowtimeById(showtimeId);
+  if (!showtime) {
+    throw showtimeError(404, "Showtime not found", SHOWTIME_ERROR.SHOWTIME_NOT_FOUND);
+  }
+  if (branchId) {
+    // Resolve the room through the same server-side branch scope used by Room management.
+    await roomService.getSeatLayout(showtime.roomId.toString(), branchId);
+  }
   if (
-    !showtime ||
     showtime.status !== SHOWTIME_STATUS.PUBLISHED ||
     showtime.startAt <= now
   ) {
@@ -218,8 +224,8 @@ export const createShowtimeRescheduler =
     updateUnclaimed = seatAvailability.updateUnclaimedShowtime,
     updateTime = updatePublishedShowtimeTime,
   } = {}) =>
-  async ({ showtimeId, startAt: startAtInput }, now = new Date()) => {
-    const showtime = await assertEditable(showtimeId, now);
+  async ({ showtimeId, startAt: startAtInput, branchId }, now = new Date()) => {
+    const showtime = await assertEditable(showtimeId, now, branchId);
     const startAt = new Date(startAtInput);
     if (startAt <= now) {
       throw showtimeError(
@@ -247,7 +253,7 @@ export const createShowtimeRescheduler =
     }
     let updated;
     if (showtime.ticketPricePlanId) {
-      const { room } = await getRoomLayout(showtime.roomId.toString());
+      const { room } = await getRoomLayout(showtime.roomId.toString(), branchId);
       const pricing = await resolvePricePlan(startAt, room.roomType);
       updated = await reprice({
         showtimeId,
@@ -293,32 +299,44 @@ export const createShowtimeRescheduler =
 
 export const rescheduleShowtime = createShowtimeRescheduler();
 
-export const createShowtimeCanceller = () => async ({ showtimeId, managerId }, now = new Date()) => {
-  const result = await cancelShowtimeWithSales({ showtimeId, managerId, now });
-  if (result.missing) {
-    throw showtimeError(404, "Showtime not found", SHOWTIME_ERROR.SHOWTIME_NOT_FOUND);
-  }
-  if (result.notCancellable) {
-    throw showtimeError(
-      409,
-      "This showtime can no longer be cancelled",
-      SHOWTIME_ERROR.SHOWTIME_NOT_EDITABLE,
-    );
-  }
-  const processed = await refundService.processShowtimeCancellationRefunds(result.refunds, result.managerId);
-  return {
-    id: result.showtimeId,
-    status: result.status,
-    refunds: {
-      total: processed.length,
-      refunded: processed.filter((item) => item.status === "REFUNDED").length,
-      failed: processed.filter((item) => item.status === "FAILED").length,
-      awaitingManual: processed.filter((item) => item.paymentMethod === "CASH" && ["REQUESTED", "FAILED"].includes(item.status)).length,
-      processing: processed.filter((item) => item.status === "PROCESSING").length,
-      items: processed,
-    },
+export const createShowtimeCanceller =
+  ({
+    findShowtime = findShowtimeById,
+    getRoomLayout = roomService.getSeatLayout,
+    cancel = cancelShowtimeWithSales,
+  } = {}) =>
+  async ({ showtimeId, managerId, branchId }, now = new Date()) => {
+    const showtime = await findShowtime(showtimeId);
+    if (!showtime) {
+      throw showtimeError(404, "Showtime not found", SHOWTIME_ERROR.SHOWTIME_NOT_FOUND);
+    }
+    if (branchId) await getRoomLayout(showtime.roomId.toString(), branchId);
+
+    const result = await cancel({ showtimeId, managerId, now });
+    if (result.missing) {
+      throw showtimeError(404, "Showtime not found", SHOWTIME_ERROR.SHOWTIME_NOT_FOUND);
+    }
+    if (result.notCancellable) {
+      throw showtimeError(
+        409,
+        "This showtime can no longer be cancelled",
+        SHOWTIME_ERROR.SHOWTIME_NOT_EDITABLE,
+      );
+    }
+    const processed = await refundService.processShowtimeCancellationRefunds(result.refunds, result.managerId);
+    return {
+      id: result.showtimeId,
+      status: result.status,
+      refunds: {
+        total: processed.length,
+        refunded: processed.filter((item) => item.status === "REFUNDED").length,
+        failed: processed.filter((item) => item.status === "FAILED").length,
+        awaitingManual: processed.filter((item) => item.paymentMethod === "CASH" && ["REQUESTED", "FAILED"].includes(item.status)).length,
+        processing: processed.filter((item) => item.status === "PROCESSING").length,
+        items: processed,
+      },
+    };
   };
-};
 
 export const cancelShowtime = createShowtimeCanceller();
 

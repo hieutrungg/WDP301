@@ -17,6 +17,12 @@ const serialize = (refund) => refund && ({
 });
 
 export const createRefundService = ({ repository, provider, clock = () => new Date() }) => ({
+  async requireRefundForBranch(refundId, branchId) {
+    if (!branchId) throw fail(403, "Your account is not assigned to a cinema branch", "BRANCH_NOT_ASSIGNED");
+    const refund = await repository.findForManagerById(refundId, branchId);
+    if (!refund) throw fail(404, "Refund request not found", REFUND_ERROR.NOT_FOUND);
+    return refund;
+  },
   getSuccessfulRevenueTotals: ({ fromAt, toAt, session } = {}) =>
     repository.aggregateSuccessfulRevenue({ fromAt, toAt, session }),
   async request({ bookingId, customerAccountId, reason }) {
@@ -52,10 +58,12 @@ export const createRefundService = ({ repository, provider, clock = () => new Da
     return serialize(created);
   },
   async listMine(customerAccountId) { return { items: (await repository.listForCustomer(customerAccountId)).map(serialize) }; },
-  async listManager() { return { items: (await repository.listForManager()).map(serialize) }; },
-  async confirmCash({ refundId, managerId }) {
-    const existing = await repository.findById(refundId);
-    if (!existing) throw fail(404, "Refund request not found", REFUND_ERROR.NOT_FOUND);
+  async listManager(branchId) {
+    if (!branchId) throw fail(403, "Your account is not assigned to a cinema branch", "BRANCH_NOT_ASSIGNED");
+    return { items: (await repository.listForManager(branchId)).map(serialize) };
+  },
+  async confirmCash({ refundId, managerId, branchId }) {
+    const existing = await this.requireRefundForBranch(refundId, branchId);
     if (existing.paymentMethod !== "CASH") throw fail(409, "Only cash refunds can be confirmed manually", REFUND_ERROR.INVALID_STATE);
     if (existing.status === REFUND_STATUS.REFUNDED) return serialize(existing);
     const claimed = await repository.claimForProcessing(refundId, managerId, clock());
@@ -84,15 +92,17 @@ export const createRefundService = ({ repository, provider, clock = () => new Da
     }
     return outcomes;
   },
-  async reject({ refundId, managerId, reason }) {
-    const current = await repository.findById(refundId);
-    if (current?.requestType === REFUND_REQUEST_TYPE.SHOWTIME_CANCELLATION) throw fail(409, "Showtime cancellation refunds cannot be rejected", REFUND_ERROR.INVALID_STATE);
+  async reject({ refundId, managerId, branchId, reason }) {
+    const current = await this.requireRefundForBranch(refundId, branchId);
+    if (current.requestType === REFUND_REQUEST_TYPE.SHOWTIME_CANCELLATION) throw fail(409, "Showtime cancellation refunds cannot be rejected", REFUND_ERROR.INVALID_STATE);
     const updated = await repository.reject(refundId, managerId, reason, clock());
     if (!updated) throw fail(409, "Only a requested refund can be rejected", REFUND_ERROR.INVALID_STATE);
     return serialize(updated);
   },
-  async process({ refundId, managerId }) {
-    const existing = await repository.findById(refundId);
+  async process({ refundId, managerId, branchId }) {
+    const existing = branchId
+      ? await this.requireRefundForBranch(refundId, branchId)
+      : await repository.findById(refundId);
     if (!existing) throw fail(404, "Refund request not found", REFUND_ERROR.NOT_FOUND);
     if (existing.status === REFUND_STATUS.REFUNDED) return serialize(existing);
     if (existing.paymentMethod === "CASH") throw fail(409, "Cash refunds require manager confirmation after the external payment", REFUND_ERROR.INVALID_STATE);

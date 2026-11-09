@@ -207,7 +207,7 @@ Không lưu `Seat.isBooked = true` global. `Room.seats[].status` chỉ được 
 - Không xóa `directPermissionIds` trong phase governance.
 - Protected request phải dùng account status và effective permissions hiện hành từ backend; account bị khóa hoặc quyền bị thu hồi có hiệu lực ở protected request tiếp theo.
 - Role redirect mặc định: `ADMIN -> /admin`, `MANAGER -> /manager`, `STAFF -> /staff`, `CUSTOMER -> /`; account nhiều role dùng thứ tự ưu tiên này.
-- Branch-scoped authorization chưa có contract; không suy ra từ global permission code.
+- Manager access to branch-owned operational data is scoped on the backend from the current account's `employeeProfile.branchId`; never trust a branch id supplied by the client. An unassigned Manager is denied. Public discovery remains available across branches.
 
 ## 11. Validation
 
@@ -429,10 +429,10 @@ Owner/Approver: Project owner.
 
 ### Decision A-16
 
-Decision: Protected API kiểm tra account status và effective permissions hiện hành ở backend; unauthenticated trả `401`, thiếu quyền trả `403`; account bị khóa/quyền bị thu hồi có hiệu lực ở protected request tiếp theo. Role redirect và priority là `ADMIN`, `MANAGER`, `STAFF`, `CUSTOMER`. Branch-scoped authorization là decision riêng chưa được duyệt.
+Decision: Protected API kiểm tra account status và effective permissions hiện hành ở backend; unauthenticated trả `401`, thiếu quyền trả `403`; account bị khóa/quyền bị thu hồi có hiệu lực ở protected request tiếp theo. Role redirect và priority là `ADMIN`, `MANAGER`, `STAFF`, `CUSTOMER`. Manager chỉ truy cập dữ liệu vận hành thuộc `employeeProfile.branchId` của tài khoản hiện hành; client không thể đổi branch scope bằng query/body/path. Manager chưa được gán branch bị từ chối. Admin và public discovery giữ phạm vi hiện hành.
 Reason: Backend là security boundary và thay đổi quyền không được phụ thuộc vào state cũ ở frontend.
 Affected modules: `auth`, `accounts`, RBAC, protected routes và role layouts.
-Status: APPROVED.
+Status: APPROVED (branch-scoped Manager access approved by project owner on 2026-11-09).
 Owner/Approver: Project owner.
 
 ### Decision A-17
