@@ -52,6 +52,7 @@ import ManagerDashboardPage from '../../features/manager-dashboard/pages/Manager
 import RevenueReportsPage from '../../features/manager-reports/pages/RevenueReportsPage'
 import PromotionsPage from '../../features/promotions/pages/PromotionsPage'
 import PromotionFormPage from '../../features/promotions/pages/PromotionFormPage'
+import OffersPage from '../../features/promotions/pages/OffersPage'
 
 function ScrollToTop() {
   const { pathname } = useLocation()
@@ -78,6 +79,7 @@ export function AppRoutes() {
           <Route path="movies" element={<MoviesPage />} />
           <Route path="movies/:movieId" element={<MovieDetailPage />} />
           <Route path="concessions" element={<ConcessionCatalogPage />} />
+          <Route path="offers" element={<OffersPage />} />
           <Route element={<ProtectedRoute />}>
             <Route path="profile" element={<ProfilePage />} />
             <Route

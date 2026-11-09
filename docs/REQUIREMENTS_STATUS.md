@@ -141,6 +141,10 @@ Still pending:
 
 No new permission was seeded. Trace viewing and knowledge sync are ADMIN-role only.
 
+### Public Offers page, 2026-11-08
+
+The `/offers` page can introduce online ticket offers with clearly labeled examples. Publishing redeemable campaigns requires approved public copy and a decision on which campaigns may be listed. PROMO-101 currently authorizes Manager-only campaign reads. Public campaign content must exclude voucher codes.
+
 ### PROMO-101 — scoped owner instruction / pending contract, 2026-10-27
 
 **Implementation update, 2026-10-27:** PROMO-101 backend and Manager/C14/confirmation/history UI are implemented in the working tree under the approved contract. MongoDB tests cover quota/Customer races, snapshots, lifecycle, pricing lock and real net-paid Refund without restoring voucher eligibility. Development cinema_management_dev was inspected read-only: no incompatible promotion data, but required validators/indexes are not installed. Versioned inspect-first migration/PowerShell guide: `docs/PROMO-101-DATABASE.md`; voucher commands fail closed until application. No development DDL/seed/backfill, SRS edit, sheet Done update, commit or push. See `docs/PROMO-101-IMPLEMENTATION.md` for exact changed files, actual check results, existing out-of-scope failures and integration review requirements. This supersedes historical NOT IMPLEMENTED/pending-contract wording below, without claiming rollout or human reviewer sign-off.
