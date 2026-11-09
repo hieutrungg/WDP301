@@ -8,6 +8,18 @@ import { Showtime } from "../showtime/showtime.model.js";
 import { RefundRequest } from "./refund.model.js";
 import { REFUND_STATUS } from "./refund.constants.js";
 
+const managerBranchStages = (branchId) => [
+  { $lookup: { from: "bookings", localField: "bookingId", foreignField: "_id", as: "booking" } },
+  { $unwind: "$booking" },
+  { $lookup: { from: "showtimes", localField: "booking.showtimeId", foreignField: "_id", as: "showtime" } },
+  { $unwind: "$showtime" },
+  { $lookup: { from: "rooms", localField: "showtime.roomId", foreignField: "_id", as: "room" } },
+  { $unwind: "$room" },
+  { $match: { "room.branchId": new mongoose.Types.ObjectId(branchId) } },
+];
+
+const withoutBranchJoins = { $project: { booking: 0, showtime: 0, room: 0 } };
+
 export const refundRepository = {
   async loadEligibility(bookingId) {
     const booking = await Booking.findById(bookingId).lean();
@@ -21,7 +33,22 @@ export const refundRepository = {
   findById(id) { return RefundRequest.findById(id).lean(); },
   findByBookingId(bookingId, requestType) { return RefundRequest.findOne({ bookingId, ...(requestType ? { requestType } : {}) }).lean(); },
   listForCustomer(customerAccountId) { return RefundRequest.find({ customerAccountId }).sort({ requestedAt: -1 }).lean(); },
-  listForManager() { return RefundRequest.find().sort({ requestedAt: 1 }).limit(200).lean(); },
+  listForManager(branchId) {
+    return RefundRequest.aggregate([
+      ...managerBranchStages(branchId),
+      { $sort: { requestedAt: 1 } },
+      { $limit: 200 },
+      withoutBranchJoins,
+    ]).exec();
+  },
+  findForManagerById(refundId, branchId) {
+    return RefundRequest.aggregate([
+      { $match: { _id: new mongoose.Types.ObjectId(refundId) } },
+      ...managerBranchStages(branchId),
+      { $limit: 1 },
+      withoutBranchJoins,
+    ]).then((items) => items[0] ?? null);
+  },
   async aggregateSuccessfulRevenue({ fromAt, toAt, session } = {}) {
     const match = {
       status: REFUND_STATUS.REFUNDED,

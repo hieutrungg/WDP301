@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { requireAuth } from "../../middlewares/authMiddleware.js";
 import { requirePermission, requireRole } from "../../middlewares/permissionMiddleware.js";
+import { requireAssignedBranch } from "../../middlewares/assignedBranchMiddleware.js";
 import { validate } from "../../middlewares/validateMiddleware.js";
 import { cancelShowtime, createShowtime, getShowtimeById, listManagerShowtimes, listMovieShowtimes, listShowtimes, rescheduleShowtime } from "./showtime.controller.js";
 import { SHOWTIME_ERROR } from "./showtime.constants.js";
@@ -15,6 +16,7 @@ router.post(
   requireAuth,
   requirePermission("showtime.create"),
   requireRole("MANAGER"),
+  requireAssignedBranch,
   validate(createShowtimeSchema, { code: SHOWTIME_ERROR.INVALID_SHOWTIME }),
   createShowtime,
 );
@@ -23,6 +25,7 @@ router.get(
   requireAuth,
   requirePermission("showtime.view"),
   requireRole("MANAGER"),
+  requireAssignedBranch,
   managerShowtimeQueryValidator,
   listManagerShowtimes,
 );
@@ -31,6 +34,7 @@ router.patch(
   requireAuth,
   requirePermission("showtime.update"),
   requireRole("MANAGER"),
+  requireAssignedBranch,
   showtimeIdParamsValidator,
   validate(rescheduleShowtimeSchema, { code: SHOWTIME_ERROR.INVALID_SHOWTIME }),
   rescheduleShowtime,
@@ -40,6 +44,7 @@ router.post(
   requireAuth,
   requirePermission("showtime.cancel"),
   requireRole("MANAGER"),
+  requireAssignedBranch,
   showtimeIdParamsValidator,
   cancelShowtime,
 );

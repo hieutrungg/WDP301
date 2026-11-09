@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router";
 import {
   Armchair,
+  Building2,
   CalendarClock,
   CalendarDays,
   CheckCircle2,
@@ -18,6 +19,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { getApiErrorMessage } from "../../../lib/api/apiError";
+import { useAuth } from "../../auth/hooks/useAuth";
 import {
   cancelManagerShowtime,
   createManagerShowtime,
@@ -768,6 +770,7 @@ function ScheduleForm({ date, movies, rooms, showtime, onClose, onSaved }) {
 }
 
 function ManagerShowtimesPage() {
+  const { account } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const date = searchParams.get("date") ?? getTodayInVietnam();
   useEffect(() => {
@@ -776,7 +779,7 @@ function ManagerShowtimesPage() {
     next.delete("view");
     setSearchParams(next, { replace: true });
   }, [searchParams, setSearchParams]);
-  const [branchId, setBranchId] = useState("");
+  const branchId = String(account?.employeeProfile?.branchId ?? "");
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [editingShowtime, setEditingShowtime] = useState(null);
   const [selectedShowtime, setSelectedShowtime] = useState(null);
@@ -811,6 +814,9 @@ function ManagerShowtimesPage() {
     );
   }, [data?.rooms]);
   const showtimes = data?.showtimes ?? [];
+  const assignedBranch =
+    branches.find((branch) => branch.id === branchId) ??
+    showtimes.find((showtime) => showtime.cinema.id === branchId)?.cinema;
   const calendarGroups = useMemo(() => {
     const branchById = new Map(branches.map((branch) => [branch.id, branch]));
     if (branchId) {
@@ -860,7 +866,7 @@ function ManagerShowtimesPage() {
               Showtime Management
             </h1>
             <p className="mt-2 max-w-2xl text-sm text-on-surface-variant">
-              View, schedule, and manage sessions across branches. Move to an
+              View and manage sessions at your assigned branch. Move to an
               earlier week to review past showtimes.
             </p>
           </div>
@@ -992,22 +998,10 @@ function ManagerShowtimesPage() {
               }}
               className="h-10 rounded-lg border border-white/10 bg-surface-container-high px-3 text-sm text-on-surface outline-none focus:border-primary-container"
             />
-            <label className="sr-only" htmlFor="manager-showtime-branch">
-              Filter by cinema
-            </label>
-            <select
-              id="manager-showtime-branch"
-              value={branchId}
-              onChange={(event) => setBranchId(event.target.value)}
-              className="h-10 min-w-48 rounded-lg border border-white/10 bg-surface-container-high px-3 text-sm text-on-surface outline-none focus:border-primary-container"
-            >
-              <option value="">All cinemas</option>
-              {branches.map((branch) => (
-                <option key={branch.id} value={branch.id}>
-                  {branch.branchName}
-                </option>
-              ))}
-            </select>
+            <div aria-label="Assigned cinema branch" className="inline-flex h-10 min-w-48 items-center gap-2 rounded-lg border border-white/10 bg-surface-container-high px-3 text-sm font-semibold text-on-surface">
+              <Building2 className="size-4 text-primary" aria-hidden="true" />
+              {assignedBranch?.branchName ?? "Assigned branch"}
+            </div>
             <label className="relative">
               <span className="sr-only">Search showtimes</span>
               <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-on-surface-variant" />
