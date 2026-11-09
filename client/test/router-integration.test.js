@@ -61,6 +61,15 @@ test("INT-FE-001 public catalog and unknown links resolve to real pages", () => 
   const html = render("/concessions");
   assert.match(html, /href="\/concessions"/);
   assert.doesNotMatch(html, /href="\/#offers"/);
+  assert.match(html, /href="\/offers"/);
+});
+
+test("Offers is public and leads to movie discovery", () => {
+  const html = render("/offers");
+  assert.match(html, /<h1[^>]*>Online ticket offers<\/h1>/);
+  assert.match(html, /<a(?=[^>]*aria-current="page")(?=[^>]*href="\/offers")[^>]*>Offers<\/a>/);
+  assert.match(html, /href="\/movies"[^>]*>Browse movies/);
+  assert.match(html, /unavailable for redemption/);
 });
 test("INT-FE-001 Staff menu mounts only inside the Staff role shell", () => {
   const html = render("/staff/concessions", actor("STAFF"));

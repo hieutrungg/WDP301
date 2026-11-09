@@ -14,7 +14,7 @@ const navItems = [
   { label: "Movies", to: "/movies" },
   { label: "Food & Drink", to: "/concessions" },
   { label: "Theatres & Tickets", href: "/#theatres-&-tickets" },
-  { label: "Offers" },
+  { label: "Offers", to: "/offers" },
 ];
 
 function Header() {
@@ -168,7 +168,7 @@ function Header() {
               >
                 {item.label}
               </NavLink>
-            ) : item.href ? (
+            ) : (
               <a
                 key={item.label}
                 href={item.href}
@@ -176,10 +176,6 @@ function Header() {
               >
                 {item.label}
               </a>
-            ) : (
-              <span key={item.label} aria-disabled="true" className="cursor-not-allowed rounded-lg px-3 py-2 text-sm text-on-surface-variant/50">
-                {item.label}<span className="ml-1 text-[10px]">Soon</span>
-              </span>
             ),
           )}
         </nav>
@@ -252,7 +248,7 @@ function Header() {
                 >
                   {item.label}
                 </NavLink>
-              ) : item.href ? (
+              ) : (
                 <a
                   key={item.label}
                   href={item.href}
@@ -261,10 +257,6 @@ function Header() {
                 >
                   {item.label}
                 </a>
-              ) : (
-                <span key={item.label} aria-disabled="true" className="cursor-not-allowed rounded-lg px-3 py-2.5 text-sm text-on-surface-variant/50">
-                  {item.label}<span className="ml-2 text-[10px]">Soon</span>
-                </span>
               ),
             )}
             {initialized && !isAuthenticated && (
