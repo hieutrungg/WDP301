@@ -99,6 +99,13 @@ export async function runPromotionMigration(args = process.argv.slice(2)) {
       throw new Error("Replica-set/sharded transactions are required");
     const errors = await auditPromotionData(db);
     const storage = await inspectPromotionStorage(db);
+    const unassignedCampaigns = (await db
+      .listCollections({ name: "promotions" })
+      .hasNext())
+      ? await db
+          .collection("promotions")
+          .countDocuments({ branchId: { $exists: false } })
+      : 0;
     console.log(
       JSON.stringify(
         {
@@ -106,6 +113,7 @@ export async function runPromotionMigration(args = process.argv.slice(2)) {
           mode: apply ? "APPLY" : "INSPECT_ONLY",
           errors,
           missing: storage.missing,
+          unassignedCampaigns,
         },
         null,
         2,

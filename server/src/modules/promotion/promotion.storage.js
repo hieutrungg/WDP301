@@ -23,31 +23,35 @@ const schema = (required, properties) => ({
     properties,
   },
 });
-export const PROMOTION_VALIDATORS = {
-  promotions: schema(
-    [
-      "name",
-      "discountType",
-      "discountValue",
-      "startDate",
-      "endDate",
-      "status",
-      "version",
-    ],
-    {
-      name: { bsonType: "string", minLength: 1, maxLength: 150 },
-      discountType: { enum: ["PERCENTAGE"] },
-      discountValue: {
-        bsonType: ["int", "long", "double"],
-        minimum: 0.01,
-        maximum: 20,
-      },
-      startDate: date,
-      endDate: date,
-      status,
-      version: integer,
+const legacyPromotionValidator = schema(
+  [
+    "name",
+    "discountType",
+    "discountValue",
+    "startDate",
+    "endDate",
+    "status",
+    "version",
+  ],
+  {
+    name: { bsonType: "string", minLength: 1, maxLength: 150 },
+    discountType: { enum: ["PERCENTAGE"] },
+    discountValue: {
+      bsonType: ["int", "long", "double"],
+      minimum: 0.01,
+      maximum: 20,
     },
-  ),
+    startDate: date,
+    endDate: date,
+    status,
+    version: integer,
+  },
+);
+export const PROMOTION_VALIDATORS = {
+  promotions: schema(legacyPromotionValidator.$jsonSchema.required, {
+    ...legacyPromotionValidator.$jsonSchema.properties,
+    branchId: oid,
+  }),
   vouchers: schema(
     [
       "promotionId",
@@ -118,7 +122,13 @@ export const PROMOTION_VALIDATORS = {
     },
   ),
 };
+const promotionBranchIndex = [
+  "promotions",
+  { branchId: 1, createdAt: -1, _id: -1 },
+  { name: "idx_promotion_branch_created" },
+];
 export const PROMOTION_INDEXES = [
+  promotionBranchIndex,
   ["vouchers", { code: 1 }, { name: "uniq_voucher_code", unique: true }],
   [
     "voucher_redemptions",
@@ -166,22 +176,33 @@ export const storageUnavailable = () =>
     503,
   );
 
-export async function inspectPromotionStorage(db) {
+export async function inspectPromotionStorage(
+  db,
+  { requireBranchScope = true } = {},
+) {
   const collections = await db
     .listCollections({}, { nameOnly: false })
     .toArray();
   const missing = [];
   for (const [name, validator] of Object.entries(PROMOTION_VALIDATORS)) {
     const current = collections.find((c) => c.name === name);
+    const currentValidator = current?.options?.validator;
+    const matchesValidator =
+      isDeepStrictEqual(currentValidator, validator) ||
+      (!requireBranchScope &&
+        name === "promotions" &&
+        isDeepStrictEqual(currentValidator, legacyPromotionValidator));
     if (
       !current ||
-      !isDeepStrictEqual(current.options?.validator, validator) ||
+      !matchesValidator ||
       current.options?.validationLevel !== "strict" ||
       current.options?.validationAction !== "error"
     )
       missing.push(`${name}: validator`);
   }
-  for (const [name, key, options] of PROMOTION_INDEXES) {
+  for (const index of PROMOTION_INDEXES) {
+    if (!requireBranchScope && index === promotionBranchIndex) continue;
+    const [name, key, options] = index;
     const indexes = collections.some((c) => c.name === name)
       ? await db.collection(name).listIndexes().toArray()
       : [];
@@ -191,7 +212,12 @@ export async function inspectPromotionStorage(db) {
   return { missing };
 }
 export async function assertPromotionStorage(db = mongoose.connection.db) {
-  if (!db || (await inspectPromotionStorage(db)).missing.length)
+  // Roll out the branch index/validator without interrupting existing voucher checkouts.
+  if (
+    !db ||
+    (await inspectPromotionStorage(db, { requireBranchScope: false })).missing
+      .length
+  )
     throw storageUnavailable();
 }
 export function validPromotion(p) {
@@ -311,26 +337,19 @@ export async function auditPromotionData(db) {
       .toArray();
     if (duplicates.length) errors.push(`${name}: duplicate ${options.name}`);
   }
-  for await (const booking of db
-    .collection("bookings")
-    .find({
-      $or: [
-        { voucherId: { $type: "objectId" } },
-        { discountAmount: { $gt: 0 } },
-      ],
-    })) {
+  for await (const booking of db.collection("bookings").find({
+    $or: [{ voucherId: { $type: "objectId" } }, { discountAmount: { $gt: 0 } }],
+  })) {
     const snapshot = booking.voucherSnapshot;
     if (
       !snapshot ||
       String(snapshot.voucherId) !== String(booking.voucherId) ||
       !snapshot.reservationId ||
-      !(await db
-        .collection("voucher_redemptions")
-        .findOne({
-          _id: snapshot.reservationId,
-          bookingId: booking._id,
-          customerAccountId: booking.customerAccountId,
-        }))
+      !(await db.collection("voucher_redemptions").findOne({
+        _id: snapshot.reservationId,
+        bookingId: booking._id,
+        customerAccountId: booking.customerAccountId,
+      }))
     )
       errors.push(`Untraceable discounted booking ${booking._id}`);
   }

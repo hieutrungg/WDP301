@@ -5,8 +5,10 @@ import ErrorState from '../../components/common/ErrorState'
 import MovieCatalogCard from '../../features/movie-showtime/components/MovieCatalogCard'
 import MovieCatalogSkeleton from '../../features/movie-showtime/components/MovieCatalogSkeleton'
 import { useMovies } from '../../features/movie-showtime/hooks/useMovies'
+import { useSelectedBranchStore } from '../../lib/store/selectedBranchStore'
 import {
   buildMovieQuery,
+  getVietnamDateKey,
   getVisibleMoviePages,
   readMovieSearchParams,
 } from '../../features/movie-showtime/utils/movieSearchParams'
@@ -16,8 +18,12 @@ const genres = ['Adventure', 'Animation', 'Drama', 'Family', 'Mystery', 'Romance
 function MoviesPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const searchState = readMovieSearchParams(searchParams)
+  const selectedBranchId = useSelectedBranchStore((state) => state.selectedBranchId)
+  const cinemaId = searchParams.get('cinemaId') || selectedBranchId
   const { q, genre, sortOption } = searchState
-  const { movies, meta, loading, error, retry } = useMovies(buildMovieQuery(searchState))
+  const { movies, meta, loading, error, retry } = useMovies(buildMovieQuery({
+    ...searchState, cinemaId, releaseTo: cinemaId ? getVietnamDateKey() : undefined,
+  }))
   const hasFilters = Boolean(q || genre)
   const visiblePages = getVisibleMoviePages(meta.page, meta.totalPages)
 
@@ -36,7 +42,7 @@ function MoviesPage() {
     updateParams({ q: formData.get('q').toString().trim(), page: '' })
   }
 
-  const clearFilters = () => setSearchParams({})
+  const clearFilters = () => setSearchParams(cinemaId ? { cinemaId } : {})
 
   return (
     <div className="min-h-screen pt-20">
@@ -114,7 +120,7 @@ function MoviesPage() {
           {!loading && !error && movies.length === 0 && (
             <EmptyState
               title={hasFilters ? 'No movies match your search' : 'No movies are showing right now'}
-              description={hasFilters ? 'Try another title or genre, or clear your filters to see the full lineup.' : 'Published movies will appear here when the cinema lineup is available.'}
+              description={hasFilters ? 'Try another title or genre, or clear your search filters.' : cinemaId ? 'There are no upcoming showtimes with seats available at this cinema. Try selecting another cinema.' : 'Published movies will appear here when the cinema lineup is available.'}
               action={hasFilters ? <button type="button" onClick={clearFilters} className="rounded-lg bg-primary-container px-4 py-2.5 text-sm font-bold text-white">Clear filters</button> : undefined}
             />
           )}

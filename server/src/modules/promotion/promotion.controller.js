@@ -15,33 +15,41 @@ export const createPromotionController = (service) => {
       }
     };
   return {
-    list: handle((req) => service.listPromotions(req.validated.query)),
-    get: handle((req) => service.getPromotion(req.params.promotionId)),
+    list: handle((req) =>
+      service.listPromotions(req.validated.query, req.auth.account),
+    ),
+    get: handle((req) =>
+      service.getPromotion(req.params.promotionId, req.auth.account),
+    ),
     create: handle(
-      (req) => service.createPromotion(req.body, req.auth.accountId),
+      (req) => service.createPromotion(req.body, req.auth.account),
       201,
     ),
     update: handle((req) =>
       service.updatePromotion(
         req.params.promotionId,
         req.body,
-        req.auth.accountId,
+        req.auth.account,
       ),
     ),
     listVouchers: handle((req) =>
-      service.listVouchers(req.params.promotionId, req.validated.query),
+      service.listVouchers(
+        req.params.promotionId,
+        req.validated.query,
+        req.auth.account,
+      ),
     ),
     createVoucher: handle(
       (req) =>
         service.createVoucher(
           req.params.promotionId,
           req.body,
-          req.auth.accountId,
+          req.auth.account,
         ),
       201,
     ),
     updateVoucher: handle((req) =>
-      service.updateVoucher(req.params.voucherId, req.body, req.auth.accountId),
+      service.updateVoucher(req.params.voucherId, req.body, req.auth.account),
     ),
   };
 };

@@ -16,13 +16,15 @@ import { dateLabel } from "../utils/promotionForm";
 
 export default function PromotionsPage() {
   const { account } = useAuth();
+  const branchId = account.employeeProfile?.branchId;
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState({ page: 1, q: "", status: "" });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const [notice, setNotice] = useState("");
   const query = useQuery({
-    queryKey: ["promotions", account.id, filter],
+    queryKey: ["promotions", account.id, branchId, filter],
+    enabled: Boolean(branchId),
     retry: false,
     queryFn: () =>
       listPromotions({
@@ -32,6 +34,7 @@ export default function PromotionsPage() {
         ...(filter.status ? { status: filter.status } : {}),
       }),
   });
+  const results = query.isError ? undefined : query.data;
   const toggle = async (p) => {
     setBusy(true);
     setError(null);
@@ -51,26 +54,40 @@ export default function PromotionsPage() {
       setBusy(false);
     }
   };
+  if (!branchId) {
+    return (
+      <div className="mx-auto max-w-7xl space-y-6 p-4 sm:p-6 lg:p-8">
+        <h1 className="font-heading text-3xl font-extrabold">
+          Promotion Management
+        </h1>
+        <ErrorNotice
+          error={{
+            message:
+              "Your account has no assigned cinema. Contact an administrator for access.",
+          }}
+        />
+      </div>
+    );
+  }
   return (
     <div className="mx-auto max-w-7xl space-y-6 p-4 sm:p-6 lg:p-8">
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p className="mb-2 text-xs font-bold uppercase tracking-widest text-primary">
-            Commercial operations
-          </p>
           <h1 className="flex items-center gap-3 font-heading text-3xl font-extrabold">
             <TicketPercent className="text-primary" />
             Promotion Management
           </h1>
           <p className="mt-2 text-sm text-on-surface-variant">
-            Manage ticket discounts and voucher codes across all F-Cinema
-            locations.
+            Manage campaigns and voucher codes for your assigned cinema.
+            Customers can use active codes at any F-Cinema location.
           </p>
         </div>
-        <Link className={buttonClass} to="/manager/promotions/new">
-          <Plus className="size-4" />
-          Create Promotion
-        </Link>
+        {!query.isError && (
+          <Link className={buttonClass} to="/manager/promotions/new">
+            <Plus className="size-4" />
+            Create Promotion
+          </Link>
+        )}
       </header>
       <div className="rounded-xl border border-secondary/20 bg-secondary/5 p-4 text-sm text-on-surface-variant">
         Percentage discounts up to 20% · Tickets only · One code per booking ·
@@ -122,7 +139,7 @@ export default function PromotionsPage() {
             Loading promotions…
           </p>
         )}
-        {!query.isFetching && query.data?.data.items.length === 0 && (
+        {!query.isFetching && results?.data.items.length === 0 && (
           <div className="py-12 text-center">
             <TicketPercent className="mx-auto mb-3 size-10 text-primary" />
             <h2 className="font-bold">No promotions found</h2>
@@ -132,7 +149,7 @@ export default function PromotionsPage() {
           </div>
         )}
         <div className="grid gap-4">
-          {query.data?.data.items.map((p) => (
+          {results?.data.items.map((p) => (
             <article
               key={p.id}
               className="grid items-center gap-4 rounded-xl border border-white/10 bg-background/40 p-4 sm:grid-cols-[minmax(0,2fr)_1fr_1fr_auto]"
@@ -176,7 +193,7 @@ export default function PromotionsPage() {
         </div>
         <Pagination
           page={filter.page}
-          meta={query.data?.meta}
+          meta={results?.meta}
           onPage={(page) => setFilter({ ...filter, page })}
         />
       </section>

@@ -97,7 +97,13 @@ function VoucherManager({ promotionId }) {
   const [error, setError] = useState(null);
   const [notice, setNotice] = useState("");
   const query = useQuery({
-    queryKey: ["promotion-vouchers", account.id, promotionId, page],
+    queryKey: [
+      "promotion-vouchers",
+      account.id,
+      account.employeeProfile?.branchId,
+      promotionId,
+      page,
+    ],
     retry: false,
     queryFn: () => listVouchers(promotionId, { page, limit: 10 }),
   });
@@ -122,6 +128,14 @@ function VoucherManager({ promotionId }) {
       setBusy(false);
     }
   };
+  if (query.isError) {
+    return (
+      <section className={panelClass}>
+        <h2 className="mb-4 font-heading text-xl font-bold">Voucher codes</h2>
+        <ErrorNotice error={query.error} retry={() => query.refetch()} />
+      </section>
+    );
+  }
   return (
     <section className={`${panelClass} space-y-4`}>
       <h2 className="font-heading text-xl font-bold">Voucher codes</h2>
@@ -158,7 +172,7 @@ function VoucherManager({ promotionId }) {
           {busy ? "Creating…" : "Create voucher code"}
         </button>
       </form>
-      <ErrorNotice error={error ?? query.error} retry={() => query.refetch()} />
+      <ErrorNotice error={error} />
       <p role="status" className="text-sm text-emerald-400">
         {notice}
       </p>
@@ -345,9 +359,10 @@ function PromotionForm({ promotion, refresh }) {
 export default function PromotionFormPage() {
   const { promotionId } = useParams();
   const { account } = useAuth();
+  const branchId = account.employeeProfile?.branchId;
   const query = useQuery({
-    queryKey: ["promotion", account.id, promotionId],
-    enabled: Boolean(promotionId),
+    queryKey: ["promotion", account.id, branchId, promotionId],
+    enabled: Boolean(branchId && promotionId),
     retry: false,
     queryFn: () => getPromotion(promotionId),
   });
@@ -357,20 +372,29 @@ export default function PromotionFormPage() {
         ← Promotion Management
       </Link>
       <header>
-        <p className="mb-2 text-xs font-bold uppercase tracking-widest text-primary">
-          Commercial operations
-        </p>
         <h1 className="font-heading text-3xl font-extrabold">
           {promotionId ? "Edit Promotion" : "Create Promotion"}
         </h1>
+        <p className="mt-2 text-sm text-on-surface-variant">
+          Campaigns are managed by your assigned cinema. Customers can use
+          active codes at any F-Cinema location.
+        </p>
       </header>
-      <ErrorNotice error={query.error} retry={() => query.refetch()} />
-      {promotionId && query.isPending ? (
+      {!branchId ? (
+        <ErrorNotice
+          error={{
+            message:
+              "Your account has no assigned cinema. Contact an administrator for access.",
+          }}
+        />
+      ) : query.isError ? (
+        <ErrorNotice error={query.error} retry={() => query.refetch()} />
+      ) : promotionId && query.isPending ? (
         <p role="status">Loading promotion…</p>
       ) : (
         (!promotionId || query.data) && (
           <PromotionForm
-            key={promotionId ?? "new"}
+            key={`${account.id}:${branchId}:${promotionId ?? "new"}`}
             promotion={query.data}
             refresh={() => query.refetch()}
           />

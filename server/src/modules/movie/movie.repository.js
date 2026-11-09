@@ -1,5 +1,6 @@
 import { Movie } from "./movie.model.js";
 import { PUBLIC_MOVIE_STATUS } from "./movie.constants.js";
+import { scanBookableShowtimes } from "../showtime/public-showtime-discovery.js";
 
 const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
@@ -39,6 +40,14 @@ const listMoviesByFilter = async (movieModel, filter, query) => {
     movieModel.countDocuments(filter),
   ]);
   return { movies, total };
+};
+
+const findBookableMovieIds = async (cinemaId) => {
+  const ids = new Set();
+  for await (const entries of scanBookableShowtimes({ cinemaId, now: new Date() })) {
+    for (const { item } of entries) ids.add(item.movieId.toString());
+  }
+  return [...ids];
 };
 
 export const createMovieRepository = (movieModel = Movie) => ({
@@ -92,6 +101,7 @@ export const createMovieRepository = (movieModel = Movie) => ({
 
   async listPublished(query) {
     const filter = buildPublishedMovieFilter(query);
+    if (query.cinemaId) filter._id = { $in: await findBookableMovieIds(query.cinemaId) };
     return listMoviesByFilter(movieModel, filter, query);
   },
 

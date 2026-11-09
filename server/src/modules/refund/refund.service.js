@@ -1,10 +1,23 @@
+import mongoose from "mongoose";
 import { AppError } from "../../utils/AppError.js";
 import { BOOKING_STATUS } from "../booking/booking.constants.js";
 import { PAYMENT_STATUS } from "../payment/payment.constants.js";
 import { REFUND_CUTOFF_MINUTES, REFUND_ERROR, REFUND_REQUEST_TYPE, REFUND_STATUS } from "./refund.constants.js";
+import { calculateRefundAmounts } from "./refund-amount.js";
 
 const fail = (status, message, code = REFUND_ERROR.NOT_ELIGIBLE) => new AppError(status, message, [], code);
 const id = (value) => value?.toString?.() ?? String(value);
+const requireBranchId = (branchId) => {
+  if (!mongoose.isObjectIdOrHexString(branchId))
+    throw fail(403, "Your account is not assigned to a cinema branch", "BRANCH_NOT_ASSIGNED");
+  return branchId;
+};
+const refundNotFound = () => fail(404, "Refund request not found", REFUND_ERROR.NOT_FOUND);
+const findManagerRefund = async (repository, refundId, branchId) => {
+  const refund = await repository.findForManagerById(refundId, requireBranchId(branchId));
+  if (!refund) throw refundNotFound();
+  return refund;
+};
 const serialize = (refund) => refund && ({
   refundId: id(refund._id), bookingId: id(refund.bookingId), paymentId: id(refund.paymentId), showtimeId: refund.showtimeId ? id(refund.showtimeId) : null, requestType: refund.requestType ?? REFUND_REQUEST_TYPE.CUSTOMER_REQUEST,
   status: refund.status, reason: refund.reason, ticketAmount: refund.ticketAmount,
@@ -16,13 +29,22 @@ const serialize = (refund) => refund && ({
   processedAt: refund.processedAt,
 });
 
+const processRefund = async ({ repository, provider, clock, existing, managerId }) => {
+  if (!existing) throw refundNotFound();
+  if (existing.status === REFUND_STATUS.REFUNDED) return serialize(existing);
+  if (existing.paymentMethod === "CASH") throw fail(409, "Cash refunds require manager confirmation after the external payment", REFUND_ERROR.INVALID_STATE);
+  const claimed = await repository.claimForProcessing(existing._id, managerId, clock());
+  if (!claimed) throw fail(409, "Refund is not ready for processing", REFUND_ERROR.INVALID_STATE);
+  try {
+    const providerResult = await provider.refund({ idempotencyKey: claimed.idempotencyKey, amount: claimed.refundAmount, method: claimed.paymentMethod, paymentId: id(claimed.paymentId) });
+    return serialize(await repository.finalize(claimed, providerResult, clock()));
+  } catch (error) {
+    await repository.markFailed(existing._id, error?.message || "Mock refund failed", clock());
+    throw fail(502, "Refund provider failed; the request can be retried", REFUND_ERROR.INVALID_STATE);
+  }
+};
+
 export const createRefundService = ({ repository, provider, clock = () => new Date() }) => ({
-  async requireRefundForBranch(refundId, branchId) {
-    if (!branchId) throw fail(403, "Your account is not assigned to a cinema branch", "BRANCH_NOT_ASSIGNED");
-    const refund = await repository.findForManagerById(refundId, branchId);
-    if (!refund) throw fail(404, "Refund request not found", REFUND_ERROR.NOT_FOUND);
-    return refund;
-  },
   getSuccessfulRevenueTotals: ({ fromAt, toAt, session } = {}) =>
     repository.aggregateSuccessfulRevenue({ fromAt, toAt, session }),
   async request({ bookingId, customerAccountId, reason }) {
@@ -37,33 +59,24 @@ export const createRefundService = ({ repository, provider, clock = () => new Da
     if (now.getTime() >= cutoffAt) throw fail(409, `Refund requests close ${REFUND_CUTOFF_MINUTES} minutes before showtime`);
     if (await repository.findByBookingId(bookingId, REFUND_REQUEST_TYPE.CUSTOMER_REQUEST)) throw fail(409, "A refund request already exists for this booking", REFUND_ERROR.ALREADY_REQUESTED);
 
-    const fulfillmentSnapshot = !data.order ? "NONE" : data.order.pickupStatus === "FULFILLED" ? "FULFILLED" : "NOT_FULFILLED";
-    const discount = data.booking.discountAmount ?? 0;
-    const ticketAmount = data.booking.subtotal - discount;
-    const fullFoodAmount = data.order?.totalAmount ?? 0;
-    if (![data.booking.subtotal, discount, ticketAmount, fullFoodAmount, data.payment.amount].every(n => Number.isSafeInteger(n) && n >= 0) ||
-        ticketAmount + fullFoodAmount !== data.payment.amount ||
-        (discount > 0 && !data.booking.voucherSnapshot)) throw fail(409, "Booking/payment amounts require review before refund");
-    const concessionAmount = fulfillmentSnapshot === "NOT_FULFILLED" ? (data.order?.totalAmount ?? 0) : 0;
-    const refundAmount = ticketAmount + concessionAmount;
+    const amounts = calculateRefundAmounts(data.booking, data.payment, data.order);
     const created = await repository.create({
       bookingId: data.booking._id, paymentId: data.payment._id,
       requestType: REFUND_REQUEST_TYPE.CUSTOMER_REQUEST,
       customerAccountId, reason, status: REFUND_STATUS.REQUESTED,
-      ticketAmount, concessionAmount, refundAmount, paymentAmount: data.payment.amount,
-      currency: "VND", paymentMethod: data.payment.method, fulfillmentSnapshot,
+      ...amounts, paymentAmount: data.payment.amount,
+      currency: "VND", paymentMethod: data.payment.method,
       policySnapshot: { cutoffMinutes: REFUND_CUTOFF_MINUTES, showtimeStartAt: data.showtime.startAt, requestedAt: now, checkedIn: false },
-      idempotencyKey: `refund:${id(data.payment._id)}:${refundAmount}`, requestedAt: now,
+      idempotencyKey: `refund:${id(data.payment._id)}:${amounts.refundAmount}`, requestedAt: now,
     });
     return serialize(created);
   },
   async listMine(customerAccountId) { return { items: (await repository.listForCustomer(customerAccountId)).map(serialize) }; },
   async listManager(branchId) {
-    if (!branchId) throw fail(403, "Your account is not assigned to a cinema branch", "BRANCH_NOT_ASSIGNED");
-    return { items: (await repository.listForManager(branchId)).map(serialize) };
+    return { items: (await repository.listForManager(requireBranchId(branchId))).map(serialize) };
   },
   async confirmCash({ refundId, managerId, branchId }) {
-    const existing = await this.requireRefundForBranch(refundId, branchId);
+    const existing = await findManagerRefund(repository, refundId, branchId);
     if (existing.paymentMethod !== "CASH") throw fail(409, "Only cash refunds can be confirmed manually", REFUND_ERROR.INVALID_STATE);
     if (existing.status === REFUND_STATUS.REFUNDED) return serialize(existing);
     const claimed = await repository.claimForProcessing(refundId, managerId, clock());
@@ -93,27 +106,19 @@ export const createRefundService = ({ repository, provider, clock = () => new Da
     return outcomes;
   },
   async reject({ refundId, managerId, branchId, reason }) {
-    const current = await this.requireRefundForBranch(refundId, branchId);
+    const current = await findManagerRefund(repository, refundId, branchId);
     if (current.requestType === REFUND_REQUEST_TYPE.SHOWTIME_CANCELLATION) throw fail(409, "Showtime cancellation refunds cannot be rejected", REFUND_ERROR.INVALID_STATE);
     const updated = await repository.reject(refundId, managerId, reason, clock());
     if (!updated) throw fail(409, "Only a requested refund can be rejected", REFUND_ERROR.INVALID_STATE);
     return serialize(updated);
   },
-  async process({ refundId, managerId, branchId }) {
-    const existing = branchId
-      ? await this.requireRefundForBranch(refundId, branchId)
-      : await repository.findById(refundId);
-    if (!existing) throw fail(404, "Refund request not found", REFUND_ERROR.NOT_FOUND);
-    if (existing.status === REFUND_STATUS.REFUNDED) return serialize(existing);
-    if (existing.paymentMethod === "CASH") throw fail(409, "Cash refunds require manager confirmation after the external payment", REFUND_ERROR.INVALID_STATE);
-    const claimed = await repository.claimForProcessing(refundId, managerId, clock());
-    if (!claimed) throw fail(409, "Refund is not ready for processing", REFUND_ERROR.INVALID_STATE);
-    try {
-      const providerResult = await provider.refund({ idempotencyKey: claimed.idempotencyKey, amount: claimed.refundAmount, method: claimed.paymentMethod, paymentId: id(claimed.paymentId) });
-      return serialize(await repository.finalize(claimed, providerResult, clock()));
-    } catch (error) {
-      await repository.markFailed(refundId, error?.message || "Mock refund failed", clock());
-      throw fail(502, "Refund provider failed; the request can be retried", REFUND_ERROR.INVALID_STATE);
-    }
+  async processForManager({ refundId, managerId, branchId }) {
+    const existing = await findManagerRefund(repository, refundId, branchId);
+    return processRefund({ repository, provider, clock, existing, managerId });
+  },
+  // Internal processing port for the Showtime cancellation workflow.
+  async process({ refundId, managerId }) {
+    const existing = await repository.findById(refundId);
+    return processRefund({ repository, provider, clock, existing, managerId });
   },
 });

@@ -32,7 +32,10 @@ function Header() {
   const branchPickerRef = useRef(null);
   const selectedBranchId = useSelectedBranchStore((state) => state.selectedBranchId);
   const setSelectedBranchId = useSelectedBranchStore((state) => state.setSelectedBranchId);
-  const selectedBranch = branches.find(({ id }) => id === selectedBranchId);
+  const movieCatalog = location.pathname === "/movies";
+  const catalogCinemaId = movieCatalog ? new URLSearchParams(location.search).get("cinemaId") : null;
+  const activeBranchId = catalogCinemaId || selectedBranchId;
+  const selectedBranch = branches.find(({ id }) => id === activeBranchId);
   const displayName = account?.username || account?.email || "";
   const avatarLabel = displayName.charAt(0).toUpperCase();
 
@@ -61,10 +64,27 @@ function Header() {
   }, [branchesRequest, setSelectedBranchId]);
 
   useEffect(() => {
-    if (!branchesLoading && !branchesError && selectedBranchId && !branches.some(({ id }) => id === selectedBranchId)) {
+    if (branchesLoading || branchesError) return;
+    if (catalogCinemaId && branches.some(({ id }) => id === catalogCinemaId)) {
+      if (catalogCinemaId !== selectedBranchId) setSelectedBranchId(catalogCinemaId);
+      return;
+    }
+    if (selectedBranchId && !branches.some(({ id }) => id === selectedBranchId)) {
       setSelectedBranchId("");
     }
-  }, [branches, branchesError, branchesLoading, selectedBranchId, setSelectedBranchId]);
+  }, [branches, branchesError, branchesLoading, catalogCinemaId, selectedBranchId, setSelectedBranchId]);
+
+  const chooseBranch = (branchId) => {
+    setSelectedBranchId(branchId);
+    setBranchMenuOpen(false);
+    if (movieCatalog) {
+      const params = new URLSearchParams(location.search);
+      if (branchId) params.set("cinemaId", branchId);
+      else params.delete("cinemaId");
+      params.delete("page");
+      navigate({ pathname: location.pathname, search: params.toString() }, { replace: true });
+    }
+  };
 
   useEffect(() => {
     if (!branchMenuOpen) return undefined;
@@ -106,28 +126,29 @@ function Header() {
   return (
     <header className="fixed inset-x-0 top-0 z-50 border-b border-white/5 bg-surface/90 backdrop-blur-xl">
       <div className="mx-auto flex h-20 max-w-[1440px] items-center justify-between gap-3 px-4 sm:px-6 lg:px-8">
-        <div className="flex min-w-0 items-center gap-6">
+        <div className="flex min-w-0 items-center gap-2 sm:gap-4 min-[1400px]:gap-6">
           <AppLogo />
-          <div className="relative hidden min-[1400px]:block" ref={branchPickerRef}>
+          <div className="relative shrink-0" ref={branchPickerRef}>
             <button
               type="button"
               onClick={() => setBranchMenuOpen((open) => !open)}
               aria-haspopup="menu"
               aria-expanded={branchMenuOpen}
               aria-label="Choose a cinema branch"
-              className="flex max-w-[250px] items-center gap-2 rounded-lg bg-surface-container-high px-3 py-2 text-xs text-on-surface transition-colors hover:bg-surface-variant"
+              title={selectedBranch?.branchName || "Choose a cinema branch"}
+              className="flex min-h-10 max-w-[250px] items-center gap-2 rounded-lg bg-surface-container-high px-3 py-2 text-xs text-on-surface transition-colors hover:bg-surface-variant"
             >
               <MapPin className="size-4 shrink-0 text-primary-container" />
-              <span className="truncate">{selectedBranch?.branchName || (branchesLoading ? "Loading cinemas…" : branchesError ? "Cinemas unavailable" : "All cinemas")}</span>
-              <ChevronDown className={`size-4 shrink-0 text-on-surface-variant transition-transform ${branchMenuOpen ? "rotate-180" : ""}`} />
+              <span className="hidden truncate min-[1400px]:inline">{selectedBranch?.branchName || (branchesLoading ? "Loading cinemas…" : branchesError ? "Cinemas unavailable" : "All cinemas")}</span>
+              <ChevronDown className={`hidden size-4 shrink-0 text-on-surface-variant transition-transform min-[1400px]:block ${branchMenuOpen ? "rotate-180" : ""}`} />
             </button>
             {branchMenuOpen && (
-              <div role="menu" aria-label="Cinema branches" className="absolute left-0 top-full z-[60] mt-2 max-h-80 w-72 overflow-y-auto rounded-xl border border-white/10 bg-surface-container-low p-2 shadow-2xl">
+              <div role="menu" aria-label="Cinema branches" className="fixed inset-x-4 top-20 z-[60] mt-2 max-h-80 overflow-y-auto rounded-xl border border-white/10 bg-surface-container-low p-2 shadow-2xl sm:absolute sm:inset-x-auto sm:left-0 sm:top-full sm:w-72">
                 <button
                   type="button"
                   role="menuitemradio"
-                  aria-checked={!selectedBranchId}
-                  onClick={() => { setSelectedBranchId(""); setBranchMenuOpen(false) }}
+                  aria-checked={!activeBranchId}
+                  onClick={() => chooseBranch("")}
                   className="w-full rounded-lg px-3 py-2.5 text-left text-sm font-semibold text-on-surface hover:bg-surface-container-high"
                 >All active branches</button>
                 {branchesLoading ? (
@@ -139,8 +160,8 @@ function Header() {
                     key={branch.id}
                     type="button"
                     role="menuitemradio"
-                    aria-checked={selectedBranchId === branch.id}
-                    onClick={() => { setSelectedBranchId(branch.id); setBranchMenuOpen(false) }}
+                    aria-checked={activeBranchId === branch.id}
+                    onClick={() => chooseBranch(branch.id)}
                     className="w-full rounded-lg px-3 py-2.5 text-left hover:bg-surface-container-high"
                   >
                     <span className="block text-sm font-semibold text-on-surface">{branch.branchName}</span>

@@ -4,32 +4,27 @@ import MembershipBanner from '../../features/movie-showtime/components/Membershi
 import NowShowingSection from '../../features/movie-showtime/components/NowShowingSection'
 import ComingSoonSection from '../../features/movie-showtime/components/ComingSoonSection'
 import { useMovies } from '../../features/movie-showtime/hooks/useMovies'
+import { getVietnamDateKey } from '../../features/movie-showtime/utils/movieSearchParams'
+import { useSelectedBranchStore } from '../../lib/store/selectedBranchStore'
 
 const homeMoviesQuery = 'page=1&limit=24&sort=releaseDate&order=desc'
 
-function getVietnamDateKey() {
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Asia/Ho_Chi_Minh',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).formatToParts(new Date())
-  const values = Object.fromEntries(parts.map(({ type, value }) => [type, value]))
-  return `${values.year}-${values.month}-${values.day}`
-}
-
 function LandingPage() {
-  const { movies, loading, error, retry } = useMovies(homeMoviesQuery)
+  const cinemaId = useSelectedBranchStore((state) => state.selectedBranchId)
   const today = getVietnamDateKey()
-  const nowShowing = movies.filter(({ releaseDate }) => releaseDate?.slice(0, 10) <= today).slice(0, 5)
-  const comingSoon = movies.filter(({ releaseDate }) => releaseDate?.slice(0, 10) > today).slice(0, 4)
-  const featuredMovie = nowShowing[0] ?? movies[0]
+  const allCinemas = useMovies(homeMoviesQuery)
+  const branchQuery = new URLSearchParams({ cinemaId, releaseTo: today, limit: '5' }).toString()
+  const atCinema = useMovies(branchQuery, { enabled: Boolean(cinemaId) })
+  const { movies, loading, error, retry } = cinemaId ? atCinema : allCinemas
+  const nowShowing = loading || error ? [] : movies.filter(({ releaseDate }) => releaseDate?.slice(0, 10) <= today).slice(0, 5)
+  const comingSoon = allCinemas.movies.filter(({ releaseDate }) => releaseDate?.slice(0, 10) > today).slice(0, 4)
+  const featuredMovie = nowShowing[0] ?? (cinemaId ? undefined : movies[0])
 
   return (
     <div className="pt-20">
-      <HeroBanner movie={featuredMovie} loading={loading} />
-      <NowShowingSection movies={nowShowing} loading={loading} error={error} onRetry={retry} />
-      {!loading && !error && <ComingSoonSection movies={comingSoon} />}
+      <HeroBanner movie={featuredMovie} loading={loading} cinemaId={cinemaId} />
+      <NowShowingSection movies={nowShowing} loading={loading} error={error} onRetry={retry} cinemaId={cinemaId} />
+      {!allCinemas.loading && !allCinemas.error && <ComingSoonSection movies={comingSoon} />}
       <CinemaExperienceSection />
       <MembershipBanner />
     </div>

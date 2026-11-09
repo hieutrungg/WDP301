@@ -51,10 +51,9 @@ const releaseRangeError = {
   message: "releaseFrom must be on or before releaseTo",
   path: ["releaseFrom"],
 };
-const movieListQuerySchema = movieListQueryBaseSchema.refine(
-  validReleaseRange,
-  releaseRangeError,
-);
+const movieListQuerySchema = movieListQueryBaseSchema
+  .extend({ cinemaId: z.string().regex(/^[a-f\d]{24}$/i, "Invalid cinema ID").optional() })
+  .refine(validReleaseRange, releaseRangeError);
 const managerMovieListQuerySchema = movieListQueryBaseSchema
   .omit({ status: true })
   .refine(validReleaseRange, releaseRangeError);

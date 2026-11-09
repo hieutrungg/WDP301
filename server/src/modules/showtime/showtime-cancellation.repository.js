@@ -5,6 +5,8 @@ import { SHOWTIME_SEAT_STATE } from "../booking/seat-hold.constants.js";
 import { ShowtimeSeat } from "../booking/showtime-seat.model.js";
 import { ConcessionOrder } from "../concession/order.model.js";
 import { releaseStock } from "../inventory/stock-reservation.service.js";
+import { promotionService } from "../promotion/promotion.service.js";
+import { calculateRefundAmounts } from "../refund/refund-amount.js";
 import { Payment } from "../payment/payment.model.js";
 import { Showtime } from "./showtime.model.js";
 import { RefundRequest } from "../refund/refund.model.js";
@@ -13,16 +15,13 @@ import { REFUND_REQUEST_TYPE, REFUND_STATUS } from "../refund/refund.constants.j
 const asId = (value) => value?.toString?.() ?? String(value);
 
 const refundSnapshot = async (booking, payment, showtime, now, session) => {
-  const order = await ConcessionOrder.findOne({ bookingId: booking._id }).session(session).lean();
-  const fulfillmentSnapshot = !order ? "NONE" : order.pickupStatus === "FULFILLED" ? "FULFILLED" : "NOT_FULFILLED";
-  const ticketAmount = booking.subtotal;
-  const concessionAmount = fulfillmentSnapshot === "NOT_FULFILLED" ? (order?.totalAmount ?? 0) : 0;
-  const refundAmount = ticketAmount + concessionAmount;
   const type = REFUND_REQUEST_TYPE.SHOWTIME_CANCELLATION;
   const customerRequest = await RefundRequest.findOne({ bookingId: booking._id, $or: [{ requestType: REFUND_REQUEST_TYPE.CUSTOMER_REQUEST }, { requestType: { $exists: false } }] }).session(session).lean();
   const cancellationRequest = await RefundRequest.findOne({ bookingId: booking._id, requestType: type }).session(session).lean();
   if (cancellationRequest) return cancellationRequest;
   if (customerRequest && customerRequest.status !== REFUND_STATUS.REJECTED) return customerRequest;
+  const order = await ConcessionOrder.findOne({ bookingId: booking._id }).session(session).lean();
+  const amounts = calculateRefundAmounts(booking, payment, order);
   return (await RefundRequest.create([{
     bookingId: booking._id,
     showtimeId: showtime._id,
@@ -31,13 +30,10 @@ const refundSnapshot = async (booking, payment, showtime, now, session) => {
     customerAccountId: booking.customerAccountId,
     reason: `Showtime ${asId(showtime._id)} was cancelled`,
     status: REFUND_STATUS.REQUESTED,
-    ticketAmount,
-    concessionAmount,
-    refundAmount,
+    ...amounts,
     paymentAmount: payment.amount,
     currency: payment.currency ?? "VND",
     paymentMethod: payment.method,
-    fulfillmentSnapshot,
     policySnapshot: {
       cutoffMinutes: 0,
       showtimeStartAt: showtime.startAt,
@@ -70,6 +66,13 @@ export const cancelShowtimeWithSales = async ({ showtimeId, managerId, now }) =>
       const pendingBookings = await Booking.find({ showtimeId, status: "PENDING_PAYMENT" }).session(session).lean();
       const pendingIds = pendingBookings.map(({ _id }) => _id);
       if (pendingIds.length) {
+        for (const booking of pendingBookings) {
+          if (booking.voucherSnapshot) {
+            await promotionService.releaseForClosedBooking({
+              reservationId: booking.voucherSnapshot.reservationId, now, session,
+            });
+          }
+        }
         const orders = await ConcessionOrder.find({ bookingId: { $in: pendingIds }, status: "PENDING_PAYMENT" }).session(session).lean();
         for (const order of orders) await releaseStock({ orderId: order._id, session });
         await ConcessionOrder.updateMany({ bookingId: { $in: pendingIds }, status: "PENDING_PAYMENT" }, { $set: { status: "EXPIRED", pickupStatus: "CANCELLED" } }, { session });

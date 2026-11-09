@@ -6,7 +6,7 @@ import {
   MOVIE_PAGE_SIZE,
   readMovieSearchParams,
 } from '../src/features/movie-showtime/utils/movieSearchParams.js'
-import { buildMovieShowtimesPath } from '../src/features/movie-showtime/utils/movieNavigation.js'
+import { buildMovieCatalogPath, buildMovieShowtimesPath } from '../src/features/movie-showtime/utils/movieNavigation.js'
 
 test('movie search parameters are trimmed and converted to an API query', () => {
   const state = readMovieSearchParams(
@@ -53,4 +53,18 @@ test('movie detail navigation passes the selected movie to showtimes', () => {
   const movieId = '507f1f77bcf86cd799439011'
 
   assert.equal(buildMovieShowtimesPath(movieId), `/showtimes?movieId=${movieId}`)
+})
+
+test('cinema selection survives catalogue links and composes with movie filters', () => {
+  const cinemaId = '507f1f77bcf86cd799439011'
+  const path = buildMovieCatalogPath({ cinemaId, genre: 'Science Fiction' })
+  const params = new URL(path, 'https://example.test').searchParams
+  const query = new URLSearchParams(buildMovieQuery({
+    ...readMovieSearchParams(params), cinemaId: params.get('cinemaId'), releaseTo: '2026-11-09',
+  }))
+
+  assert.equal(query.get('cinemaId'), cinemaId)
+  assert.equal(query.get('genre'), 'Science Fiction')
+  assert.equal(query.get('releaseTo'), '2026-11-09')
+  assert.equal(buildMovieCatalogPath(), '/movies')
 })

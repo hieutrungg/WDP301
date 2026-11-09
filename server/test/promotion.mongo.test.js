@@ -96,7 +96,7 @@ test(
         bookingService,
         now: clock,
       });
-      const manager = oid();
+      const manager = { id: oid(), employeeProfile: { branchId: oid() } };
       const campaign = async (usageLimit = 10) => {
         const p = await promotion.createPromotion(
           {
@@ -501,7 +501,7 @@ test(
           assert.equal(requested.refundAmount, 180005);
           await refunds.process({
             refundId: requested.refundId,
-            managerId: manager,
+            managerId: manager.id,
           });
           assert.equal(
             (await Booking.findById(f.bookingId).lean()).status,
@@ -589,7 +589,7 @@ test(
             },
             { _id: staffRole, name: "STAFF", permissionIds: [permissionId] },
           ]);
-          const account = async (role) => {
+          const account = async (role, branchId) => {
             const _id = oid();
             await db
               .collection("accounts")
@@ -601,10 +601,14 @@ test(
                 roleIds: [role],
                 directPermissionIds: [],
                 profile: {},
+                ...(branchId ? { employeeProfile: { branchId } } : {}),
               });
             return _id;
           };
-          const m = await account(managerRole),
+          const m = await account(managerRole, manager.employeeProfile.branchId),
+            otherBranch = oid(),
+            otherManager = await account(managerRole, otherBranch),
+            unassigned = await account(managerRole),
             c = await account(customerRole),
             s = await account(staffRole);
           const app = express();
@@ -635,6 +639,9 @@ test(
           assert.equal((await request("/promotions", c)).status, 404);
           assert.equal((await request("/promotions", s)).status, 404);
           assert.equal((await request("/promotions", m)).status, 200);
+          const denied = await request("/promotions", unassigned);
+          assert.equal(denied.status, 403);
+          assert.equal(denied.body.code, "BRANCH_NOT_ASSIGNED");
           // Withdrawing promotion.manage from MANAGER blocks the next request; restoring it works.
           await db
             .collection("roles")
@@ -644,7 +651,67 @@ test(
             .collection("roles")
             .updateOne({ _id: managerRole }, { $set: { permissionIds: [promotionManageId] } });
           assert.equal((await request("/promotions", m)).status, 200);
-          const { v } = await campaign();
+          const campaignInput = {
+            name: "Branch scope regression",
+            discountValue: 10,
+            startDate: new Date(+now - 60000).toISOString(),
+            endDate: new Date(+now + 3600000).toISOString(),
+            status: "ACTIVE",
+          };
+          const create = (actor, input) => request("/promotions", actor, "POST", input);
+          assert.equal((await create(m, { ...campaignInput, branchId: String(otherBranch) })).status, 400);
+          const own = await create(m, campaignInput);
+          const foreign = await create(otherManager, campaignInput);
+          assert.equal(own.status, 201);
+          assert.equal(foreign.status, 201);
+          const ownId = own.body.data.id;
+          const foreignId = foreign.body.data.id;
+          const stored = await db.collection("promotions").findOne({ _id: new mongoose.Types.ObjectId(ownId) });
+          assert.equal(String(stored.branchId), String(manager.employeeProfile.branchId));
+          assert.equal(String(stored.createdBy), String(m));
+          const { _id, branchId, ...legacyCampaign } = stored;
+          assert.ok(_id && branchId);
+          const { insertedId: legacyId } = await db.collection("promotions").insertOne(legacyCampaign);
+
+          const listPath = "/promotions?q=Branch%20scope%20regression&status=ACTIVE&limit=1";
+          const ownList = await request(listPath, m);
+          assert.deepEqual(ownList.body.data.items.map(({ id }) => id), [ownId]);
+          assert.equal(ownList.body.meta.total, 1);
+          assert.deepEqual((await request(listPath, otherManager)).body.data.items.map(({ id }) => id), [foreignId]);
+
+          const voucherInput = { code: "BRANCH-REGRESSION", usageLimit: 10, status: "ACTIVE" };
+          const ownVoucher = await request(`/promotions/${ownId}/vouchers`, m, "POST", voucherInput);
+          assert.equal(ownVoucher.status, 201);
+          const v = ownVoucher.body.data;
+          const voucherUpdate = { expectedVersion: v.version, usageLimit: 8 };
+          assert.equal((await request(`/vouchers/${v.id}`, otherManager, "PATCH", voucherUpdate)).status, 404);
+          assert.equal((await request(`/vouchers/${v.id}`, m, "PATCH", voucherUpdate)).status, 200);
+
+          for (const id of [foreignId, legacyId]) {
+            const path = `/promotions/${id}`;
+            assert.equal((await request(path, m)).status, 404);
+            assert.equal((await request(path, m, "PATCH", { expectedVersion: 0, status: "INACTIVE" })).status, 404);
+            assert.equal((await request(`${path}/vouchers`, m)).status, 404);
+            assert.equal((await request(`${path}/vouchers`, m, "POST", voucherInput)).status, 404);
+          }
+          assert.equal((await request(`/promotions/${ownId}`, m)).status, 200);
+          assert.equal((await request(`/promotions/${ownId}/vouchers`, m)).status, 200);
+          assert.equal((await request(`/promotions/${ownId}`, m, "PATCH", { expectedVersion: 0, discountValue: 9 })).status, 200);
+          await db.collection("accounts").updateOne({ _id: m }, { $set: { "employeeProfile.branchId": otherBranch } });
+          assert.equal((await request(`/promotions/${ownId}`, m)).status, 404);
+          assert.equal((await request(`/promotions/${foreignId}`, m)).status, 200);
+
+          const { _id: originalVoucherId, ...legacyVoucher } = await db
+            .collection("vouchers").findOne({ _id: new mongoose.Types.ObjectId(v.id) });
+          assert.ok(originalVoucherId);
+          await db.collection("vouchers").insertOne({
+            ...legacyVoucher,
+            promotionId: legacyId,
+            code: "LEGACY-BRANCH",
+          });
+          assert.equal((await promotion.quoteForBooking({
+            code: "LEGACY-BRANCH", customerAccountId: c, ticketAmount: 200005,
+          })).discountAmount, 20000);
           const f = await fixture(c);
           const input = {
             code: v.code,

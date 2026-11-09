@@ -14,6 +14,21 @@ import {
   discountForTickets,
 } from "./promotion.policy.js";
 
+const requireBranchId = (account) => {
+  const branchId = account?.employeeProfile?.branchId;
+  if (!mongoose.isObjectIdOrHexString(branchId))
+    throw promoError(
+      "BRANCH_NOT_ASSIGNED",
+      "Your account is not assigned to a branch",
+      403,
+    );
+  return branchId;
+};
+const promotionNotFound = () =>
+  promoError("PROMOTION_NOT_FOUND", "Promotion not found", 404);
+const voucherNotFound = () =>
+  promoError("VOUCHER_NOT_FOUND", "Voucher not found", 404);
+
 export function createPromotionService({
   repository: r = promotionRepository,
   clock = () => new Date(),
@@ -156,9 +171,11 @@ export function createPromotionService({
   });
   return {
     assertReady,
-    async listPromotions(query) {
+    async listPromotions(query, account) {
+      const branchId = requireBranchId(account);
       await assertReady();
       const filter = {
+        branchId,
         ...(query.status ? { status: query.status } : {}),
         ...(query.q
           ? {
@@ -184,14 +201,15 @@ export function createPromotionService({
         query,
       );
     },
-    async getPromotion(id) {
+    async getPromotion(id, account) {
+      const branchId = requireBranchId(account);
       await assertReady();
-      const p = await r.promotion.findById(id).lean();
-      if (!p)
-        throw promoError("PROMOTION_NOT_FOUND", "Promotion not found", 404);
+      const p = await r.promotion.findOne({ _id: id, branchId }).lean();
+      if (!p) throw promotionNotFound();
       return promotionDto(checkedPromotion(p), clock());
     },
-    async createPromotion(input, actorId) {
+    async createPromotion(input, account) {
+      const branchId = requireBranchId(account);
       await assertReady();
       return promotionDto(
         (
@@ -199,27 +217,32 @@ export function createPromotionService({
             ...input,
             discountType: "PERCENTAGE",
             version: 0,
-            createdBy: actorId,
-            updatedBy: actorId,
+            branchId,
+            createdBy: account.id,
+            updatedBy: account.id,
           })
         ).toObject(),
         clock(),
       );
     },
-    async updatePromotion(id, { expectedVersion, ...input }, actorId) {
+    async updatePromotion(id, { expectedVersion, ...input }, account) {
+      const branchId = requireBranchId(account);
       await assertReady();
       return r.transaction(async (session) => {
-        const current = await r.promotion.findById(id).session(session).lean();
-        if (!current)
-          throw promoError("PROMOTION_NOT_FOUND", "Promotion not found", 404);
+        const scope = { _id: id, branchId };
+        const current = await r.promotion
+          .findOne(scope)
+          .session(session)
+          .lean();
+        if (!current) throw promotionNotFound();
         checkedPromotion(current);
         const next = { ...current, ...input };
         if (next.startDate >= next.endDate)
           throw promoError("INVALID_PROMOTION", "End must be after start", 400);
         const p = await r.promotion
           .findOneAndUpdate(
-            { _id: id, version: expectedVersion },
-            { $set: { ...input, updatedBy: actorId }, $inc: { version: 1 } },
+            { ...scope, version: expectedVersion },
+            { $set: { ...input, updatedBy: account.id }, $inc: { version: 1 } },
             { returnDocument: "after", session, runValidators: true },
           )
           .lean();
@@ -239,10 +262,11 @@ export function createPromotionService({
         return promotionDto(p, clock());
       });
     },
-    async listVouchers(promotionId, query) {
+    async listVouchers(promotionId, query, account) {
+      const branchId = requireBranchId(account);
       await assertReady();
-      if (!(await r.promotion.exists({ _id: promotionId })))
-        throw promoError("PROMOTION_NOT_FOUND", "Promotion not found", 404);
+      if (!(await r.promotion.exists({ _id: promotionId, branchId })))
+        throw promotionNotFound();
       const filter = { promotionId };
       const [items, total] = await Promise.all([
         r.voucher
@@ -262,19 +286,19 @@ export function createPromotionService({
         serverNow: clock(),
       };
     },
-    async createVoucher(promotionId, input, actorId) {
+    async createVoucher(promotionId, input, account) {
+      const branchId = requireBranchId(account);
       await assertReady();
       try {
         return await r.transaction(async (session) => {
           const p = await r.promotion
             .findOneAndUpdate(
-              { _id: promotionId },
+              { _id: promotionId, branchId },
               { $inc: { reservationFence: 1 } },
               { returnDocument: "after", session },
             )
             .lean();
-          if (!p)
-            throw promoError("PROMOTION_NOT_FOUND", "Promotion not found", 404);
+          if (!p) throw promotionNotFound();
           checkedPromotion(p);
           const [v] = await r.voucher.create(
             [
@@ -286,8 +310,8 @@ export function createPromotionService({
                 version: 0,
                 validFrom: p.startDate,
                 validTo: p.endDate,
-                createdBy: actorId,
-                updatedBy: actorId,
+                createdBy: account.id,
+                updatedBy: account.id,
               },
             ],
             { session },
@@ -300,12 +324,24 @@ export function createPromotionService({
         throw e;
       }
     },
-    async updateVoucher(id, { expectedVersion, ...input }, actorId) {
+    async updateVoucher(id, { expectedVersion, ...input }, account) {
+      const branchId = requireBranchId(account);
       await assertReady();
       return r.transaction(async (session) => {
+        const parent = await r.voucher
+          .findById(id)
+          .select("promotionId")
+          .session(session)
+          .lean();
+        if (
+          !parent ||
+          !(await r.promotion
+            .exists({ _id: parent.promotionId, branchId })
+            .session(session))
+        )
+          throw voucherNotFound();
         await reclaim(id, clock(), session);
         const v = await r.voucher.findById(id).session(session).lean();
-        if (!v) throw promoError("VOUCHER_NOT_FOUND", "Voucher not found", 404);
         checkedVoucher(v);
         if (
           input.usageLimit !== undefined &&
@@ -318,8 +354,12 @@ export function createPromotionService({
           );
         const updated = await r.voucher
           .findOneAndUpdate(
-            { _id: id, version: expectedVersion },
-            { $set: { ...input, updatedBy: actorId }, $inc: { version: 1 } },
+            {
+              _id: id,
+              promotionId: parent.promotionId,
+              version: expectedVersion,
+            },
+            { $set: { ...input, updatedBy: account.id }, $inc: { version: 1 } },
             { returnDocument: "after", session, runValidators: true },
           )
           .lean();
