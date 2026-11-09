@@ -124,6 +124,23 @@ Effective union và global enforcement policy đã `APPROVED`; `/auth/me` union,
 
 ## Approval queue
 
+### AI-001 assistant — Cường request 2026-11-09 (PROPOSED, not in SRS)
+
+Cường asked in chat on 2026-11-09 for an OpenAI-based assistant, and chose its scope while the plan was reviewed:
+- It serves every role, guests included. It reads the real database only through the existing REST APIs, with the user's own session.
+- It may do basic writes, each needing an explicit "Xác nhận" click: update own profile, submit a movie review, and Staff ticket check-in. Hard flows are excluded: payment, refund request/approve/reject, showtime cancellation, seat holding, and catalog/price/role/account changes.
+- Vector store is MongoDB Atlas Vector Search.
+- RAG sources are the movie catalog plus newly written customer FAQs in `docs/ai-knowledge/`.
+
+Implementation is in the working tree. Contract and verification are in `docs/AI-001-IMPLEMENTATION.md`; the setup steps are in `docs/AI-001-ATLAS-SETUP.md`.
+
+Still pending:
+- Project-owner approval of the feature, since it is not an SRS use case.
+- Cross-owner review of the shared mounts in `server/src/app.js` and `client/src/app/router/index.jsx`.
+- Each module owner's review of the FAQ files, which stay `status: draft`.
+
+No new permission was seeded. Trace viewing and knowledge sync are ADMIN-role only.
+
 ### PROMO-101 — scoped owner instruction / pending contract, 2026-10-27
 
 **Implementation update, 2026-10-27:** PROMO-101 backend and Manager/C14/confirmation/history UI are implemented in the working tree under the approved contract. MongoDB tests cover quota/Customer races, snapshots, lifecycle, pricing lock and real net-paid Refund without restoring voucher eligibility. Development cinema_management_dev was inspected read-only: no incompatible promotion data, but required validators/indexes are not installed. Versioned inspect-first migration/PowerShell guide: `docs/PROMO-101-DATABASE.md`; voucher commands fail closed until application. No development DDL/seed/backfill, SRS edit, sheet Done update, commit or push. See `docs/PROMO-101-IMPLEMENTATION.md` for exact changed files, actual check results, existing out-of-scope failures and integration review requirements. This supersedes historical NOT IMPLEMENTED/pending-contract wording below, without claiming rollout or human reviewer sign-off.

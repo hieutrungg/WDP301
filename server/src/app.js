@@ -31,6 +31,7 @@ import { errorHandler } from "./middlewares/errorMiddleware.js";
 import { env } from "./config/env.js";
 import { promotionRoutes } from "./modules/promotion/promotion.routes.js";
 import staffDashboardRoutes from "./modules/staff-dashboard/staff-dashboard.routes.js";
+import { aiRoutes } from "./modules/ai/ai.module.js";
 
 const app = express();
 
@@ -76,6 +77,7 @@ app.use("/api/refunds", refundRoutes);
 app.use("/api/analytics", reportingRoutes);
 app.use("/api/reports", revenueExportRoutes);
 app.use("/api/tickets", ticketRoutes);
+app.use("/api/ai", aiRoutes);
 
 app.use(notFound);
 app.use(errorHandler);

@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 430" role="img" aria-labelledby="title desc">
+<title id="title">Popo</title>
+<desc id="desc">Popo, linh vật bắp rang của F-Cinema.</desc>
+<g stroke="#503437" stroke-width="8" stroke-linecap="round" stroke-linejoin="round">
+<!-- Bắp nằm cân đối chính giữa cốc -->
+<path d="M70 196C49 177 57 145 81 135c-1-29 21-47 49-42 13-31 45-40 70-17 25-23 57-14 70 17 28-5 50 13 49 42 24 10 32 42 11 61z" fill="#ffe8ab"/>
+<path d="M106 143q12-9 25-5m61-51q-6 12-1 23m80 27q-12 4-16 15" fill="none" stroke="#dfb269" stroke-width="6"/>
+<!-- Cốc và các sọc -->
+<path d="M64 192q136 24 272 0l-25 158q-111 27-222 0z" fill="#e35c50"/>
+<path d="M93 199q16 3 32 4l13 157q-17-2-32-6zm64 7q21 2 43 2t43-2l-5 158q-19 2-38 2t-38-2zm118-3q16-1 32-4l-13 155q-15 4-32 6z" fill="#fff6e2" stroke="none"/>
+<path d="M64 192q136 24 272 0l-25 158q-111 27-222 0z" fill="none"/>
+<path d="M59 182q141 29 282 0l-6 30q-135 29-270 0z" fill="#fff6e2"/>
+<!-- Khuôn mặt -->
+<ellipse cx="163" cy="273" rx="11" ry="16" fill="#503437" stroke="none"/>
+<ellipse cx="237" cy="273" rx="11" ry="16" fill="#503437" stroke="none"/>
+<ellipse cx="137" cy="302" rx="12" ry="7" fill="#f4aaa0" stroke="none"/>
+<ellipse cx="263" cy="302" rx="12" ry="7" fill="#f4aaa0" stroke="none"/>
+<path d="M185 301q15 15 30 0" fill="none" stroke-width="7"/>
+</g></svg>
