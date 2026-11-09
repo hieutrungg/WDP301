@@ -49,6 +49,24 @@ export const env = {
   get emailFrom() {
     return process.env.EMAIL_FROM;
   },
+  // AI-001 assistant. Disabled (503 AI_DISABLED) until OPENAI_API_KEY is set.
+  get ai() {
+    const apiKey = process.env.OPENAI_API_KEY?.trim();
+    if (!apiKey) return null;
+    const positiveInt = (value, fallback) => {
+      const number = Number(value);
+      return Number.isInteger(number) && number > 0 ? number : fallback;
+    };
+    return {
+      apiKey,
+      baseUrl: process.env.OPENAI_BASE_URL?.trim() || "https://api.openai.com/v1",
+      chatModel: process.env.OPENAI_CHAT_MODEL?.trim() || "gpt-5-mini",
+      embeddingModel: process.env.OPENAI_EMBEDDING_MODEL?.trim() || "text-embedding-3-small",
+      moderationModel: process.env.OPENAI_MODERATION_MODEL?.trim() || "omni-moderation-latest",
+      storeResponses: process.env.AI_STORE_RESPONSES === "true",
+      traceRetentionDays: positiveInt(process.env.AI_TRACE_RETENTION_DAYS, 30),
+    };
+  },
   // payOS bank transfer is enabled only when all three credentials are present.
   get payos() {
     const clientId = process.env.PAYOS_CLIENT_ID?.trim();

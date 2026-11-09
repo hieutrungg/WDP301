@@ -1,5 +1,6 @@
 import { useLayoutEffect } from 'react'
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router'
+import AiAssistantWidget from '../../features/ai-assistant/components/AiAssistantWidget'
 import ChangePasswordPage from '../../features/account/pages/ChangePasswordPage'
 import EditProfilePage from '../../features/account/pages/EditProfilePage'
 import ProfilePage from '../../features/account/pages/ProfilePage'
@@ -208,6 +209,7 @@ function AppRouter() {
     <BrowserRouter>
       <ScrollToTop />
       <AppRoutes />
+      <AiAssistantWidget />
     </BrowserRouter>
   )
 }
