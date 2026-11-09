@@ -30,7 +30,10 @@ export const loginSchema = z.object({
 });
 
 export const internalStaffLoginSchema = loginSchema.extend({
-  branchId: z.string().regex(/^[a-f\d]{24}$/i, "Select a valid cinema"),
+  branchId: z
+    .string()
+    .regex(/^[a-f\d]{24}$/i, "Select a valid cinema")
+    .optional(),
 });
 
 export const googleLoginSchema = z.object({
@@ -42,7 +45,10 @@ export const googleLoginSchema = z.object({
 });
 
 export const internalStaffGoogleLoginSchema = googleLoginSchema.extend({
-  branchId: z.string().regex(/^[a-f\d]{24}$/i, "Select a valid cinema"),
+  branchId: z
+    .string()
+    .regex(/^[a-f\d]{24}$/i, "Select a valid cinema")
+    .optional(),
 });
 
 export const fullNameField = z

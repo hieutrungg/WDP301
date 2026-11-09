@@ -6,14 +6,18 @@ import {
   Plus,
   Popcorn,
   RefreshCw,
+  RotateCcw,
   Search,
   Ticket,
+  Trash2,
+  X,
 } from "lucide-react";
 import { Link, useNavigate } from "react-router";
 import { toast } from "sonner";
 import EmptyState from "../../../components/common/EmptyState";
 import ErrorState from "../../../components/common/ErrorState";
 import { getApiErrorMessage } from "../../../lib/api/apiError";
+import { useAuthStore } from "../../auth/store/authStore";
 import { useMovies } from "../../movie-showtime/hooks/useMovies";
 import { useShowtimes } from "../../movie-showtime/hooks/useShowtimes";
 import SeatButton from "../../seat-selection/components/SeatButton";
@@ -36,6 +40,17 @@ import {
   CatalogBadges,
   CatalogImage,
 } from "../../concessions/components/CatalogCard";
+import {
+  getSeatAvailability,
+  releaseSeatHold,
+} from "../../seat-selection/api/seatHoldApi";
+import {
+  clearCounterOrderDraft,
+  readCounterOrderDraft,
+  writeCounterOrderDraft,
+} from "../utils/counterOrderDraft";
+import { uniqueAvailableCatalogItems } from "../../concessions/utils/catalogDisplay";
+import { withCatalogImageOverride } from "../../concessions/utils/catalogPresentation";
 
 const dateFmt = new Intl.DateTimeFormat("vi-VN", {
   dateStyle: "medium",
@@ -62,36 +77,37 @@ function vietnamDateKey(date = new Date()) {
 
 function SeatMatrix({ rows, selected, locked, onToggle }) {
   return (
-    <div className="rounded-xl bg-surface-container-low p-5">
-      <div className="mb-6 text-center">
+    <div className="min-w-0 rounded-xl bg-surface-container-low p-4 sm:p-6">
+      <div className="mb-7 text-center">
         <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-on-surface-variant">
           Cinema screen
         </p>
-        <div className="mx-auto mt-2 h-1.5 max-w-lg rounded-full bg-gradient-to-r from-transparent via-primary to-transparent opacity-70" />
+        <div className="mx-auto mt-2 h-1.5 w-[min(90%,52rem)] rounded-full bg-gradient-to-r from-transparent via-primary to-transparent opacity-70" />
       </div>
-      <div className="overflow-x-auto pb-2">
-        <div className="mx-auto flex min-w-max flex-col gap-2.5">
+      <div className="w-full overflow-x-auto pb-3">
+        <div className="mx-auto flex w-max min-w-max flex-col gap-3 px-2 sm:px-4">
           {rows.map(([row, seats]) => (
-            <div key={row} className="flex items-center gap-3">
-              <span className="w-6 text-center font-mono text-xs font-bold text-on-surface-variant">
+            <div key={row} className="flex items-center justify-center gap-3 sm:gap-4">
+              <span className="w-5 shrink-0 text-center font-mono text-xs font-bold text-on-surface-variant">
                 {row}
               </span>
-              <div className="flex gap-1.5">
+              <div className="flex gap-2 sm:gap-2.5">
                 {seats.map((seat, index) => (
                   <Fragment key={seat.seatId}>
                     {index === Math.ceil(seats.length / 2) && (
-                      <span className="w-4" />
+                      <span className="w-3 sm:w-5" />
                     )}
                     <SeatButton
                       seat={seat}
                       selected={selected.includes(seat.seatId)}
                       disabled={locked || !hasValidSeatPrice(seat.price)}
                       onToggle={onToggle}
+                      size="counter"
                     />
                   </Fragment>
                 ))}
               </div>
-              <span className="w-6 text-center font-mono text-xs font-bold text-on-surface-variant">
+              <span className="w-5 shrink-0 text-center font-mono text-xs font-bold text-on-surface-variant">
                 {row}
               </span>
             </div>
@@ -104,6 +120,13 @@ function SeatMatrix({ rows, selected, locked, onToggle }) {
 
 function CounterPosPage() {
   const navigate = useNavigate();
+  const account = useAuthStore((state) => state.account);
+  const [savedDraft, setSavedDraft] = useState(() =>
+    readCounterOrderDraft(sessionStorage, account?.id),
+  );
+  const [draftDecisionPending, setDraftDecisionPending] = useState(() =>
+    Boolean(readCounterOrderDraft(sessionStorage, account?.id)),
+  );
   const [query, setQuery] = useState("");
   const [date, setDate] = useState(vietnamDateKey);
   const [movieId, setMovieId] = useState("");
@@ -116,6 +139,35 @@ function CounterPosPage() {
   const [foodItems, setFoodItems] = useState([]);
   const [foodContext, setFoodContext] = useState(null);
   const [checkoutBusy, setCheckoutBusy] = useState(false);
+
+  useEffect(() => {
+    if (!account?.id || draftDecisionPending) return;
+    if (!showtimeId || !selectedIds.length) {
+      clearCounterOrderDraft(sessionStorage, account.id);
+      return;
+    }
+    writeCounterOrderDraft(sessionStorage, {
+      accountId: account.id,
+      movieId,
+      showtimeId,
+      date,
+      selectedIds,
+      hold,
+      foodItems,
+      foodContext,
+      savedAt: new Date().toISOString(),
+    });
+  }, [
+    account?.id,
+    date,
+    draftDecisionPending,
+    foodContext,
+    foodItems,
+    hold,
+    movieId,
+    selectedIds,
+    showtimeId,
+  ]);
 
   // The public Movie contract caps a page at 24. Sending 50 made every Staff
   // POS request fail validation before any movie could be displayed.
@@ -167,6 +219,13 @@ function CounterPosPage() {
     Boolean(foodOpen && foodContext?.branchId),
   );
   const foodCount = foodItems.reduce((sum, line) => sum + line.quantity, 0);
+  const availableFoodItems = useMemo(
+    () =>
+      uniqueAvailableCatalogItems(catalog.data?.items).map(
+        withCatalogImageOverride,
+      ),
+    [catalog.data?.items],
+  );
   const rows = useMemo(() => {
     const groups = new Map();
     seats.forEach((seat) => {
@@ -238,6 +297,7 @@ function CounterPosPage() {
         setFoodOpen(false);
         setFoodItems([]);
         setFoodContext(null);
+        clearCounterOrderDraft(sessionStorage, account?.id);
         setRefresh((value) => value + 1);
         toast.error(
           "The seat reservation expired. Please select the seats again.",
@@ -246,7 +306,69 @@ function CounterPosPage() {
       Math.max(0, remaining),
     );
     return () => window.clearTimeout(timer);
-  }, [hold?.expiresAt]);
+  }, [account?.id, hold?.expiresAt]);
+
+  const continueSavedOrder = async () => {
+    if (!savedDraft) return;
+    const activeHold =
+      savedDraft.hold?.expiresAt &&
+      Date.parse(savedDraft.hold.expiresAt) > Date.now()
+        ? savedDraft.hold
+        : null;
+    let restoredIds = savedDraft.selectedIds;
+    if (!activeHold) {
+      try {
+        const current = await getSeatAvailability(savedDraft.showtimeId);
+        const currentSeats = new Map(
+          (current?.seats ?? []).map((seat) => [seat.seatId, seat]),
+        );
+        restoredIds = savedDraft.selectedIds.filter((id) => {
+          const seat = currentSeats.get(id);
+          return (
+            seat?.availability === "AVAILABLE" &&
+            hasValidSeatPrice(seat.price)
+          );
+        });
+        if (restoredIds.length !== savedDraft.selectedIds.length) {
+          toast.warning("Some saved seats are no longer available and were removed.");
+        }
+      } catch (error) {
+        toast.error(getApiErrorMessage(error));
+        return;
+      }
+    }
+    if (!restoredIds.length) {
+      clearCounterOrderDraft(sessionStorage, account?.id);
+      setSavedDraft(null);
+      setDraftDecisionPending(false);
+      toast.error("None of the saved seats are still available.");
+      return;
+    }
+    setDate(savedDraft.date);
+    setMovieId(savedDraft.movieId);
+    setShowtimeId(savedDraft.showtimeId);
+    setSelectedIds(restoredIds);
+    setHold(activeHold);
+    setFoodItems(activeHold ? savedDraft.foodItems : []);
+    setFoodContext(activeHold ? savedDraft.foodContext : null);
+    setSavedDraft(null);
+    setDraftDecisionPending(false);
+    toast.success("Your counter order has been restored.");
+  };
+
+  const discardSavedOrder = async () => {
+    const activeHold = savedDraft?.hold;
+    clearCounterOrderDraft(sessionStorage, account?.id);
+    setSavedDraft(null);
+    setDraftDecisionPending(false);
+    if (activeHold?.holdId && Date.parse(activeHold.expiresAt) > Date.now()) {
+      try {
+        await releaseSeatHold(activeHold.holdId);
+      } catch {
+        toast.warning("The saved order was cleared; its seat hold will expire automatically.");
+      }
+    }
+  };
 
   const openFood = async () => {
     setFoodOpen(true);
@@ -306,6 +428,7 @@ function CounterPosPage() {
         priceQuoteReference: activeHold.priceQuote?.quoteId,
         concessionSelection,
       });
+      clearCounterOrderDraft(sessionStorage, account?.id);
       navigate("/staff/pos/payment", {
         state: {
           booking,
@@ -347,8 +470,37 @@ function CounterPosPage() {
           </div>
         </div>
       </header>
+      {draftDecisionPending && savedDraft && (
+        <section className="flex flex-col gap-4 rounded-xl border border-secondary/25 bg-secondary/10 p-4 shadow-lg sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-secondary">
+              Unfinished counter order
+            </p>
+            <p className="mt-1 text-sm text-on-surface">
+              {savedDraft.selectedIds.length} seat{savedDraft.selectedIds.length === 1 ? "" : "s"} selected
+              {savedDraft.foodItems.length ? " with F&B add-ons" : ""}. Continue where you left off?
+            </p>
+          </div>
+          <div className="flex shrink-0 gap-2">
+            <button
+              type="button"
+              onClick={discardSavedOrder}
+              className="flex items-center gap-2 rounded-lg bg-surface-container-high px-4 py-2.5 text-sm font-bold text-tertiary hover:text-white"
+            >
+              <Trash2 className="size-4" /> Discard
+            </button>
+            <button
+              type="button"
+              onClick={continueSavedOrder}
+              className="flex items-center gap-2 rounded-lg bg-secondary px-4 py-2.5 text-sm font-extrabold text-neutral-950"
+            >
+              <RotateCcw className="size-4" /> Continue order
+            </button>
+          </div>
+        </section>
+      )}
       <div className="grid gap-4 xl:grid-cols-12">
-        <section className="space-y-3 xl:col-span-3">
+        <section className="space-y-3 xl:col-span-2">
           <div className="rounded-xl bg-surface-container-low p-4">
             <label className="relative block">
               <span className="sr-only">Search movie title</span>
@@ -410,7 +562,7 @@ function CounterPosPage() {
           </div>
         </section>
 
-        <section className="space-y-4 xl:col-span-5">
+        <section className="space-y-4 xl:col-span-7">
           <div className="rounded-xl bg-surface-container-low p-5">
             <div className="flex flex-wrap items-end justify-between gap-3">
               <div>
@@ -514,7 +666,7 @@ function CounterPosPage() {
           )}
         </section>
 
-        <aside className="xl:col-span-4">
+        <aside className="xl:col-span-3">
           <div className="sticky top-20 rounded-xl bg-surface-container-low p-5 shadow-xl">
             <div className="flex items-start justify-between gap-3">
               <div>
@@ -614,43 +766,64 @@ function CounterPosPage() {
         </aside>
       </div>
       {hold && foodOpen && (
-        <section className="rounded-xl bg-surface-container-low p-5">
-          <div className="flex flex-wrap items-end justify-between gap-3">
-            <div>
-              <p className="text-xs font-bold uppercase tracking-wider text-secondary">
-                Optional add-on
-              </p>
-              <h2 className="font-heading text-xl font-bold">
-                Food &amp; drink
-              </h2>
-              <p className="mt-1 text-sm text-tertiary">
-                {foodContext?.branchName ?? "Loading the menu for this cinema…"}
-              </p>
-            </div>
-            <div className="flex gap-2">
-              {["items", "combos"].map((kind) => (
+        <div
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/75 p-3 backdrop-blur-sm sm:p-6"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="counter-food-title"
+        >
+          <section className="flex max-h-[86vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-white/10 bg-surface-container-low shadow-2xl">
+            <header className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 px-5 py-4">
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-secondary">
+                  Optional add-on
+                </p>
+                <h2 id="counter-food-title" className="font-heading text-xl font-bold">
+                  Add food &amp; drink
+                </h2>
+                <p className="mt-0.5 text-xs text-tertiary">
+                  {foodContext?.branchName ?? "Loading this cinema's menu…"}
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                {["items", "combos"].map((kind) => (
                 <button
                   key={kind}
                   type="button"
                   onClick={() => setFoodKind(kind)}
-                  className={`rounded-lg px-4 py-2 text-sm font-bold ${foodKind === kind ? "bg-primary-container text-white" : "bg-surface-container-high text-tertiary"}`}
+                  className={`rounded-lg px-3 py-2 text-xs font-bold ${foodKind === kind ? "bg-primary-container text-white" : "bg-surface-container-high text-tertiary"}`}
                 >
                   {kind === "items" ? "Items" : "Combos"}
                 </button>
-              ))}
-            </div>
-          </div>
-          {catalog.loading && (
-            <p className="mt-5 text-sm text-tertiary">Loading F&amp;B…</p>
-          )}
-          {catalog.error && (
-            <ErrorState
-              message={getApiErrorMessage(catalog.error)}
-              onRetry={() => setRefresh((value) => value + 1)}
-            />
-          )}
-          <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            {(catalog.data?.items ?? []).map((item) => {
+                ))}
+                <button
+                  type="button"
+                  onClick={() => setFoodOpen(false)}
+                  aria-label="Close food and drink menu"
+                  className="grid size-9 place-items-center rounded-lg bg-surface-container-high text-tertiary hover:text-white"
+                >
+                  <X className="size-4" />
+                </button>
+              </div>
+            </header>
+            <div className="min-h-0 flex-1 overflow-y-auto p-5">
+              {catalog.loading && (
+                <p className="py-10 text-center text-sm text-tertiary">Loading F&amp;B…</p>
+              )}
+              {catalog.error && (
+                <ErrorState
+                  message={getApiErrorMessage(catalog.error)}
+                  onRetry={() => setRefresh((value) => value + 1)}
+                />
+              )}
+              {!catalog.loading && !catalog.error && availableFoodItems.length === 0 && (
+                <EmptyState
+                  title="No food available"
+                  description="This cinema currently has no in-stock items in this category."
+                />
+              )}
+              <div className="grid gap-3 md:grid-cols-2">
+                {availableFoodItems.map((item) => {
               const type = foodKind === "combos" ? "COMBO" : "CONCESSION";
               const quantity =
                 foodItems.find(
@@ -659,23 +832,25 @@ function CounterPosPage() {
               return (
                 <article
                   key={item.id}
-                  className="overflow-hidden rounded-xl bg-surface-container-lowest"
+                  className="flex min-h-32 overflow-hidden rounded-xl border border-white/5 bg-surface-container-lowest"
                 >
-                  <CatalogImage item={item} combo={foodKind === "combos"} />
-                  <div className="p-4">
+                  <div className="w-32 shrink-0 [&>div]:h-full [&>div]:aspect-auto">
+                    <CatalogImage item={item} combo={foodKind === "combos"} />
+                  </div>
+                  <div className="flex min-w-0 flex-1 flex-col justify-between p-3">
                     <div className="flex flex-wrap gap-2">
                       <CatalogBadges item={item} />
                     </div>
-                    <h3 className="mt-3 font-bold">{item.name}</h3>
+                    <h3 className="mt-2 line-clamp-2 text-sm font-bold">{item.name}</h3>
                     <p className="mt-1 text-sm text-secondary">
                       {formatSeatMoney(item.price)}
                     </p>
-                    <div className="mt-4 flex items-center justify-between">
+                    <div className="mt-2 flex items-center justify-end gap-3">
                       <button
                         type="button"
                         disabled={!quantity}
                         onClick={() => changeFood(item, -1)}
-                        className="grid size-9 place-items-center rounded-lg bg-surface-container-high disabled:opacity-40"
+                        className="grid size-8 place-items-center rounded-lg bg-surface-container-high disabled:opacity-40"
                       >
                         <Minus className="size-4" />
                       </button>
@@ -684,7 +859,7 @@ function CounterPosPage() {
                         type="button"
                         disabled={!item.available}
                         onClick={() => changeFood(item, 1)}
-                        className="grid size-9 place-items-center rounded-lg bg-primary-container text-white disabled:opacity-40"
+                        className="grid size-8 place-items-center rounded-lg bg-primary-container text-white disabled:opacity-40"
                       >
                         <Plus className="size-4" />
                       </button>
@@ -692,9 +867,23 @@ function CounterPosPage() {
                   </div>
                 </article>
               );
-            })}
-          </div>
-        </section>
+                })}
+              </div>
+            </div>
+            <footer className="flex items-center justify-between gap-3 border-t border-white/10 bg-surface-container-lowest px-5 py-4">
+              <p className="text-sm text-tertiary">
+                <strong className="text-on-surface">{foodCount}</strong> item{foodCount === 1 ? "" : "s"} selected
+              </p>
+              <button
+                type="button"
+                onClick={() => setFoodOpen(false)}
+                className="rounded-xl bg-primary-container px-6 py-2.5 text-sm font-bold text-white shadow-crimson"
+              >
+                Add to order
+              </button>
+            </footer>
+          </section>
+        </div>
       )}
     </div>
   );

@@ -167,11 +167,15 @@ const issueAccessToken = (accountId, rememberMe) =>
 const assertInternalAccountBranch = async (account, branchId) => {
   const roles = await getRolesByIds(account.roleIds ?? []);
   const actors = actorRoleNames(roles);
+  if (actors.has("ADMIN")) return;
   if (!actors.has("STAFF") && !actors.has("MANAGER")) {
     throw new AppError(
       403,
-      "Internal sign-in is available to Staff and Managers only",
+      "Internal sign-in is available to Admins, Staff and Managers only",
     );
+  }
+  if (!branchId) {
+    throw new AppError(403, "Select the cinema assigned to this account");
   }
   if (String(account.employeeProfile?.branchId ?? "") !== String(branchId)) {
     throw new AppError(

@@ -19,6 +19,7 @@ import PublicLayout from '../../layouts/PublicLayout'
 import ForbiddenPage from '../../pages/public/ForbiddenPage'
 import LandingPage from '../../pages/public/LandingPage'
 import LoginPage from '../../pages/public/LoginPage'
+import InternalLoginPage from '../../pages/public/InternalLoginPage'
 import RegisterPage from '../../pages/public/RegisterPage'
 import VerifyEmailPage from '../../pages/public/VerifyEmailPage'
 import ForgotPasswordPage from '../../pages/public/ForgotPasswordPage'
@@ -71,6 +72,7 @@ export function AppRoutes() {
           {/* Home stays reachable for every role (logo link). Role redirect (A-16) happens on login only. */}
           <Route index element={<LandingPage />} />
           <Route path="login" element={<LoginPage />} />
+          <Route path="internal-login" element={<InternalLoginPage />} />
           <Route path="register" element={<RegisterPage />} />
           <Route path="verify-email" element={<VerifyEmailPage />} />
           <Route path="forgot-password" element={<ForgotPasswordPage />} />

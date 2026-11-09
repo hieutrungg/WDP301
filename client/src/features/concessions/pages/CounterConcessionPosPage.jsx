@@ -24,6 +24,8 @@ import {
   getCatalogPage,
 } from "../api/concessionApi";
 import { useAuth } from "../../auth/hooks/useAuth";
+import { uniqueAvailableCatalogItems } from "../utils/catalogDisplay";
+import { withCatalogImageOverride } from "../utils/catalogPresentation";
 
 const money = (value) =>
   new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(
@@ -83,12 +85,12 @@ export default function CounterConcessionPosPage() {
     ])
       .then(([items, combos]) => {
         setProducts([
-          ...items.items.map((item) => ({
+          ...items.items.map((item) => withCatalogImageOverride({
             ...item,
             itemType: "CONCESSION",
             itemId: item.id,
           })),
-          ...combos.items.map((item) => ({
+          ...combos.items.map((item) => withCatalogImageOverride({
             ...item,
             itemType: "COMBO",
             itemId: item.id,
@@ -113,7 +115,7 @@ export default function CounterConcessionPosPage() {
   const cashValue = Number(cash || 0);
   const visible = useMemo(
     () =>
-      products.filter((item) => {
+      uniqueAvailableCatalogItems(products).filter((item) => {
         const categoryMatch =
           categoryId === "ALL" ||
           (categoryId === "COMBO"

@@ -16,12 +16,10 @@ import { loginSchema } from "../schema/loginSchema";
 import { getLoginDestination } from "../utils/loginDestination";
 import { AuthInput, AuthServerError, PasswordInput } from "./AuthFormField";
 import GoogleSignInButton from "./GoogleSignInButton";
-import InternalStaffLogin from "./InternalStaffLogin";
 
 function LoginForm() {
   const [showPassword, setShowPassword] = useState(false);
   const [serverError, setServerError] = useState("");
-  const [internalLoginOpen, setInternalLoginOpen] = useState(false);
   const { login, isPending } = useLogin();
   const navigate = useNavigate();
   const location = useLocation();
@@ -140,16 +138,12 @@ function LoginForm() {
 
       <GoogleSignInButton onError={setServerError} rememberMe={rememberMe} />
 
-      <button
-        type="button"
-        onClick={() => setInternalLoginOpen(true)}
+      <Link
+        to="/internal-login"
         className="mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-lg border border-white/10 bg-surface-container text-sm font-bold text-on-surface transition hover:border-primary/40 hover:bg-surface-container-high"
       >
         <Building2 className="size-4 text-primary" /> Internal Sign In
-      </button>
-      {internalLoginOpen && (
-        <InternalStaffLogin onClose={() => setInternalLoginOpen(false)} />
-      )}
+      </Link>
 
       <p className="mt-6 text-center text-sm text-on-surface-variant">
         Don&apos;t have an account yet?{" "}
