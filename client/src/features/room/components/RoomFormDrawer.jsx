@@ -8,7 +8,7 @@ import { getApiErrorMessage, getApiFieldErrors } from '../../../lib/api/apiError
 import { createRoomRequest, updateRoomRequest } from '../api/roomApi'
 import {
   PRICED_ROOM_TYPES,
-  ROOM_TYPE_SUGGESTIONS,
+  ROOM_TYPE_OPTIONS,
   emptyRoomForm,
   normalizeRoomType,
   roomFormSchema,
@@ -63,6 +63,10 @@ function RoomFormDrawer({ room, branches, lockedBranchId = '', branchesLoading, 
 
   const roomType = normalizeRoomType(useWatch({ control, name: 'roomType' }) ?? '')
   const typeFrozen = isEdit && room.upcomingShowtimeCount > 0
+  // A room saved with another label keeps it selectable, so editing never silently changes the format.
+  const currentRoomType = isEdit ? normalizeRoomType(room.roomType ?? '') : ''
+  const roomTypeOptions =
+    currentRoomType && !ROOM_TYPE_OPTIONS.includes(currentRoomType) ? [...ROOM_TYPE_OPTIONS, currentRoomType] : ROOM_TYPE_OPTIONS
   const unpriced = roomType !== '' && !PRICED_ROOM_TYPES.includes(roomType)
 
   const onSubmit = async (values) => {
@@ -193,23 +197,22 @@ function RoomFormDrawer({ room, branches, lockedBranchId = '', branchesLoading, 
             label="Format"
             icon={Film}
             error={errors.roomType}
-            hint={typeFrozen ? undefined : 'Pick a suggestion or type another label, for example IMAX. It is stored in capitals.'}
+            hint={typeFrozen ? undefined : 'Choose the screening format of this room.'}
           >
-            <input
+            <select
               id="room-type"
-              list="room-type-suggestions"
-              maxLength={30}
               disabled={typeFrozen}
               aria-invalid={Boolean(errors.roomType)}
-              placeholder="STANDARD"
-              className={`${inputClass} h-12 pl-10 uppercase`}
+              className={`${inputClass} h-12 appearance-none pl-10`}
               {...register('roomType')}
-            />
-            <datalist id="room-type-suggestions">
-              {ROOM_TYPE_SUGGESTIONS.map((suggestion) => (
-                <option key={suggestion} value={suggestion} />
+            >
+              {!currentRoomType && <option value="">Select a format</option>}
+              {roomTypeOptions.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
               ))}
-            </datalist>
+            </select>
           </Field>
 
           {typeFrozen && (

@@ -2,8 +2,9 @@ import { z } from 'zod'
 
 export const ROOM_STATUSES = ['ACTIVE', 'MAINTENANCE', 'INACTIVE']
 
-// Labels offered as suggestions only; the server accepts any short label (schema doc: 2D, 3D, IMAX).
-export const ROOM_TYPE_SUGGESTIONS = ['STANDARD', '2D', '3D', 'IMAX']
+// Formats offered in the room form dropdown. The server still accepts any short label, so an
+// existing room with another label keeps it as an extra option when edited.
+export const ROOM_TYPE_OPTIONS = ['STANDARD', '2D']
 
 // The approved ticket price policy covers adult 2D only (ticket-pricing service), so a showtime
 // can only be published in a room of one of these types.
