@@ -19,6 +19,7 @@ import PublicLayout from '../../layouts/PublicLayout'
 import ForbiddenPage from '../../pages/public/ForbiddenPage'
 import LandingPage from '../../pages/public/LandingPage'
 import LoginPage from '../../pages/public/LoginPage'
+import InternalLoginPage from '../../pages/public/InternalLoginPage'
 import RegisterPage from '../../pages/public/RegisterPage'
 import VerifyEmailPage from '../../pages/public/VerifyEmailPage'
 import ForgotPasswordPage from '../../pages/public/ForgotPasswordPage'
@@ -52,6 +53,7 @@ import ManagerDashboardPage from '../../features/manager-dashboard/pages/Manager
 import RevenueReportsPage from '../../features/manager-reports/pages/RevenueReportsPage'
 import PromotionsPage from '../../features/promotions/pages/PromotionsPage'
 import PromotionFormPage from '../../features/promotions/pages/PromotionFormPage'
+import OffersPage from '../../features/promotions/pages/OffersPage'
 
 function ScrollToTop() {
   const { pathname } = useLocation()
@@ -70,6 +72,7 @@ export function AppRoutes() {
           {/* Home stays reachable for every role (logo link). Role redirect (A-16) happens on login only. */}
           <Route index element={<LandingPage />} />
           <Route path="login" element={<LoginPage />} />
+          <Route path="internal-login" element={<InternalLoginPage />} />
           <Route path="register" element={<RegisterPage />} />
           <Route path="verify-email" element={<VerifyEmailPage />} />
           <Route path="forgot-password" element={<ForgotPasswordPage />} />
@@ -78,6 +81,7 @@ export function AppRoutes() {
           <Route path="movies" element={<MoviesPage />} />
           <Route path="movies/:movieId" element={<MovieDetailPage />} />
           <Route path="concessions" element={<ConcessionCatalogPage />} />
+          <Route path="offers" element={<OffersPage />} />
           <Route element={<ProtectedRoute />}>
             <Route path="profile" element={<ProfilePage />} />
             <Route

@@ -151,18 +151,18 @@ function CounterCompletePage() {
               <p className="text-xs font-bold uppercase tracking-wider text-tertiary">
                 Seats
               </p>
-              <p className="mt-2 font-heading text-4xl font-extrabold text-secondary">
+              <p className="mt-2 break-words font-heading text-3xl font-extrabold leading-tight text-secondary sm:text-4xl">
                 {state.seats
                   .map((seat) => `${seat.row}${seat.number}`)
                   .join(" · ")}
               </p>
             </div>
             {tickets.length ? (
-              <div className="mt-5 grid gap-3 sm:grid-cols-2">
+              <div className="mt-5 grid gap-3 md:grid-cols-2">
                 {tickets.map((ticket) => (
                   <div
                     key={ticket.ticketId}
-                    className="rounded-xl border border-white/10 bg-white/5 p-3 text-center"
+                    className="min-w-0 rounded-xl border border-white/10 bg-white/5 p-3 text-center"
                   >
                     <QrCodeImage
                       value={ticket.qrCode || ticket.ticketCode}
@@ -170,7 +170,7 @@ function CounterCompletePage() {
                       label="E-Ticket"
                       ariaLabel={`Ticket QR ${ticket.ticketCode}`}
                     />
-                    <p className="text-xs text-tertiary">
+                    <p className="mt-2 break-words text-xs font-semibold text-on-surface">
                       Seat {ticket.seat?.label ?? ticket.seatLabel ?? "—"}
                     </p>
                     <p className="mt-1 font-mono text-sm font-bold text-secondary">
@@ -237,6 +237,18 @@ function CounterCompletePage() {
               )}
               <dt className="text-neutral-500">Payment ID</dt>
               <dd className="truncate text-right font-mono">{paymentId}</dd>
+              {state.method === "CASH" && (
+                <>
+                  <dt className="text-neutral-500">Cash received</dt>
+                  <dd className="text-right font-semibold">
+                    {formatVnd(state.tenderedAmount ?? state.total)}
+                  </dd>
+                  <dt className="text-neutral-500">Change returned</dt>
+                  <dd className="text-right font-semibold">
+                    {formatVnd(state.changeDue ?? 0)}
+                  </dd>
+                </>
+              )}
             </dl>
             <div className="space-y-3 border-b border-dashed border-neutral-400 py-5">
               <p className="flex items-center gap-2 text-xs font-extrabold uppercase tracking-wider">

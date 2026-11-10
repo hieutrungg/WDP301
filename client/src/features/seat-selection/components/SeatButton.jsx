@@ -23,11 +23,14 @@ const stateLabels = {
   UNAVAILABLE: 'Disabled',
 }
 
-function SeatButton({ seat, selected, onToggle, disabled }) {
+function SeatButton({ seat, selected, onToggle, disabled, size = 'default' }) {
   const displayState = selected ? 'SELECTED' : seat.availability
   const isDisabled = disabled || !['AVAILABLE', 'SELECTED'].includes(displayState)
   const label = `${seat.row}${seat.number}, ${seat.type}, ${stateLabels[displayState] ?? displayState}`
   const classes = stateClasses[displayState] ?? typeClasses[seat.type] ?? typeClasses.STANDARD
+  const sizeClasses = size === 'counter'
+    ? 'h-9 w-9 text-[10px] sm:h-10 sm:w-10 2xl:h-11 2xl:w-11 2xl:text-xs'
+    : 'h-7 w-7 text-[9px] sm:h-8 sm:w-8 sm:text-[10px]'
 
   return (
     <button
@@ -37,7 +40,7 @@ function SeatButton({ seat, selected, onToggle, disabled }) {
       aria-pressed={selected}
       aria-label={label}
       title={label}
-      className={`relative grid h-7 w-7 place-items-center rounded border font-mono text-[9px] font-bold transition sm:h-8 sm:w-8 sm:text-[10px] ${classes}`}
+      className={`relative grid place-items-center rounded border font-mono font-bold transition ${sizeClasses} ${classes}`}
     >
       {['UNAVAILABLE', 'SOLD', 'HELD'].includes(displayState) ? (
         <X className="size-3.5" aria-hidden="true" />
