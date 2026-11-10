@@ -33,3 +33,17 @@ test('AI-001 a pending action shows its remaining time', () => {
   assert.equal(formatActionExpiry('2026-11-09T05:04:01Z', now), 'Hết hạn sau 5 phút')
   assert.equal(formatActionExpiry('2026-11-09T04:59:00Z', now), 'Đã hết hạn')
 })
+
+test('AI-001 a short typed "xác nhận" or "huỷ" answers the one waiting card', async () => {
+  const { matchActionReply, singlePendingAction } = await import('../src/features/ai-assistant/utils/aiMessage.js')
+  for (const text of ['Xác nhận', 'xac nhan!', ' Đồng ý ', 'OK', 'gửi đi']) assert.equal(matchActionReply(text), 'confirm', text)
+  for (const text of ['Huỷ', 'hủy bỏ', 'thôi']) assert.equal(matchActionReply(text), 'cancel', text)
+  for (const text of ['xác nhận giúp tôi suất 19h', 'Vé đã xác nhận chưa?', '']) assert.equal(matchActionReply(text), null, text)
+
+  const later = new Date(Date.now() + 60000).toISOString()
+  const card = (id, state = 'pending', expiresAt = later) => ({ id, state, expiresAt })
+  assert.equal(singlePendingAction([{ actions: [card('a')] }, { actions: [card('b', 'done')] }]).id, 'a')
+  assert.equal(singlePendingAction([{ actions: [card('a'), card('b')] }]), null, 'two cards: ambiguous')
+  assert.equal(singlePendingAction([{ actions: [card('a', 'pending', '2000-01-01T00:00:00Z')] }]), null, 'expired')
+  assert.equal(singlePendingAction([{ role: 'user', content: 'hi' }]), null)
+})

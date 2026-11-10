@@ -2,8 +2,9 @@
 
 // v2 (2026-11-09): the assistant is named Popo.
 // v3 (2026-11-09): plain language for guests/customers; never promise features that do not exist.
+// v4 (2026-11-10): per-session list of write actions; cards only after a real tool call.
 // A new version invalidates every cached answer.
-export const PROMPT_VERSION = "ai-001.v3";
+export const PROMPT_VERSION = "ai-001.v4";
 
 export const AI_LIMITS = Object.freeze({
   MAX_INPUT_CHARS: 2000,
@@ -117,4 +118,6 @@ export const AI_MESSAGES = Object.freeze({
     "Xin lỗi, yêu cầu này cần quá nhiều bước tra cứu. Bạn thử hỏi cụ thể hơn (ví dụ tên phim, rạp, ngày) nhé.",
   PROVIDER_FAILED:
     "Trợ lý đang tạm thời gián đoạn. Bạn thử lại sau ít phút nhé.",
+  NO_ACTION_CARD:
+    "Xin lỗi, Popo chưa làm được việc này cho tài khoản của bạn nên chưa có gì thay đổi. Bạn có thể tự thực hiện trên trang tương ứng của F-Cinema nhé.",
 });

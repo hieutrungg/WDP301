@@ -84,6 +84,13 @@ export const isAllowedLink = (href) =>
         : href === prefix || href.startsWith(`${prefix}/`) || href.startsWith(`${prefix}?`),
     ));
 
+// The answer tells the user a confirmation card is waiting ("bấm nút Xác nhận", "đã chuẩn bị thẻ
+// xác nhận", "press Confirm"). Matched without diacritics.
+const CARD_CLAIM =
+  /\b(the|nut) xac nhan\b|\bbam (vao |nut |vao nut )?["“'«]?xac nhan\b|\bda (chuan bi|tao|soan|gui)( san)?( cho ban)?( mot)? the\b|\bconfirmation card\b|\bpress (the )?["“']?confirm\b/;
+
+export const claimsConfirmationCard = (text) => CARD_CLAIM.test(fold(String(text ?? "")));
+
 // Technical words a guest or customer should never read (prompt rule 12). Found words are only
 // recorded in the trace (`jargon:<word>`), so the prompt can be tuned from real conversations.
 const JARGON_RULES = [
