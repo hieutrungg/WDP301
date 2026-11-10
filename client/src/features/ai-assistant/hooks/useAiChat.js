@@ -4,6 +4,7 @@ import { getApiErrorMessage } from '../../../lib/api/apiError'
 import { useAuth } from '../../auth/hooks/useAuth'
 import { cancelAiAction, confirmAiAction, sendAiMessage } from '../api/aiApi'
 import { useAiChatStore } from '../store/aiChatStore'
+import { matchActionReply, singlePendingAction } from '../utils/aiMessage'
 
 let localId = 0
 const nextId = () => {
@@ -53,10 +54,27 @@ export function useAiChat() {
   const confirm = useMutation({ mutationFn: (actionId) => settle(actionId, confirmAiAction) })
   const cancel = useMutation({ mutationFn: (actionId) => settle(actionId, cancelAiAction) })
 
+  const confirmAction = (actionId) => {
+    store.updateAction(actionId, { state: 'working' })
+    confirm.mutate(actionId)
+  }
+  const cancelAction = (actionId) => {
+    store.updateAction(actionId, { state: 'working' })
+    cancel.mutate(actionId)
+  }
+
   const ask = (text) => {
     const message = text.trim()
     if (!message || send.isPending) return
     store.addMessage({ id: nextId(), role: 'user', content: message })
+    // Typing "xác nhận" / "huỷ" while exactly one card is waiting presses that card's button.
+    const reply = matchActionReply(message)
+    const waiting = reply ? singlePendingAction(useAiChatStore.getState().messages) : null
+    if (waiting) {
+      if (reply === 'confirm') confirmAction(waiting.id)
+      else cancelAction(waiting.id)
+      return
+    }
     send.mutate({ conversationId: useAiChatStore.getState().conversationId, message })
   }
 
@@ -66,14 +84,8 @@ export function useAiChat() {
     messages: store.messages,
     isSending: send.isPending,
     ask,
-    confirmAction: (actionId) => {
-      store.updateAction(actionId, { state: 'working' })
-      confirm.mutate(actionId)
-    },
-    cancelAction: (actionId) => {
-      store.updateAction(actionId, { state: 'working' })
-      cancel.mutate(actionId)
-    },
+    confirmAction,
+    cancelAction,
     newConversation: () => resetFor(ownerKey),
     signedIn: Boolean(account),
   }

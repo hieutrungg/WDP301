@@ -34,6 +34,11 @@ export const createFakeAiRepository = () => {
     async createPendingAction(action) {
       pendingActions.set(action._id, { ...action });
     },
+    async countOpenActions({ conversationId, accountId, now }) {
+      return [...pendingActions.values()].filter((action) =>
+        action.conversationId === conversationId && action.accountId === accountId &&
+        action.status === "PENDING" && action.expiresAt > now).length;
+    },
     async findPendingAction(id) {
       return pendingActions.get(id) ?? null;
     },

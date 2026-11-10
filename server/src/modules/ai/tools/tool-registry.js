@@ -13,12 +13,24 @@ import { TOOL_KIND, FAQ_CACHE_TTL_SECONDS } from "../ai.constants.js";
 //   permissions     all must be granted.
 //   cacheTtlSeconds > 0 = public data; an answer built only from such tools may be cached.
 //   local           handled inside the AI module (vector search) instead of the REST API.
+//   precheck        write tools only: a read call that must pass before a confirmation card is
+//                   created ({ request(args), evaluate(data) → { ok, code?, hint? } }).
 
 const objectId = z.string().regex(/^[a-f\d]{24}$/i, "Must be a 24-character ObjectId");
 const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD (Vietnam local date)");
 const page = z.number().int().min(1).max(100).optional();
 const text = (max) => z.string().trim().min(1).max(max);
 const id = (value) => encodeURIComponent(value);
+
+// Reasons from GET /api/movies/:id/review-eligibility (REV-102, Hiếu), explained for the model.
+const REVIEW_REFUSAL_HINT = Object.freeze({
+  NO_ELIGIBLE_BOOKING:
+    "No review card was created. The customer can only review a movie after buying a ticket for it (paid, not refunded) and after that showtime has ended. Explain this kindly.",
+  ALREADY_REVIEWED:
+    "No review card was created. The customer already reviewed this movie; they can edit it on the movie page /movies/<movieId>.",
+  AUTHOR_NAME_REQUIRED:
+    "No review card was created. The customer needs a full name in their profile first; offer update_my_profile.",
+});
 
 const tool = (definition) => Object.freeze({
   kind: TOOL_KIND.READ,
@@ -27,6 +39,7 @@ const tool = (definition) => Object.freeze({
   permissions: [],
   cacheTtlSeconds: 0,
   local: null,
+  precheck: null,
   ...definition,
 });
 
@@ -188,10 +201,19 @@ export const TOOLS = Object.freeze([
     request: () => ({ method: "GET", path: "/refunds/me" }),
   }),
   tool({
+    name: "check_review_eligibility",
+    description:
+      "Whether the customer may review a movie: they need a paid, not refunded booking for it whose showtime has ended, and no earlier review of that movie.",
+    schema: z.strictObject({ movieId: objectId }),
+    roles: ["CUSTOMER"],
+    requiresAccount: true,
+    request: ({ movieId }) => ({ method: "GET", path: `/movies/${id(movieId)}/review-eligibility` }),
+  }),
+  tool({
     name: "submit_movie_review",
     kind: TOOL_KIND.WRITE,
     description:
-      "Post the customer's rating (1-5) and optional comment for a movie they watched. Needs the user's confirmation.",
+      "Post the customer's rating (1-5) and optional comment for a movie they watched. Needs the user's confirmation. Eligibility is checked first; when the customer is not eligible no card is shown and the reason comes back.",
     schema: z.strictObject({
       movieId: objectId,
       movieTitle: z.string().trim().max(200).describe("Title shown on the confirmation card"),
@@ -205,6 +227,14 @@ export const TOOLS = Object.freeze([
       path: `/movies/${id(movieId)}/reviews`,
       body: { rating, content: content ?? "" },
     }),
+    // Runs before a card is created, so the customer never confirms a review the API would refuse.
+    precheck: {
+      request: ({ movieId }) => ({ method: "GET", path: `/movies/${id(movieId)}/review-eligibility` }),
+      evaluate: (data) =>
+        data?.canReview === true
+          ? { ok: true }
+          : { ok: false, code: data?.reason ?? "NOT_ELIGIBLE", hint: REVIEW_REFUSAL_HINT[data?.reason] ?? REVIEW_REFUSAL_HINT.NO_ELIGIBLE_BOOKING },
+    },
     summarize: ({ movieTitle, rating, content }) =>
       `Đánh giá phim "${movieTitle}": ${rating}/5${content ? ` — "${content.slice(0, 120)}"` : ""}`,
   }),
@@ -330,7 +360,7 @@ export const TOOLS_BY_NAME = new Map(TOOLS.map((entry) => [entry.name, entry]));
 
 // Only these API prefixes can ever be reached by a tool (defence in depth for api-caller).
 export const TOOL_PATH_ALLOWLIST = Object.freeze([
-  /^\/movies(\/[a-f\d]{24}(\/reviews)?)?$/i,
+  /^\/movies(\/[a-f\d]{24}(\/reviews|\/review-eligibility)?)?$/i,
   /^\/cinemas$/,
   /^\/showtimes(\/manage)?$/,
   /^\/showtimes\/[a-f\d]{24}\/seats$/i,

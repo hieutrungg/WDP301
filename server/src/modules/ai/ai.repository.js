@@ -52,6 +52,16 @@ export const createAiRepository = () => ({
     await AiPendingAction.create(action);
   },
 
+  // Unexpired cards still waiting in a conversation (an answer may point back to one of them).
+  async countOpenActions({ conversationId, accountId, now }) {
+    return AiPendingAction.countDocuments({
+      conversationId,
+      accountId,
+      status: PENDING_ACTION_STATUS.PENDING,
+      expiresAt: { $gt: now },
+    });
+  },
+
   async findPendingAction(actionId) {
     return AiPendingAction.findById(actionId).lean();
   },

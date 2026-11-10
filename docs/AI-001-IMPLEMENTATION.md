@@ -248,4 +248,38 @@ In fact, `PATCH /api/accounts/me` and `EditProfilePage` change only `fullName` a
 - `server`: all unit tests 264 tests, 262 pass, 2 skipped (the same 2 skips as before).
 - Not checked against the live model: whether the model now follows rule 12 is a prompt behaviour. The jargon flag in the trace is the way to measure it.
 
+## 13. Phantom confirmation cards and review eligibility (2026-11-10)
+
+**Problem.** Cường reported that Popo "sometimes does not send the Xác nhận button" and that the button looked broken.
+
+The traces on 2026-11-10 (07:25–07:27 UTC, conversation `3980855d…`) were from an **ADMIN** account. `submit_movie_review` is a CUSTOMER-only tool (the route has `requireRole("CUSTOMER")`), so no tool was offered. The model still answered "Popo đã chuẩn bị thẻ xác nhận" five times, and every round was `reasoning+message` with no function call. The same flow as a CUSTOMER at 07:21 worked: a card was created and confirmed with HTTP 201.
+
+The "broken button" was the user's own typed "Xác nhận" messages. The user bubble was a block element stretched to 85% width, so it looked like a red button.
+
+**Fix**
+- Prompt `ai-001.v4`:
+  - Rule 6 is generic. It may mention a card only after a write tool returned `PENDING_CONFIRMATION`; `NOT_ALLOWED_NOW` means no card.
+  - A new session line, "Thao tác cần xác nhận của phiên này", lists exactly the write actions of this actor, or "KHÔNG có" for guests.
+- Phantom-card guard (`claimsConfirmationCard` + `isPhantomCard` in the service):
+  - The guard checks for answers that claim a waiting card when no card was created this turn and none is still open in the conversation (`repository.countOpenActions`).
+  - Such an answer gets one corrective developer message and another model round.
+  - If the model still claims a card, the answer is replaced by `AI_MESSAGES.NO_ACTION_CARD`.
+  - The trace records `guardrails.phantom_card.reasons` as `retry` or `replaced`.
+  - The guard covers Vietnamese ("đã chuẩn bị thẻ", "bấm nút Xác nhận") and English ("press Confirm", "confirmation card"). It does not fire on "vé đã được xác nhận" or "email xác nhận".
+- Review eligibility:
+  - New read tool `check_review_eligibility` calls `GET /api/movies/:id/review-eligibility` (REV-102, Hiếu, unchanged).
+  - `submit_movie_review` now has a `precheck`: the same call runs **before** a card is created. If `canReview` is false, no card is created; the tool call is logged `denied` with the reason (`NO_ELIGIBLE_BOOKING`, `ALREADY_REVIEWED` or `AUTHOR_NAME_REQUIRED`), and the model gets a hint to explain it.
+  - Eligibility itself is the existing rule: a confirmed, paid, not refunded booking for the movie whose showtime has ended, and no earlier review. The POST still re-checks it inside its transaction.
+- Client:
+  - The user bubble is `w-fit`, so short messages no longer look like buttons.
+  - The card's button row wraps on narrow screens.
+  - Typing a short "xác nhận / đồng ý / ok / gửi đi" or "huỷ / thôi / không" while **exactly one** unexpired card is waiting presses that card's button (`matchActionReply`, `singlePendingAction`). Longer sentences still go to Popo.
+- FAQ: `faq-danh-gia-phim.md` explains the pre-check and that staff, manager and admin accounts cannot review. Re-ingest with `npm run ai:ingest -- --include-draft --faq`.
+
+**Verification**
+- `server`: lint clean; AI tests 39/39 pass. New tests cover the three refusal reasons, the phantom retry then replace, the honest rewrite, an open card from an earlier turn, and the per-session write-action line.
+- `server`: all unit tests 267 tests, 265 pass, 2 skipped (the same 2 as before).
+- `client`: eslint clean on the feature; `ai-message.test.js` 4/4 pass; `npm run build` succeeds.
+- Not run against the live model or in a browser.
+
 No commit, push, merge or task-board/Google Sheet update was made.

@@ -13,7 +13,7 @@ import {
   TRACE_STATUS,
 } from "./ai.constants.js";
 import { actorScope, isInternalActor, knowledgeAudiences } from "./ai-actor.js";
-import { checkInput, checkOutput, normalizeInput } from "./guardrails/guardrails.js";
+import { checkInput, checkOutput, claimsConfirmationCard, normalizeInput } from "./guardrails/guardrails.js";
 import { LlmProviderError } from "./llm/openai.client.js";
 import { buildSystemPrompt } from "./prompt/system-prompt.js";
 import { TOOLS } from "./tools/tool-registry.js";
@@ -38,6 +38,9 @@ const STATUS_HINT = {
 };
 
 const hintFor = (status) => STATUS_HINT[status] ?? (status >= 500 ? "System error. Suggest trying again later." : undefined);
+
+const PHANTOM_CARD_CORRECTION =
+  "Kiểm tra hệ thống: câu trả lời vừa rồi nói đã có thẻ xác nhận, nhưng thực tế KHÔNG có thẻ nào được tạo vì bạn chưa gọi công cụ ghi nào. Viết lại câu trả lời: nếu bạn có công cụ ghi phù hợp và đủ thông tin thì gọi nó ngay; nếu không có công cụ đó cho người dùng này thì nói thật, nhẹ nhàng rằng Popo chưa làm được việc này cho tài khoản này và chỉ trang họ có thể tự làm. Không nhắc tới thẻ xác nhận hay nút Xác nhận nữa.";
 
 const hashId = (value) => createHash("sha256").update(String(value)).digest("hex").slice(0, 32);
 
@@ -76,6 +79,15 @@ export const createAiChatService = ({
     if (!conversation || (conversation.accountId ?? null) !== (actor.accountId ?? null)) {
       throw notFound("Conversation not found", AI_ERROR.CONVERSATION_NOT_FOUND);
     }
+  };
+
+  // True when the answer promises a confirmation card that does not exist: none was created in
+  // this turn and the conversation has no unexpired card left from an earlier turn.
+  const isPhantomCard = async (reply, context, conversationId, actor) => {
+    if (!claimsConfirmationCard(reply) || context.pendingActions.length > 0) return false;
+    if (actor.kind !== "account") return true;
+    const open = await repository.countOpenActions({ conversationId, accountId: actor.accountId, now: clock() });
+    return open === 0;
   };
 
   const callApi = async (tool, args, accessToken) => {
@@ -182,6 +194,23 @@ export const createAiChatService = ({
     }
 
     if (tool.kind === TOOL_KIND.WRITE) {
+      // A card is only offered when the action can succeed now (e.g. review eligibility).
+      if (tool.precheck) {
+        const check = await apiCaller({ ...tool.precheck.request(parsed.data), accessToken: context.accessToken })
+          .catch(() => ({ ok: false, status: 0, body: { code: "TOOL_FAILED" } }));
+        const verdict = check.ok
+          ? tool.precheck.evaluate(check.body?.data)
+          : { ok: false, code: check.body?.code ?? `HTTP_${check.status}`, hint: hintFor(check.status) };
+        if (!verdict.ok) {
+          context.toolProblems += 1;
+          await record({ status: TOOL_CALL_STATUS.DENIED, args: parsed.data, httpStatus: check.status, errorCode: verdict.code });
+          return toolEnvelope(`tool:${tool.name}`, {
+            status: "NOT_ALLOWED_NOW",
+            error: { code: verdict.code },
+            hint: verdict.hint,
+          });
+        }
+      }
       const now = clock();
       const action = {
         _id: idFactory(),
@@ -293,7 +322,7 @@ export const createAiChatService = ({
     const tools = toolsForActor(actor, catalog);
     const openAiTools = tools.map(toOpenAiTool);
     const canary = `FC-${idFactory().replace(/-/g, "").slice(0, 16)}`;
-    const instructions = buildSystemPrompt({ actor, now, canary });
+    const instructions = buildSystemPrompt({ actor, now, canary, tools });
     const llmInput = [
       ...history.map((item) => ({ role: item.role, content: item.content })),
       { role: "user", content: input },
@@ -337,6 +366,14 @@ export const createAiChatService = ({
         const calls = response.output.filter((item) => item.type === "function_call");
         if (!calls.length) {
           reply = response.outputText;
+          // "Phantom card": the answer says a confirmation card is waiting but none exists. The
+          // model gets one chance to call the write tool or to say it cannot; then it is replaced.
+          if (round <= AI_LIMITS.MAX_TOOL_ROUNDS && !context.phantomRetried && (await isPhantomCard(reply, context, id, actor))) {
+            context.phantomRetried = true;
+            trace.setGuardrail("phantom_card", { blocked: true, reasons: ["retry"] });
+            llmInput.push({ role: "developer", content: PHANTOM_CARD_CORRECTION });
+            continue;
+          }
           break;
         }
         for (const call of calls) {
@@ -356,6 +393,11 @@ export const createAiChatService = ({
         error,
         canary,
       });
+    }
+
+    if (context.phantomRetried && (await isPhantomCard(reply, context, id, actor))) {
+      trace.setGuardrail("phantom_card", { blocked: true, reasons: ["replaced"] });
+      reply = AI_MESSAGES.NO_ACTION_CARD;
     }
 
     // 4. Output guardrail.
