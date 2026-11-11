@@ -37,10 +37,11 @@ export async function getManagerScheduleData(
     };
   };
   const requestedDates = getWeekDates(date);
+  const fetchDates = [shiftDate(requestedDates[0], -1), ...requestedDates];
 
   const [showtimesByDate, movies, rooms] = await Promise.all([
     Promise.all(
-      requestedDates.map((requestedDate) =>
+      fetchDates.map((requestedDate) =>
         getAllPages(requestedDate, "schedule"),
       ),
     ),
@@ -54,8 +55,9 @@ export async function getManagerScheduleData(
   const showtimes = showtimesResponses
     .flatMap((response) => response.data.data)
     .sort((a, b) => new Date(a.startAt) - new Date(b.startAt));
+  const weeklyResults = showtimesByDate.slice(1);
   const meta = {
-    total: showtimesByDate.reduce((sum, result) => sum + result.total, 0),
+    total: weeklyResults.reduce((sum, result) => sum + result.total, 0),
     totalPages: 1,
     page: 1,
   };
@@ -78,6 +80,12 @@ function getWeekDates(date) {
     weekDay.setUTCDate(selectedDay.getUTCDate() + index);
     return `${weekDay.getUTCFullYear()}-${String(weekDay.getUTCMonth() + 1).padStart(2, "0")}-${String(weekDay.getUTCDate()).padStart(2, "0")}`;
   });
+}
+
+function shiftDate(date, days) {
+  const [year, month, day] = date.split("-").map(Number);
+  const shifted = new Date(Date.UTC(year, month - 1, day + days, 12));
+  return `${shifted.getUTCFullYear()}-${String(shifted.getUTCMonth() + 1).padStart(2, "0")}-${String(shifted.getUTCDate()).padStart(2, "0")}`;
 }
 
 export async function createManagerShowtime(payload) {

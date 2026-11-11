@@ -84,7 +84,7 @@ function AiAssistantWidget() {
               </div>
             )}
             {messages.map((message) => message.role === 'user' ? (
-              <div key={message.id} className="ml-auto max-w-[85%] whitespace-pre-wrap break-words rounded-2xl rounded-br-sm bg-primary-container px-3 py-2 text-white">
+              <div key={message.id} className="ml-auto w-fit max-w-[85%] whitespace-pre-wrap break-words rounded-2xl rounded-br-sm bg-primary-container/90 px-3 py-2 text-white">
                 {message.content}
               </div>
             ) : (

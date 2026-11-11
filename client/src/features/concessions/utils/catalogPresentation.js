@@ -1,3 +1,18 @@
+import dasaniMineralWaterImage from "../../../assets/concessions/dasani-mineral-water.png";
+import dasaniPureMineralWaterImage from "../../../assets/concessions/dasani-pure-mineral-water.png";
+
+const catalogImageOverrides = new Map([
+  ["dasani mineral water", dasaniMineralWaterImage],
+  ["dasani pure mineral water", dasaniPureMineralWaterImage],
+]);
+
+export const withCatalogImageOverride = (item) => ({
+  ...item,
+  imageUrl:
+    catalogImageOverrides.get(item.name?.trim().toLocaleLowerCase("en-US")) ??
+    item.imageUrl,
+});
+
 export const catalogPrice = (price) =>
   new Intl.NumberFormat("vi-VN", {
     style: "currency",

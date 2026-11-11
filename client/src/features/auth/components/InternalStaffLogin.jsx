@@ -3,10 +3,10 @@ import {
   LockKeyhole,
   ShieldCheck,
   UserRound,
-  X,
+  ArrowLeft,
 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router";
+import { Link, useLocation, useNavigate } from "react-router";
 import { getApiErrorMessage } from "../../../lib/api/apiError";
 import { getPublicCinemas } from "../../../lib/api/publicCinemaApi";
 import {
@@ -15,11 +15,13 @@ import {
   internalStaffLoginRequest,
 } from "../api/authApi";
 import { useAuthStore } from "../store/authStore";
+import { getLoginDestination } from "../utils/loginDestination";
 import { AuthInput, AuthServerError, PasswordInput } from "./AuthFormField";
 import GoogleCredentialButton from "./GoogleCredentialButton";
 
-export default function InternalStaffLogin({ onClose }) {
+export default function InternalStaffLogin() {
   const navigate = useNavigate();
+  const location = useLocation();
   const setAccount = useAuthStore((state) => state.setAccount);
   const [cinemas, setCinemas] = useState([]);
   const [form, setForm] = useState({
@@ -37,10 +39,6 @@ export default function InternalStaffLogin({ onClose }) {
     getPublicCinemas({ page: 1, limit: 50 }, controller.signal)
       .then(({ items }) => {
         setCinemas(items);
-        setForm((current) => ({
-          ...current,
-          branchId: current.branchId || items[0]?.id || "",
-        }));
       })
       .catch((requestError) => {
         if (!controller.signal.aborted)
@@ -52,14 +50,19 @@ export default function InternalStaffLogin({ onClose }) {
   const finish = async () => {
     const account = await getCurrentAccountRequest();
     setAccount(account);
-    navigate("/staff/dashboard", { replace: true });
+    navigate(getLoginDestination(account, location.state?.from), {
+      replace: true,
+    });
   };
   const submit = async (event) => {
     event.preventDefault();
     setBusy(true);
     setError("");
     try {
-      await internalStaffLoginRequest(form);
+      await internalStaffLoginRequest({
+        ...form,
+        branchId: form.branchId || undefined,
+      });
       await finish();
     } catch (requestError) {
       setError(getApiErrorMessage(requestError));
@@ -73,7 +76,7 @@ export default function InternalStaffLogin({ onClose }) {
     try {
       await internalStaffGoogleLoginRequest({
         credential,
-        branchId: form.branchId,
+        branchId: form.branchId || undefined,
         rememberMe: form.rememberMe,
       });
       await finish();
@@ -85,22 +88,8 @@ export default function InternalStaffLogin({ onClose }) {
   };
 
   return (
-    <div
-      className="fixed inset-0 z-[80] grid place-items-center overflow-y-auto bg-black/75 p-4 backdrop-blur-sm"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="internal-login-title"
-    >
-      <div className="relative w-full max-w-lg rounded-2xl border border-white/5 bg-surface-container-low p-6 shadow-2xl sm:p-8">
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Close internal sign in"
-          className="absolute right-4 top-4 grid size-9 place-items-center rounded-lg bg-surface-container-high"
-        >
-          <X className="size-4" />
-        </button>
-        <div className="mb-6 pr-10">
+    <div className="w-full rounded-2xl border border-white/5 bg-surface-container-low p-6 shadow-2xl sm:p-8">
+        <div className="mb-6">
           <div className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.18em] text-secondary">
             <ShieldCheck className="size-4" />
             Secure internal access
@@ -112,8 +101,8 @@ export default function InternalStaffLogin({ onClose }) {
             Internal Sign In
           </h2>
           <p className="mt-2 text-sm leading-6 text-on-surface-variant">
-            Choose your assigned cinema and enter your Staff or Manager
-            credentials.
+            Admins can enter the system workspace directly. Staff and Managers
+            must choose their assigned cinema.
           </p>
         </div>
         <AuthServerError message={error} />
@@ -123,13 +112,13 @@ export default function InternalStaffLogin({ onClose }) {
             <span className="relative block">
               <Building2 className="absolute left-4 top-1/2 size-5 -translate-y-1/2 text-on-surface-variant" />
               <select
-                required
                 value={form.branchId}
                 onChange={(event) =>
                   setForm({ ...form, branchId: event.target.value })
                 }
                 className="h-12 w-full rounded-lg bg-surface-container pl-11 pr-4 text-sm outline-none"
               >
+                <option value="">System Administration (Admin)</option>
                 {cinemas.map((cinema) => (
                   <option key={cinema.id} value={cinema.id}>
                     {cinema.branchName}
@@ -154,7 +143,6 @@ export default function InternalStaffLogin({ onClose }) {
             labelAction={
               <Link
                 to="/forgot-password"
-                onClick={onClose}
                 className="text-xs text-primary"
               >
                 Forgot password?
@@ -181,7 +169,7 @@ export default function InternalStaffLogin({ onClose }) {
             Remember me
           </label>
           <button
-            disabled={busy || !form.branchId}
+            disabled={busy}
             className="flex h-12 w-full items-center justify-center rounded-lg bg-primary-container text-sm font-bold text-white shadow-crimson-strong disabled:opacity-50"
           >
             {busy ? "Signing in…" : "Sign In"}
@@ -194,9 +182,14 @@ export default function InternalStaffLogin({ onClose }) {
         </div>
         <GoogleCredentialButton
           onCredential={google}
-          disabled={busy || !form.branchId}
+          disabled={busy}
         />
+        <Link
+          to="/login"
+          className="mt-5 flex items-center justify-center gap-2 text-sm font-semibold text-on-surface-variant transition hover:text-white"
+        >
+          <ArrowLeft className="size-4" /> Back to customer sign in
+        </Link>
       </div>
-    </div>
   );
 }

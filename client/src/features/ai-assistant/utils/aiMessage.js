@@ -65,6 +65,29 @@ export function parseBlocks(text) {
   return blocks
 }
 
+const fold = (text) => String(text ?? '')
+  .normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D')
+  .toLowerCase().replace(/[.!?,"'“”…\s]+/g, ' ').trim()
+
+const CONFIRM_WORDS = new Set(['xac nhan', 'dong y', 'ok', 'oke', 'okay', 'co', 'gui di', 'lam di', 'confirm', 'yes'])
+const CANCEL_WORDS = new Set(['huy', 'huy bo', 'khong', 'thoi', 'cancel', 'no'])
+
+// A short typed reply that means "press the button on the card": 'confirm' | 'cancel' | null.
+// Only exact short answers count, so "xác nhận giúp tôi suất 19h" is still sent to Popo.
+export function matchActionReply(text) {
+  const value = fold(text)
+  if (CONFIRM_WORDS.has(value)) return 'confirm'
+  if (CANCEL_WORDS.has(value)) return 'cancel'
+  return null
+}
+
+// The one card still waiting for an answer, or null when there are none or several.
+export function singlePendingAction(messages) {
+  const pending = messages.flatMap((message) => message.actions ?? [])
+    .filter((action) => action.state === 'pending' && Date.parse(action.expiresAt) > Date.now())
+  return pending.length === 1 ? pending[0] : null
+}
+
 export function formatActionExpiry(expiresAt, now = Date.now()) {
   const remaining = Date.parse(expiresAt) - now
   if (!Number.isFinite(remaining) || remaining <= 0) return 'Đã hết hạn'

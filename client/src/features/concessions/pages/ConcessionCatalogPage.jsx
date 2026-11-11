@@ -49,6 +49,7 @@ function CatalogContent({
   refresh,
   filters,
   setFilters,
+  disableUnavailable,
 }) {
   const [selected, setSelected] = useState(null);
   const request = useCatalogPage(
@@ -130,6 +131,7 @@ function CatalogContent({
               item={item}
               combo={combo}
               onDetails={setSelected}
+              disableUnavailable={disableUnavailable}
             />
           ))}
         </div>
@@ -360,6 +362,7 @@ export default function ConcessionCatalogPage({ staff = false }) {
               refresh={refresh}
               filters={filters}
               setFilters={setFilters}
+              disableUnavailable={!staff}
             />
           )}
         </section>

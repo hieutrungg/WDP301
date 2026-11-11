@@ -208,7 +208,7 @@ test("AI-001 a guest question runs a public tool without a session and is traced
   assert.ok(!llm.requests[0].tools.some((tool) => tool.name === "my_bookings"));
   assert.match(llm.requests[0].instructions, /Vai trò người dùng: GUEST/);
   assert.match(llm.requests[0].instructions, /^Bạn là "Popo"/);
-  assert.match(llm.requests[0].instructions, /phiên bản ai-001.v3/);
+  assert.match(llm.requests[0].instructions, /phiên bản ai-001.v4/);
 
   const [trace] = repository.traces;
   assert.equal(trace.status, "ok");
@@ -368,20 +368,25 @@ test("AI-001 movie recommendations are re-read live and unpublished movies are d
 
 // --- Write tools ----------------------------------------------------------------------------------
 
-const reviewSetup = (api) => {
+// The review card is offered only after GET /movies/:id/review-eligibility says yes.
+const reviewSetup = (api, eligibility = { canReview: true, reason: null }) => {
   const customer = actor(["CUSTOMER"], CUSTOMER_PERMS);
   const context = setup({
     script: [callTool("submit_movie_review", { movieId: MOVIE, movieTitle: "Elio", rating: 5, content: "Hay" }), say("Bấm Xác nhận để gửi.")],
-    api,
+    api: (request) => request.path.endsWith("/review-eligibility")
+      ? { ok: true, status: 200, body: { success: true, data: eligibility } }
+      : (api ?? (() => ({ ok: true, status: 200, body: { success: true, data: {} } })))(request),
   });
-  return { ...context, customer };
+  const writes = () => context.apiCaller.calls.filter(({ path }) => !path.endsWith("/review-eligibility"));
+  return { ...context, customer, writes };
 };
 
 test("AI-001 a write tool only proposes an action; nothing runs until it is confirmed", async () => {
-  const { service, apiCaller, repository, customer } = reviewSetup(() => ({ ok: true, status: 201, body: { success: true, data: { rating: 5 } } }));
+  const { service, apiCaller, repository, customer, writes } = reviewSetup(() => ({ ok: true, status: 201, body: { success: true, data: { rating: 5 } } }));
   const result = await service.chat({ actor: customer, accessToken: "tok", message: "Đánh giá Elio 5 sao, hay" });
 
-  assert.equal(apiCaller.calls.length, 0);
+  assert.deepEqual(apiCaller.calls.map(({ method, path, accessToken }) => [method, path, accessToken]), [["GET", `/movies/${MOVIE}/review-eligibility`, "tok"]]);
+  assert.equal(writes().length, 0);
   assert.equal(result.pendingActions.length, 1);
   assert.equal(result.pendingActions[0].summary, 'Đánh giá phim "Elio": 5/5 — "Hay"');
   assert.equal(repository.toolCalls[0].status, "pending_confirmation");
@@ -389,7 +394,7 @@ test("AI-001 a write tool only proposes an action; nothing runs until it is conf
 
   const confirmed = await service.confirmAction({ actor: customer, accessToken: "tok", actionId: result.pendingActions[0].id });
   assert.equal(confirmed.status, "EXECUTED");
-  assert.deepEqual(apiCaller.calls[0], {
+  assert.deepEqual(writes()[0], {
     method: "POST",
     path: `/movies/${MOVIE}/reviews`,
     body: { rating: 5, content: "Hay" },
@@ -404,11 +409,11 @@ test("AI-001 a write tool only proposes an action; nothing runs until it is conf
     service.confirmAction({ actor: customer, accessToken: "tok", actionId: result.pendingActions[0].id }),
     { statusCode: 409, code: "AI_ACTION_ALREADY_HANDLED" },
   );
-  assert.equal(apiCaller.calls.length, 1, "executed once");
+  assert.equal(writes().length, 1, "executed once");
 });
 
 test("AI-001 only the owner can confirm, and an expired action is refused", async () => {
-  const { service, apiCaller, customer, advance } = reviewSetup();
+  const { service, writes, customer, advance } = reviewSetup();
   const { pendingActions: [action] } = await service.chat({ actor: customer, accessToken: "tok", message: "Đánh giá Elio 5 sao" });
 
   await assert.rejects(
@@ -419,7 +424,7 @@ test("AI-001 only the owner can confirm, and an expired action is refused", asyn
 
   advance(5 * 60 * 1000 + 1);
   await assert.rejects(service.confirmAction({ actor: customer, actionId: action.id }), { statusCode: 410, code: "AI_ACTION_EXPIRED" });
-  assert.equal(apiCaller.calls.length, 0);
+  assert.equal(writes().length, 0);
 });
 
 test("AI-001 a permission revoked after the proposal stops the confirmation", async () => {
@@ -444,7 +449,54 @@ test("AI-001 a failed confirmation reports the API's reason; cancel never calls 
   const second = reviewSetup();
   const { pendingActions: [other] } = await second.service.chat({ actor: second.customer, message: "Đánh giá Elio 5 sao" });
   assert.equal((await second.service.cancelAction({ actor: second.customer, actionId: other.id })).status, "CANCELLED");
-  assert.equal(second.apiCaller.calls.length, 0);
+  assert.equal(second.writes().length, 0);
+});
+
+test("AI-001 no review card is offered to a customer who has not watched the movie or already reviewed it", async () => {
+  for (const [reason, hint] of [["NO_ELIGIBLE_BOOKING", /showtime has ended/], ["ALREADY_REVIEWED", /already reviewed/], ["AUTHOR_NAME_REQUIRED", /full name/]]) {
+    const { service, repository, llm, writes, customer } = reviewSetup(undefined, { canReview: false, reason });
+    // The scripted "Bấm Xác nhận" answer is now a phantom card, so the model is asked to rewrite it.
+    llm.push(say("Bạn chưa đánh giá được phim này lúc này."));
+    const result = await service.chat({ actor: customer, accessToken: "tok", message: "Đánh giá Elio 5 sao" });
+    assert.equal(result.pendingActions.length, 0, reason);
+    assert.equal(repository.pendingActions.size, 0);
+    assert.equal(writes().length, 0);
+    assert.equal(repository.toolCalls[0].status, "denied");
+    assert.equal(repository.toolCalls[0].errorCode, reason);
+    const output = JSON.parse(llm.requests[1].input.find((item) => item.type === "function_call_output").output);
+    assert.equal(output.status, "NOT_ALLOWED_NOW");
+    assert.match(output.hint, hint);
+    assert.equal(result.reply, "Bạn chưa đánh giá được phim này lúc này.");
+  }
+});
+
+test("AI-001 an answer that promises a card which was never created gets one retry, then is replaced", async () => {
+  const admin = actor(["ADMIN"], ["account.manage", "role.view"]);
+  const phantom = say("Đồng ý — Popo đã chuẩn bị thẻ xác nhận. Bạn bấm nút \"Xác nhận\" nhé.");
+  const stubborn = setup({ script: [phantom, phantom] });
+  const result = await stubborn.service.chat({ actor: admin, message: "đánh giá phim Interstellar 1 sao" });
+  assert.equal(result.reply, AI_MESSAGES.NO_ACTION_CARD);
+  assert.equal(stubborn.llm.requests.length, 2);
+  assert.deepEqual(stubborn.llm.requests[1].input.at(-1).role, "developer");
+  assert.deepEqual(stubborn.repository.traces[0].guardrails.phantom_card.reasons, ["replaced"]);
+  // Every account may edit its own profile, so that is the admin's only write action.
+  assert.match(stubborn.llm.requests[0].instructions, /Thao tác cần xác nhận của phiên này: chỉ có: đổi họ tên hoặc số điện thoại của chính mình \(update_my_profile\)\. Mọi thay đổi khác/);
+  const guestPrompt = buildSystemPrompt({ actor: GUEST_ACTOR, now: new Date(), canary: "FC-x", tools: toolsForActor(GUEST_ACTOR) });
+  assert.match(guestPrompt, /Thao tác cần xác nhận của phiên này: KHÔNG có/);
+
+  const honest = setup({ script: [phantom, say("Popo chưa gửi được đánh giá cho tài khoản này, bạn vào trang phim để đánh giá nhé.")] });
+  const fixed = await honest.service.chat({ actor: admin, message: "đánh giá phim Interstellar 1 sao" });
+  assert.match(fixed.reply, /^Popo chưa gửi được/);
+  assert.deepEqual(honest.repository.traces[0].guardrails.phantom_card.reasons, ["retry"]);
+});
+
+test("AI-001 pointing back to a card from an earlier turn is not a phantom", async () => {
+  const { service, llm, customer } = reviewSetup();
+  const first = await service.chat({ actor: customer, accessToken: "tok", message: "Đánh giá Elio 5 sao" });
+  llm.push(say("Thẻ xác nhận ở tin nhắn phía trên, bạn bấm nút \"Xác nhận\" là xong."));
+  const followUp = await service.chat({ actor: customer, accessToken: "tok", conversationId: first.conversationId, message: "gửi đi" });
+  assert.match(followUp.reply, /^Thẻ xác nhận ở tin nhắn phía trên/);
+  assert.match(llm.requests[0].instructions, /Thao tác cần xác nhận của phiên này: chỉ có: .*submit_movie_review/);
 });
 
 // --- Conversations ----------------------------------------------------------------------------------

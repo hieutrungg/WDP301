@@ -1,6 +1,9 @@
 import mongoose from "mongoose";
 import { Showtime } from "./showtime.model.js";
-import { SHOWTIME_STATUS } from "./showtime.constants.js";
+import {
+  SHOWTIME_CLEANUP_BUFFER_MS,
+  SHOWTIME_STATUS,
+} from "./showtime.constants.js";
 
 const toObjectId = (value) => new mongoose.Types.ObjectId(value);
 const collection = (name) => mongoose.connection.db.collection(name);
@@ -195,18 +198,70 @@ export const findPublicShowtimeById = async (showtimeId, now) => {
   return showtime ?? null;
 };
 
-export const findScheduleConflict = ({ roomId, startAt, endAt, excludeShowtimeId }) =>
-  collection("showtimes").findOne({
-    roomId: toObjectId(roomId),
-    status: { $ne: SHOWTIME_STATUS.CANCELLED },
-    ...(excludeShowtimeId ? { _id: { $ne: toObjectId(excludeShowtimeId) } } : {}),
-    $expr: {
-      $and: [
-        { $lt: [{ $ifNull: ["$startAt", "$startTime"] }, endAt] },
-        { $gt: [{ $ifNull: ["$endAt", "$endTime"] }, startAt] },
-      ],
+export const findScheduleConflict = async ({ roomId, startAt, endAt, excludeShowtimeId }) => {
+  const [conflict] = await collection("showtimes").aggregate([
+    {
+      $match: {
+        roomId: toObjectId(roomId),
+        status: { $ne: SHOWTIME_STATUS.CANCELLED },
+        ...(excludeShowtimeId ? { _id: { $ne: toObjectId(excludeShowtimeId) } } : {}),
+      },
     },
-  });
+    {
+      $addFields: {
+        resolvedStartAt: { $ifNull: ["$startAt", "$startTime"] },
+        storedEndAt: { $ifNull: ["$endAt", "$endTime"] },
+      },
+    },
+    {
+      $lookup: {
+        from: "movies",
+        localField: "movieId",
+        foreignField: "_id",
+        as: "conflictMovie",
+      },
+    },
+    {
+      $addFields: {
+        resolvedEndAt: {
+          $cond: [
+            { $isNumber: { $arrayElemAt: ["$conflictMovie.duration", 0] } },
+            {
+              $add: [
+                "$resolvedStartAt",
+                {
+                  $add: [
+                    {
+                      $multiply: [
+                        { $arrayElemAt: ["$conflictMovie.duration", 0] },
+                        60_000,
+                      ],
+                    },
+                    SHOWTIME_CLEANUP_BUFFER_MS,
+                  ],
+                },
+              ],
+            },
+            "$storedEndAt",
+          ],
+        },
+      },
+    },
+    {
+      $match: {
+        $expr: {
+          $and: [
+            { $lt: ["$resolvedStartAt", endAt] },
+            { $gt: ["$resolvedEndAt", startAt] },
+          ],
+        },
+      },
+    },
+    { $limit: 1 },
+  ]).toArray();
+
+  return conflict ?? null;
+};
 
 export const findShowtimeById = (showtimeId) =>
   Showtime.findById(showtimeId).lean().exec();

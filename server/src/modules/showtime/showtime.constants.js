@@ -4,7 +4,7 @@ export const SHOWTIME_STATUS = Object.freeze({
   CANCELLED: "CANCELLED",
 });
 
-export const SHOWTIME_CLEANUP_BUFFER_MS = 15 * 60 * 1000;
+export const SHOWTIME_CLEANUP_BUFFER_MS = 30 * 60 * 1000;
 export const SHOWTIME_PAGE_LIMIT_DEFAULT = 20;
 export const SHOWTIME_PAGE_LIMIT_MAX = 50;
 

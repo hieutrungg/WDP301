@@ -24,7 +24,7 @@ function PendingActionCard({ action, onConfirm, onCancel }) {
       {settled ? (
         <p className={`mt-3 rounded-lg border px-3 py-2 ${RESULT_STYLE[action.state]}`} role="status">{action.message}</p>
       ) : (
-        <div className="mt-3 flex items-center gap-2">
+        <div className="mt-3 flex flex-wrap items-center gap-2">
           <button type="button" disabled={working} onClick={() => onConfirm(action.id)} className="inline-flex items-center gap-1.5 rounded-lg bg-primary-container px-3 py-1.5 font-bold text-white disabled:opacity-50">
             {working ? <Loader2 className="size-3.5 animate-spin" aria-hidden="true" /> : <Check className="size-3.5" aria-hidden="true" />}
             Xác nhận

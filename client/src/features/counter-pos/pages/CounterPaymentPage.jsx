@@ -33,6 +33,7 @@ function CounterPaymentPage() {
   const [verifying, setVerifying] = useState(false);
   const total = state?.booking?.amount ?? state?.total ?? 0;
   const tenderedValue = Number(tendered.replaceAll(".", "")) || 0;
+  const changeDue = Math.max(0, tenderedValue - total);
   const activeAttempt = attempt?.activeAttempt;
   const realBankTransfer = isBankTransferAttempt(activeAttempt);
   const canConfirm =
@@ -50,7 +51,14 @@ function CounterPaymentPage() {
     if (result?.payment?.status !== "PAID") return false;
     navigate("/staff/pos/complete", {
       replace: true,
-      state: { ...state, method: selectedMethod, settlement: result },
+      state: {
+        ...state,
+        method: selectedMethod,
+        settlement: result,
+        ...(selectedMethod === "CASH"
+          ? { tenderedAmount: tenderedValue, changeDue }
+          : {}),
+      },
     });
     return true;
   };
@@ -259,15 +267,19 @@ function CounterPaymentPage() {
                 className={`mt-5 rounded-xl p-4 ${tenderedValue >= total ? "bg-secondary-container/20 text-secondary" : "bg-error-container/30 text-error"}`}
               >
                 <p className="text-xs font-bold uppercase">
-                  {tenderedValue >= total
-                    ? "Cash is sufficient"
-                    : "Still required"}
+                  {tenderedValue >= total ? "Change due" : "Still required"}
                 </p>
                 <p className="mt-1 font-heading text-2xl font-bold">
-                  {formatVnd(Math.max(0, total - tenderedValue))}
+                  {formatVnd(
+                    tenderedValue >= total
+                      ? changeDue
+                      : Math.max(0, total - tenderedValue),
+                  )}
                 </p>
                 <p className="mt-1 text-xs text-tertiary">
-                  Any change is handled outside the system.
+                  {tenderedValue >= total
+                    ? "Return this amount to the customer."
+                    : "Enter enough cash before confirming payment."}
                 </p>
               </div>
             </div>

@@ -104,6 +104,7 @@ function ConcessionSelectionSession() {
     return <Navigate to={`/booking/${showtimeId}/checkout`} replace />;
 
   const changeQuantity = (item, delta) => {
+    if (delta > 0 && !item.available) return;
     const line = {
       itemType: kind === "combos" ? "COMBO" : "CONCESSION",
       itemId: item.id,
@@ -308,13 +309,14 @@ function ConcessionSelectionSession() {
                   return (
                     <article
                       key={item.id}
-                      className="overflow-hidden rounded-2xl border border-white/10 bg-surface-container-low"
+                      className={`overflow-hidden rounded-2xl border border-white/10 bg-surface-container-low ${item.available ? "" : "grayscale"}`}
                     >
                       <div className="relative">
                         <CatalogImage
                           key={item.imageUrl}
                           item={item}
                           combo={kind === "combos"}
+                          muted={!item.available}
                         />
                         <div className="absolute left-3 top-3 flex flex-wrap gap-2">
                           <CatalogBadges item={item} />
@@ -353,7 +355,7 @@ function ConcessionSelectionSession() {
                               (!quantity && items.length >= 50)
                             }
                             onClick={() => changeQuantity(item, 1)}
-                            className="rounded-lg bg-primary-container p-2 text-white disabled:opacity-30"
+                            className="rounded-lg bg-primary-container p-2 text-white disabled:cursor-not-allowed disabled:bg-surface-container-high disabled:text-on-surface-variant"
                           >
                             <Plus className="size-4" />
                           </button>
