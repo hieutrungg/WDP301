@@ -9,12 +9,12 @@ const toObjectId = (value) => new mongoose.Types.ObjectId(value);
 const collection = (name) => mongoose.connection.db.collection(name);
 const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-export const findPublicShowtimes = async ({ movieId, cinemaId, roomId, dateRange, page, limit, now }) => {
+const buildPublicShowtimeScope = ({ movieId, cinemaId, roomId, dateRange, now }) => {
   const match = { status: SHOWTIME_STATUS.PUBLISHED };
   if (movieId) match.movieId = toObjectId(movieId);
   if (roomId) match.roomId = toObjectId(roomId);
 
-  const pipeline = [
+  return [
     { $match: match },
     {
       $addFields: {
@@ -23,6 +23,13 @@ export const findPublicShowtimes = async ({ movieId, cinemaId, roomId, dateRange
       },
     },
     { $match: { startAt: { $gt: now, ...(dateRange ? { $gte: dateRange.start, $lt: dateRange.end } : {}) } } },
+    { $lookup: { from: "rooms", localField: "roomId", foreignField: "_id", as: "room" } },
+    { $unwind: "$room" },
+    { $match: { "room.status": { $in: ["ACTIVE", "AVAILABLE"] } } },
+    ...(cinemaId ? [{ $match: { "room.branchId": toObjectId(cinemaId) } }] : []),
+    { $lookup: { from: "branches", localField: "room.branchId", foreignField: "_id", as: "cinema" } },
+    { $unwind: "$cinema" },
+    { $match: { "cinema.status": "ACTIVE" } },
     {
       $lookup: {
         from: "showtime_seats",
@@ -43,16 +50,15 @@ export const findPublicShowtimes = async ({ movieId, cinemaId, roomId, dateRange
       },
     },
     { $match: { "bookableSeat.0": { $exists: true } } },
-    { $lookup: { from: "rooms", localField: "roomId", foreignField: "_id", as: "room" } },
-    { $unwind: "$room" },
-    { $match: { "room.status": { $in: ["ACTIVE", "AVAILABLE"] } } },
-    ...(cinemaId ? [{ $match: { "room.branchId": toObjectId(cinemaId) } }] : []),
-    { $lookup: { from: "branches", localField: "room.branchId", foreignField: "_id", as: "cinema" } },
-    { $unwind: "$cinema" },
-    { $match: { "cinema.status": "ACTIVE" } },
     { $lookup: { from: "movies", localField: "movieId", foreignField: "_id", as: "movie" } },
     { $unwind: "$movie" },
     { $match: { "movie.status": "PUBLISHED" } },
+  ];
+};
+
+export const findPublicShowtimes = async ({ page, limit, ...scope }) => {
+  const pipeline = [
+    ...buildPublicShowtimeScope(scope),
     {
       $facet: {
         items: [

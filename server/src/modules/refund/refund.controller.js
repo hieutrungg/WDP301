@@ -2,8 +2,8 @@ export const createRefundController = (service) => ({
   request: async (req, res, next) => { try { res.status(201).json({ success: true, data: await service.request({ ...req.body, customerAccountId: req.auth.accountId }) }); } catch (error) { next(error); } },
   listMine: async (req, res, next) => { try { res.json({ success: true, data: await service.listMine(req.auth.accountId) }); } catch (error) { next(error); } },
   listManager: async (req, res, next) => { try { res.json({ success: true, data: await service.listManager(req.auth.branchId) }); } catch (error) { next(error); } },
-  approve: async (req, res, next) => { try { res.json({ success: true, data: await service.process({ refundId: req.params.refundId, managerId: req.auth.accountId, branchId: req.auth.branchId }) }); } catch (error) { next(error); } },
-  retry: async (req, res, next) => { try { res.json({ success: true, data: await service.process({ refundId: req.params.refundId, managerId: req.auth.accountId, branchId: req.auth.branchId }) }); } catch (error) { next(error); } },
+  approve: async (req, res, next) => { try { res.json({ success: true, data: await service.processForManager({ refundId: req.params.refundId, managerId: req.auth.accountId, branchId: req.auth.branchId }) }); } catch (error) { next(error); } },
+  retry: async (req, res, next) => { try { res.json({ success: true, data: await service.processForManager({ refundId: req.params.refundId, managerId: req.auth.accountId, branchId: req.auth.branchId }) }); } catch (error) { next(error); } },
   confirmCash: async (req, res, next) => { try { res.json({ success: true, data: await service.confirmCash({ refundId: req.params.refundId, managerId: req.auth.accountId, branchId: req.auth.branchId }) }); } catch (error) { next(error); } },
   reject: async (req, res, next) => { try { res.json({ success: true, data: await service.reject({ refundId: req.params.refundId, managerId: req.auth.accountId, branchId: req.auth.branchId, reason: req.body.reason }) }); } catch (error) { next(error); } },
 });

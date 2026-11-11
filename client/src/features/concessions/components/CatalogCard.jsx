@@ -2,10 +2,10 @@ import { ArrowUpRight, Layers, Popcorn } from "lucide-react";
 import { useState } from "react";
 import { catalogBadges, catalogPrice } from "../utils/catalogPresentation";
 
-export function CatalogImage({ item, combo = false }) {
+export function CatalogImage({ item, combo = false, muted = false }) {
   const [failed, setFailed] = useState(false);
   return (
-    <div className="relative flex aspect-[4/3] items-center justify-center overflow-hidden bg-[radial-gradient(ellipse_at_top_right,rgba(245,197,24,0.13),transparent_65%)]">
+    <div className={`relative flex aspect-[4/3] items-center justify-center overflow-hidden bg-[radial-gradient(ellipse_at_top_right,rgba(245,197,24,0.13),transparent_65%)] ${muted ? "opacity-60" : ""}`}>
       {item.imageUrl && !failed ? (
         <img
           src={item.imageUrl}
@@ -39,11 +39,14 @@ export function CatalogBadges({ item }) {
     </span>
   ));
 }
-export default function CatalogCard({ item, combo, onDetails }) {
+export default function CatalogCard({ item, combo, onDetails, disableUnavailable }) {
+  const disabled = disableUnavailable && !item.available;
   return (
-    <article className="group overflow-hidden rounded-2xl border border-white/8 bg-surface-container-low transition-colors hover:border-white/20">
+    <article
+      className={`group overflow-hidden rounded-2xl border border-white/8 bg-surface-container-low ${disabled ? "grayscale" : "transition-colors hover:border-white/20"}`}
+    >
       <div className="relative">
-        <CatalogImage key={item.imageUrl} item={item} combo={combo} />
+        <CatalogImage key={item.imageUrl} item={item} combo={combo} muted={disabled} />
         <div className="absolute inset-x-3 top-3 flex flex-wrap gap-2">
           <CatalogBadges item={item} />
         </div>
@@ -73,9 +76,10 @@ export default function CatalogCard({ item, combo, onDetails }) {
           </div>
           <button
             type="button"
+            disabled={disabled}
             onClick={() => onDetails(item)}
             aria-label={`View details: ${item.name}`}
-            className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary-container text-white transition-colors hover:bg-primary-container/80 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-secondary"
+            className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary-container text-white transition-colors enabled:hover:bg-primary-container/80 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-secondary disabled:cursor-not-allowed disabled:bg-surface-container-high disabled:text-on-surface-variant"
           >
             <ArrowUpRight className="size-5" />
           </button>

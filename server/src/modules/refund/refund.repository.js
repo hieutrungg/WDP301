@@ -19,7 +19,6 @@ const managerBranchStages = (branchId) => [
 ];
 
 const withoutBranchJoins = { $project: { booking: 0, showtime: 0, room: 0 } };
-
 export const refundRepository = {
   async loadEligibility(bookingId) {
     const booking = await Booking.findById(bookingId).lean();
@@ -36,18 +35,19 @@ export const refundRepository = {
   listForManager(branchId) {
     return RefundRequest.aggregate([
       ...managerBranchStages(branchId),
-      { $sort: { requestedAt: 1 } },
+      { $sort: { requestedAt: 1, _id: 1 } },
       { $limit: 200 },
       withoutBranchJoins,
     ]).exec();
   },
-  findForManagerById(refundId, branchId) {
-    return RefundRequest.aggregate([
+  async findForManagerById(refundId, branchId) {
+    const [refund] = await RefundRequest.aggregate([
       { $match: { _id: new mongoose.Types.ObjectId(refundId) } },
       ...managerBranchStages(branchId),
       { $limit: 1 },
       withoutBranchJoins,
-    ]).then((items) => items[0] ?? null);
+    ]).exec();
+    return refund ?? null;
   },
   async aggregateSuccessfulRevenue({ fromAt, toAt, session } = {}) {
     const match = {

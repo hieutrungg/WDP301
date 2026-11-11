@@ -26,11 +26,24 @@ export function readMovieSearchParams(searchParams) {
   }
 }
 
-export function buildMovieQuery({ q, genre, page, sort, order }) {
+export function getVietnamDateKey() {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Ho_Chi_Minh',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date())
+  const values = Object.fromEntries(parts.map(({ type, value }) => [type, value]))
+  return `${values.year}-${values.month}-${values.day}`
+}
+
+export function buildMovieQuery({ q, genre, cinemaId, releaseTo, page, sort, order }) {
   const query = new URLSearchParams()
 
   if (q) query.set('q', q)
   if (genre) query.set('genre', genre)
+  if (cinemaId) query.set('cinemaId', cinemaId)
+  if (releaseTo) query.set('releaseTo', releaseTo)
   query.set('page', String(page))
   query.set('limit', String(MOVIE_PAGE_SIZE))
   query.set('sort', sort)

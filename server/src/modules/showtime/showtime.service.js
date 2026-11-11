@@ -20,12 +20,12 @@ import {
   findShowtimeById,
   findManagerShowtimes,
   findPublicShowtimeById,
-  findPublicShowtimes,
   findScheduleConflict,
   publishShowtime,
   updatePublishedShowtimeTime,
 } from "./showtime.repository.js";
 import { cancelShowtimeWithSales } from "./showtime-cancellation.repository.js";
+import { scanBookableShowtimes } from "./public-showtime-discovery.js";
 
 const getVietnamDateRange = (date) => {
   if (!date) return undefined;
@@ -306,11 +306,14 @@ export const createShowtimeCanceller =
     cancel = cancelShowtimeWithSales,
   } = {}) =>
   async ({ showtimeId, managerId, branchId }, now = new Date()) => {
+    if (!mongoose.isObjectIdOrHexString(branchId)) {
+      throw showtimeError(403, "Your account is not assigned to a cinema branch", "BRANCH_NOT_ASSIGNED");
+    }
     const showtime = await findShowtime(showtimeId);
     if (!showtime) {
       throw showtimeError(404, "Showtime not found", SHOWTIME_ERROR.SHOWTIME_NOT_FOUND);
     }
-    if (branchId) await getRoomLayout(showtime.roomId.toString(), branchId);
+    await getRoomLayout(showtime.roomId.toString(), branchId.toString());
 
     const result = await cancel({ showtimeId, managerId, now });
     if (result.missing) {
@@ -343,39 +346,19 @@ export const cancelShowtime = createShowtimeCanceller();
 export const listShowtimes = async (query, now = new Date()) => {
   if (query.movieId) await movieService.getMovie(query.movieId);
 
-  const scanLimit = 50;
   const requestedStart = (query.page - 1) * query.limit;
   const requestedEnd = requestedStart + query.limit;
-  let candidatePage = 1;
-  let candidateTotal = 0;
   let validTotal = 0;
   const pageItems = [];
-  while (candidatePage === 1 || (candidatePage - 1) * scanLimit < candidateTotal) {
-    const { items, total } = await findPublicShowtimes({
-      ...query,
-      page: candidatePage,
-      limit: scanLimit,
-      dateRange: getVietnamDateRange(query.date),
-      now,
-    });
-    candidateTotal = total;
-    const priceSnapshots = await Promise.all(
-      items.map((item) =>
-        seatAvailability.getPriceSnapshot({
-          showtimeId: item._id,
-          roomId: item.roomId,
-          roomLayoutVersion: item.roomLayoutVersion,
-        }),
-      ),
-    );
-    for (let index = 0; index < items.length; index += 1) {
-      if (!priceSnapshots[index]) continue;
+  for await (const entries of scanBookableShowtimes({
+    ...query, dateRange: getVietnamDateRange(query.date), now,
+  })) {
+    for (const entry of entries) {
       if (validTotal >= requestedStart && validTotal < requestedEnd) {
-        pageItems.push({ item: items[index], priceSnapshot: priceSnapshots[index] });
+        pageItems.push(entry);
       }
       validTotal += 1;
     }
-    candidatePage += 1;
   }
   const availabilityByShowtime = await seatAvailability.getAvailabilitySummary(
     pageItems.map(({ item }) => item._id),

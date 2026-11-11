@@ -2,6 +2,7 @@ import { CheckCircle2, Clock3, Film, Flame } from "lucide-react";
 import { Link } from "react-router";
 import { useState } from "react";
 import TrailerPlayerButton from "./TrailerPlayerButton";
+import { buildMovieCatalogPath } from "../utils/movieNavigation";
 
 const releaseDateFormatter = new Intl.DateTimeFormat("en-GB", {
   day: "2-digit",
@@ -9,7 +10,7 @@ const releaseDateFormatter = new Intl.DateTimeFormat("en-GB", {
   year: "numeric",
 });
 
-function HeroBanner({ movie, loading }) {
+function HeroBanner({ movie, loading, cinemaId }) {
   const [failedImageUrl, setFailedImageUrl] = useState("");
   const [failedLandscapeUrl, setFailedLandscapeUrl] = useState("");
   const hasImage =
@@ -59,11 +60,12 @@ function HeroBanner({ movie, loading }) {
             Experience cinema at F-Cinema
           </h1>
           <p className="mt-4 leading-7 text-on-surface-variant">
-            Published movies will appear here when the current cinema lineup is
-            available.
+            {cinemaId
+              ? "Check the lineup for your selected cinema or choose another cinema."
+              : "Published movies will appear here when the current cinema lineup is available."}
           </p>
           <Link
-            to="/movies"
+            to={buildMovieCatalogPath({ cinemaId })}
             className="mt-7 inline-flex rounded-lg bg-primary-container px-5 py-3 text-sm font-bold text-white shadow-crimson"
           >
             Browse movies

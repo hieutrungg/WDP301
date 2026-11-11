@@ -20,6 +20,7 @@ const promotionSchema = new mongoose.Schema(
     status: { type: String, enum: ["ACTIVE", "INACTIVE"], required: true },
     version: { type: Number, required: true, default: 0 },
     reservationFence: { type: Number, default: 0 },
+    branchId: { type: oid, ref: "Branch", immutable: true },
     createdBy: oid,
     updatedBy: oid,
   },
