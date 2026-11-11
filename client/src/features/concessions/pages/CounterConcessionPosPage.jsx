@@ -32,14 +32,13 @@ const money = (value) =>
     value || 0,
   );
 const keyOf = (item) => `${item.itemType}:${item.itemId}`;
+const categoryKey = (value) => value?.trim().toLocaleLowerCase("en-US") || "";
 
 export default function CounterConcessionPosPage() {
   const { account } = useAuth();
   const [branches, setBranches] = useState([]);
   const [categories, setCategories] = useState([]);
-  const [branchId, setBranchId] = useState(
-    account?.employeeProfile?.branchId || "",
-  );
+  const branchId = account?.employeeProfile?.branchId || "";
   const [categoryId, setCategoryId] = useState("ALL");
   const [products, setProducts] = useState([]);
   const [query, setQuery] = useState("");
@@ -53,16 +52,23 @@ export default function CounterConcessionPosPage() {
   useEffect(() => {
     const controller = new AbortController();
     getCatalogBranches(controller.signal)
-      .then((branchRows) => {
-        setBranches(branchRows);
-        setBranchId((current) => current || branchRows[0]?.id || "");
-      })
+      .then(setBranches)
       .catch(() => {
         if (!controller.signal.aborted)
           toast.error("Unable to load cinema branches");
       });
     getCatalogCategories(controller.signal)
-      .then(setCategories)
+      .then((rows) => {
+        const seen = new Set();
+        setCategories(
+          rows.filter((row) => {
+            const key = categoryKey(row.name);
+            if (!key || seen.has(key)) return false;
+            seen.add(key);
+            return true;
+          }),
+        );
+      })
       .catch(() => {
         if (!controller.signal.aborted)
           toast.error("Unable to load concession categories");
@@ -85,17 +91,21 @@ export default function CounterConcessionPosPage() {
     ])
       .then(([items, combos]) => {
         setProducts([
-          ...items.items.map((item) => withCatalogImageOverride({
-            ...item,
-            itemType: "CONCESSION",
-            itemId: item.id,
-          })),
-          ...combos.items.map((item) => withCatalogImageOverride({
-            ...item,
-            itemType: "COMBO",
-            itemId: item.id,
-            category: null,
-          })),
+          ...items.items.map((item) =>
+            withCatalogImageOverride({
+              ...item,
+              itemType: "CONCESSION",
+              itemId: item.id,
+            }),
+          ),
+          ...combos.items.map((item) =>
+            withCatalogImageOverride({
+              ...item,
+              itemType: "COMBO",
+              itemId: item.id,
+              category: null,
+            }),
+          ),
         ]);
       })
       .catch(() => {
@@ -120,7 +130,7 @@ export default function CounterConcessionPosPage() {
           categoryId === "ALL" ||
           (categoryId === "COMBO"
             ? item.itemType === "COMBO"
-            : item.category?.id === categoryId);
+            : categoryKey(item.category?.name) === categoryId);
         return (
           categoryMatch &&
           item.name?.toLowerCase().includes(query.trim().toLowerCase())
@@ -153,19 +163,6 @@ export default function CounterConcessionPosPage() {
         )
         .filter((line) => line.quantity > 0),
     );
-  const changeBranch = (next) => {
-    if (
-      lines.length &&
-      !window.confirm(
-        "Changing the cinema will clear the current sale. Continue?",
-      )
-    )
-      return;
-    setLines([]);
-    setCheckout(null);
-    setLoading(true);
-    setBranchId(next);
-  };
   const submit = async () => {
     if (!lines.length || (method === "CASH" && cashValue < total)) return;
     setBusy(true);
@@ -227,7 +224,7 @@ export default function CounterConcessionPosPage() {
   return (
     <div className="counter-fnb-pos grid min-h-[calc(100vh-7.5rem)] gap-4 xl:grid-cols-[minmax(0,1fr)_25rem]">
       <section className="min-w-0 rounded-2xl bg-surface-container-low p-4 sm:p-5">
-        <div className="flex flex-wrap items-end justify-between gap-3 border-b border-white/10 pb-4">
+        <div className="border-b border-white/10 pb-4">
           <div>
             <p className="text-xs font-bold uppercase tracking-wider text-primary">
               Counter F&amp;B POS
@@ -236,25 +233,14 @@ export default function CounterConcessionPosPage() {
               Sell Concessions
             </h1>
           </div>
-          <label className="grid gap-1 text-xs text-tertiary">
-            Cinema
-            <select
-              value={branchId}
-              onChange={(event) => changeBranch(event.target.value)}
-              className="min-w-60 rounded-lg bg-surface-container-high px-3 py-2 text-sm font-semibold text-on-surface outline-none"
-            >
-              {branches.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.branchName}
-                </option>
-              ))}
-            </select>
-          </label>
         </div>
         <div className="mt-4 flex gap-2 overflow-x-auto pb-2">
           {[
             { id: "ALL", name: "All" },
-            ...categories,
+            ...categories.map((category) => ({
+              id: categoryKey(category.name),
+              name: category.name,
+            })),
             { id: "COMBO", name: "Combos" },
           ].map((item) => (
             <button
@@ -305,6 +291,11 @@ export default function CounterConcessionPosPage() {
                   <p className="line-clamp-2 min-h-10 text-sm font-bold">
                     {item.name}
                   </p>
+                  {item.lowStock && (
+                    <p className="mt-1 text-xs font-semibold text-amber-400">
+                      Low in stock
+                    </p>
+                  )}
                   <div className="mt-2 flex items-center justify-between">
                     <span className="text-sm font-bold text-secondary">
                       {money(item.price)}

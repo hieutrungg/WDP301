@@ -3,7 +3,6 @@ import {
   ArrowRight,
   LockKeyhole,
   ShieldCheck,
-  Building2,
   UserRound,
 } from "lucide-react";
 import { useState } from "react";
@@ -137,13 +136,6 @@ function LoginForm() {
       </div>
 
       <GoogleSignInButton onError={setServerError} rememberMe={rememberMe} />
-
-      <Link
-        to="/internal-login"
-        className="mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-lg border border-white/10 bg-surface-container text-sm font-bold text-on-surface transition hover:border-primary/40 hover:bg-surface-container-high"
-      >
-        <Building2 className="size-4 text-primary" /> Internal Sign In
-      </Link>
 
       <p className="mt-6 text-center text-sm text-on-surface-variant">
         Don&apos;t have an account yet?{" "}

@@ -159,6 +159,32 @@ export const concessionSeeds = [
   },
 ];
 
+export const comboSeeds = [
+  {
+    seedKey: "combo:movie-night-duo",
+    name: "Movie Night Duo",
+    description: "Cheddar popcorn and two fountain sodas",
+    price: 119000,
+    imageUrl: "/images/concessions/movie-night-duo-combo.png",
+    items: [
+      { concession: "cheese-popcorn", quantity: 1 },
+      { concession: "cola", quantity: 2 },
+    ],
+  },
+  {
+    seedKey: "combo:premiere-sharing",
+    name: "Premiere Sharing Combo",
+    description: "Caramel popcorn, nachos and two fountain sodas",
+    price: 189000,
+    imageUrl: "/images/concessions/premiere-sharing-combo.png",
+    items: [
+      { concession: "caramel-popcorn", quantity: 1 },
+      { concession: "nachos", quantity: 1 },
+      { concession: "cola", quantity: 2 },
+    ],
+  },
+];
+
 export const supplierSeeds = [
   {
     seedKey: "supplier:vissan",
@@ -250,6 +276,23 @@ export const seedInventory = async (database) => {
     }),
   );
 
+  const combos = await upsertFixtures(
+    database,
+    "combos",
+    comboSeeds,
+    ({ name, description, price, imageUrl, items }) => ({
+      name,
+      description,
+      price,
+      imageUrl,
+      status: "ACTIVE",
+      items: items.map(({ concession, quantity }) => ({
+        concessionId: deterministicObjectId(`concession:${concession}`),
+        quantity,
+      })),
+    }),
+  );
+
   const suppliers = await upsertFixtures(
     database,
     "suppliers",
@@ -307,24 +350,23 @@ export const seedInventory = async (database) => {
 
   const grants = {};
   for (const { role, permissions } of roleGrantSeeds) {
-    const result = await database
-      .collection("roles")
-      .updateOne(
-        { name: role },
-        {
-          $addToSet: {
-            permissionIds: {
-              $each: permissions.map((name) => permissionIds[name]),
-            },
+    const result = await database.collection("roles").updateOne(
+      { name: role },
+      {
+        $addToSet: {
+          permissionIds: {
+            $each: permissions.map((name) => permissionIds[name]),
           },
         },
-      );
+      },
+    );
     grants[role] = result.matchedCount === 1 ? "granted" : "role not found";
   }
 
   return {
     categories,
     concessions,
+    combos,
     suppliers,
     inventories: {
       matched: inventoryResult.matchedCount,

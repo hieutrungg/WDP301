@@ -16,17 +16,32 @@ export const readSellableStock = async ({ branchId, concessionIds, now }) => {
     );
   }
   const ids = [...new Set(concessionIds.map((id) => id.toLowerCase()))];
-  const result = new Map(ids.map((id) => [id, { quantity: 0 }]));
+  const result = new Map(
+    ids.map((id) => [id, { quantity: 0, minThreshold: 0 }]),
+  );
   if (ids.length === 0) return result;
   const rows = await Inventory.find({ branchId, concessionId: { $in: ids } })
-    .select({ _id: 0, concessionId: 1, quantity: 1 })
+    .select({ _id: 0, concessionId: 1, quantity: 1, minThreshold: 1 })
     .lean();
-  const reserved = await readLiveReserved({ branchId, concessionIds: ids, ...(now ? { now } : {}) });
+  const reserved = await readLiveReserved({
+    branchId,
+    concessionIds: ids,
+    ...(now ? { now } : {}),
+  });
   for (const row of rows) {
     if (!Number.isSafeInteger(row.quantity) || row.quantity < 0) {
       throw new Error("Invalid inventory quantity in catalog stock read");
     }
-    result.set(row.concessionId.toString(), { quantity: Math.max(0, row.quantity - (reserved.get(row.concessionId.toString()) ?? 0)) });
+    result.set(row.concessionId.toString(), {
+      quantity: Math.max(
+        0,
+        row.quantity - (reserved.get(row.concessionId.toString()) ?? 0),
+      ),
+      minThreshold:
+        Number.isSafeInteger(row.minThreshold) && row.minThreshold >= 0
+          ? row.minThreshold
+          : 0,
+    });
   }
   return result;
 };

@@ -3,6 +3,7 @@ import { test } from "node:test";
 import { branchSeeds } from "../src/seeds/seed-branches.js";
 import {
   categorySeeds,
+  comboSeeds,
   concessionSeeds,
   permissionSeeds,
   roleGrantSeeds,
@@ -27,8 +28,14 @@ const createFakeDatabase = () => {
         async findOneAndUpdate(filter, update, options) {
           assert.equal(name, "permissions");
           assert.equal(options.upsert, true);
-          assert.ok(update.$setOnInsert, "existing permissions are never overwritten");
-          return { _id: deterministicObjectId(`permission:${filter.name}`), name: filter.name };
+          assert.ok(
+            update.$setOnInsert,
+            "existing permissions are never overwritten",
+          );
+          return {
+            _id: deterministicObjectId(`permission:${filter.name}`),
+            name: filter.name,
+          };
         },
         async updateOne(filter, update) {
           assert.equal(name, "roles");
@@ -43,20 +50,48 @@ const createFakeDatabase = () => {
 };
 
 test("inventory fixtures use stable unique identities and valid references", () => {
-  const keys = [...categorySeeds, ...concessionSeeds, ...supplierSeeds].map(({ seedKey }) => seedKey);
+  const keys = [
+    ...categorySeeds,
+    ...concessionSeeds,
+    ...comboSeeds,
+    ...supplierSeeds,
+  ].map(({ seedKey }) => seedKey);
   assert.equal(new Set(keys).size, keys.length);
 
   const categoryKeys = new Set(categorySeeds.map(({ seedKey }) => seedKey));
   for (const { category } of concessionSeeds) {
-    assert.ok(categoryKeys.has(`concession-category:${category}`), `unknown category ${category}`);
+    assert.ok(
+      categoryKeys.has(`concession-category:${category}`),
+      `unknown category ${category}`,
+    );
+  }
+
+  const concessions = new Map(
+    concessionSeeds.map(({ seedKey, price }) => [seedKey.split(":")[1], price]),
+  );
+  for (const combo of comboSeeds) {
+    const retailTotal = combo.items.reduce(
+      (sum, item) => sum + concessions.get(item.concession) * item.quantity,
+      0,
+    );
+    assert.ok(
+      combo.price < retailTotal,
+      `${combo.name} must cost less than its items`,
+    );
   }
 });
 
 test("inventory fixtures cover out-of-stock, low-stock, healthy and never-stocked items", () => {
-  const stocks = concessionSeeds.filter(({ stock }) => stock).map(({ stock }) => stock[0]);
+  const stocks = concessionSeeds
+    .filter(({ stock }) => stock)
+    .map(({ stock }) => stock[0]);
 
   assert.ok(stocks.some(([quantity]) => quantity === 0));
-  assert.ok(stocks.some(([quantity, threshold]) => quantity > 0 && quantity <= threshold));
+  assert.ok(
+    stocks.some(
+      ([quantity, threshold]) => quantity > 0 && quantity <= threshold,
+    ),
+  );
   assert.ok(stocks.some(([quantity, threshold]) => quantity > threshold));
   assert.ok(concessionSeeds.some(({ stock }) => stock === null));
 });
@@ -65,18 +100,31 @@ test("inventory seed upserts by deterministic identity and never resets existing
   const database = createFakeDatabase();
   const result = await seedInventory(database);
 
-  const inventoryWrite = database.writes.find(({ name }) => name === "inventories");
-  const activeBranches = branchSeeds.filter(({ status }) => status === "ACTIVE").length;
+  const inventoryWrite = database.writes.find(
+    ({ name }) => name === "inventories",
+  );
+  const activeBranches = branchSeeds.filter(
+    ({ status }) => status === "ACTIVE",
+  ).length;
   const stockedItems = concessionSeeds.filter(({ stock }) => stock).length;
 
   assert.equal(inventoryWrite.operations.length, activeBranches * stockedItems);
   for (const { updateOne } of inventoryWrite.operations) {
     assert.equal(updateOne.upsert, true);
-    assert.equal(updateOne.update.$set, undefined, "quantity is written on insert only");
+    assert.equal(
+      updateOne.update.$set,
+      undefined,
+      "quantity is written on insert only",
+    );
     assert.ok(updateOne.update.$setOnInsert.quantity >= 0);
   }
 
-  for (const name of ["concession_categories", "concessions", "suppliers"]) {
+  for (const name of [
+    "concession_categories",
+    "concessions",
+    "combos",
+    "suppliers",
+  ]) {
     const { operations } = database.writes.find((write) => write.name === name);
     assert.ok(operations.every(({ updateOne }) => updateOne.upsert === true));
   }

@@ -28,20 +28,30 @@ const requireBranch = async (branchId) => {
   }
 };
 
-const serializeItem = (item, branchId, stock) => ({
-  id: item._id.toString(),
-  category: item.category
-    ? { id: item.category._id.toString(), name: textOrNull(item.category.name) }
-    : null,
-  name: textOrNull(item.name),
-  description: null,
-  size: textOrNull(item.size),
-  imageUrl: textOrNull(item.imageUrl),
-  price: item.price,
-  branchId,
-  available: (stock.get(item._id.toString())?.quantity ?? 0) > 0,
-  isSpecialOffer: item.price === 0,
-});
+const serializeItem = (item, branchId, stock) => {
+  const level = stock.get(item._id.toString()) ?? {
+    quantity: 0,
+    minThreshold: 0,
+  };
+  return {
+    id: item._id.toString(),
+    category: item.category
+      ? {
+          id: item.category._id.toString(),
+          name: textOrNull(item.category.name),
+        }
+      : null,
+    name: textOrNull(item.name),
+    description: null,
+    size: textOrNull(item.size),
+    imageUrl: textOrNull(item.imageUrl),
+    price: item.price,
+    branchId,
+    available: level.quantity > 0,
+    lowStock: level.quantity > 0 && level.quantity <= level.minThreshold,
+    isSpecialOffer: item.price === 0,
+  };
+};
 
 export const listCategories = async (query) => {
   const { items, total } = await listCatalogCategories(pageInput(query));
@@ -140,6 +150,12 @@ const serializeCombos = async (items, branchId) => {
         const component = components.get(line.concessionId);
         return component?.status === "ACTIVE" && priced(component.price);
       });
+    const available =
+      eligible &&
+      recipe.every(
+        (line) =>
+          (stock.get(line.concessionId)?.quantity ?? 0) >= line.quantity,
+      );
     return {
       id: item._id.toString(),
       name: textOrNull(item.name),
@@ -147,12 +163,16 @@ const serializeCombos = async (items, branchId) => {
       imageUrl: textOrNull(item.imageUrl),
       price: item.price,
       branchId,
-      available:
-        eligible &&
-        recipe.every(
-          (line) =>
-            (stock.get(line.concessionId)?.quantity ?? 0) >= line.quantity,
-        ),
+      available,
+      lowStock:
+        available &&
+        recipe.some((line) => {
+          const level = stock.get(line.concessionId);
+          return (
+            (level?.quantity ?? 0) >= line.quantity &&
+            level.quantity <= level.minThreshold
+          );
+        }),
       isSpecialOffer: item.price === 0,
       // Do not expose inactive/missing/non-priced component details or malformed legacy recipes.
       items: eligible
