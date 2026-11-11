@@ -66,7 +66,7 @@ Owner approved the demo policy on 2026-10-27: Customer requests close 45 minutes
 
 ### Manager Showtime creation integration
 
-UC17 create-screen/API implementation is in the working tree. Before integrating it, the Showtime owner and affected module reviewers still need to confirm the `SHOW-001` write contract, cleanup-buffer configuration location, stable overlap/inactive-reference error codes, and whether Manager role alone is sufficient for this mutation (there is no approved `showtime.manage` permission code). The current draft uses the approved fixed 15-minute default, `movieId`/`roomId`/UTC `startAt`, and a Manager-role guard. Consumers are Manager Showtime UI and Booking seat availability. New records use the approved Showtime fields; no migration/backfill was run, and any legacy records need review before rollout.
+UC17 create-screen/API implementation is in the working tree. The Project Owner confirmed a fixed 30-minute cleanup buffer on 2026-11-10; the Showtime owner and affected module reviewers still need to confirm the `SHOW-001` write contract, stable overlap/inactive-reference error codes, and whether Manager role alone is sufficient for this mutation (there is no approved `showtime.manage` permission code). The implementation uses `movieId`/`roomId`/UTC `startAt` and a Manager-role guard. Consumers are Manager Showtime UI and Booking seat availability. New records use the approved Showtime fields; no migration/backfill was run, and any legacy records need review before rollout.
 
 ### Showtime cancellation
 

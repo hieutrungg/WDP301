@@ -3,6 +3,7 @@ import HeroBanner from '../../features/movie-showtime/components/HeroBanner'
 import MembershipBanner from '../../features/movie-showtime/components/MembershipBanner'
 import NowShowingSection from '../../features/movie-showtime/components/NowShowingSection'
 import ComingSoonSection from '../../features/movie-showtime/components/ComingSoonSection'
+import CinemaMapSection from '../../features/movie-showtime/components/CinemaMapSection'
 import { useMovies } from '../../features/movie-showtime/hooks/useMovies'
 
 const homeMoviesQuery = 'page=1&limit=24&sort=releaseDate&order=desc'
@@ -30,6 +31,7 @@ function LandingPage() {
       <HeroBanner movie={featuredMovie} loading={loading} />
       <NowShowingSection movies={nowShowing} loading={loading} error={error} onRetry={retry} />
       {!loading && !error && <ComingSoonSection movies={comingSoon} />}
+      <CinemaMapSection />
       <CinemaExperienceSection />
       <MembershipBanner />
     </div>

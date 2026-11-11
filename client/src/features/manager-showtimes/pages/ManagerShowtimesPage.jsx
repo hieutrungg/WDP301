@@ -80,55 +80,56 @@ function shiftDate(date, days) {
   return `${value.getUTCFullYear()}-${String(value.getUTCMonth() + 1).padStart(2, "0")}-${String(value.getUTCDate()).padStart(2, "0")}`;
 }
 
-function localDateKey(date) {
-  return vietnamDateFormatter.format(date);
-}
-
-function vietnamMinutes(date) {
-  const parts = new Intl.DateTimeFormat("en-GB", {
-    timeZone: "Asia/Ho_Chi_Minh",
-    hour: "2-digit",
-    minute: "2-digit",
-    hourCycle: "h23",
-  }).formatToParts(date);
-  const hour = Number(parts.find((part) => part.type === "hour")?.value ?? 0);
-  const minute = Number(
-    parts.find((part) => part.type === "minute")?.value ?? 0,
-  );
-  return hour * 60 + minute;
-}
-
 function ShowtimeWeekCalendar({ date, cinema, showtimes, onDetails, onMore }) {
   const weekDates = getWeekDates(date);
   const roomColors = new Map();
   let nextColor = 0;
   const dayEvents = weekDates.map((weekDate) => {
-    const events = showtimes
-      .filter(
-        (showtime) => localDateKey(new Date(showtime.startAt)) === weekDate,
-      )
-      .map((showtime) => {
-        const roomId = showtime.room.id;
-        if (!roomColors.has(roomId)) {
-          roomColors.set(
-            roomId,
-            calendarRoomColors[nextColor % calendarRoomColors.length],
-          );
-          nextColor += 1;
-        }
-        const start = new Date(showtime.startAt);
-        const end = new Date(showtime.endAt);
-        const startMinutes = vietnamMinutes(start);
-        const endLocalDate = localDateKey(end);
-        const rawEndMinutes = vietnamMinutes(end);
-        const endMinutes = endLocalDate === weekDate ? rawEndMinutes : 24 * 60;
-        return {
+    const dayStartAt = new Date(`${weekDate}T00:00:00+07:00`);
+    const dayEndAt = new Date(dayStartAt.getTime() + 24 * 60 * 60_000);
+    const events = showtimes.flatMap((showtime) => {
+      const showtimeStart = new Date(showtime.startAt);
+      const showtimeEnd = new Date(showtime.endAt);
+      if (showtimeStart >= dayEndAt || showtimeEnd <= dayStartAt) return [];
+
+      const segmentStart = new Date(
+        Math.max(showtimeStart.getTime(), dayStartAt.getTime()),
+      );
+      const segmentEnd = new Date(
+        Math.min(showtimeEnd.getTime(), dayEndAt.getTime()),
+      );
+      const segmentStartMinutes =
+        (segmentStart.getTime() - dayStartAt.getTime()) / 60_000;
+      const segmentEndMinutes =
+        (segmentEnd.getTime() - dayStartAt.getTime()) / 60_000;
+      const cleanupStartAt = new Date(showtimeEnd.getTime() - 30 * 60_000);
+      const cleanupStartMinutes = Math.max(
+        segmentStartMinutes,
+        (cleanupStartAt.getTime() - dayStartAt.getTime()) / 60_000,
+      );
+      const roomId = showtime.room.id;
+      if (!roomColors.has(roomId)) {
+        roomColors.set(
+          roomId,
+          calendarRoomColors[nextColor % calendarRoomColors.length],
+        );
+        nextColor += 1;
+      }
+      return [
+        {
           showtime,
-          startMinutes,
-          endMinutes: Math.max(startMinutes + 30, endMinutes),
+          startMinutes: segmentStartMinutes,
+          endMinutes: segmentEndMinutes,
+          cleanupStartMinutes,
+          starts: timeFormatter.format(segmentStart),
+          ends:
+            segmentEnd.getTime() === dayEndAt.getTime()
+              ? "24:00"
+              : timeFormatter.format(segmentEnd),
           color: roomColors.get(roomId),
-        };
-      })
+        },
+      ];
+    })
       .sort((a, b) => a.startMinutes - b.startMinutes);
 
     const clusters = [];
@@ -241,6 +242,9 @@ function ShowtimeWeekCalendar({ date, cinema, showtimes, onDetails, onMore }) {
                     showtime,
                     startMinutes,
                     endMinutes,
+                    cleanupStartMinutes,
+                    starts,
+                    ends,
                     lane,
                     laneCount,
                     color,
@@ -252,10 +256,10 @@ function ShowtimeWeekCalendar({ date, cinema, showtimes, onDetails, onMore }) {
                       ((endMinutes - startMinutes) / 60) * 48 - 3,
                     );
                     const width = 100 / laneCount;
-                    const starts = timeFormatter.format(
-                      new Date(showtime.startAt),
+                    const cleanupHeight = Math.max(
+                      0,
+                      ((endMinutes - Math.max(startMinutes, cleanupStartMinutes)) / 60) * 48,
                     );
-                    const ends = timeFormatter.format(new Date(showtime.endAt));
                     if (lane >= 2) {
                       const firstOverflow =
                         overflow[0]?.showtime.id === showtime.id;
@@ -295,6 +299,23 @@ function ShowtimeWeekCalendar({ date, cinema, showtimes, onDetails, onMore }) {
                           borderLeftColor: color.border,
                         }}
                       >
+                        {cleanupHeight > 0 && (
+                          <span
+                            aria-hidden="true"
+                            className="pointer-events-none absolute inset-x-0 bottom-0 border-t border-dashed border-white/35"
+                            style={{
+                              height: cleanupHeight,
+                              backgroundImage:
+                                "repeating-linear-gradient(135deg, rgba(255,255,255,0.13) 0px, rgba(255,255,255,0.13) 2px, transparent 2px, transparent 7px)",
+                            }}
+                          >
+                            {cleanupHeight >= 18 && (
+                              <span className="absolute inset-x-1 top-0.5 truncate text-[8px] font-bold uppercase tracking-wide text-on-surface-variant">
+                                Cleaning
+                              </span>
+                            )}
+                          </span>
+                        )}
                         <span className="block truncate text-[11px] font-bold leading-4 text-on-surface">
                           {showtime.movie.title}
                         </span>
@@ -554,7 +575,7 @@ function ScheduleForm({ date, movies, rooms, showtime, onClose, onSaved }) {
   const startAt = makeLocalDateTime(sessionDate, startTime);
   const endAt =
     movie && startAt
-      ? new Date(startAt.getTime() + (movie.duration + 15) * 60_000)
+      ? new Date(startAt.getTime() + (movie.duration + 30) * 60_000)
       : null;
   const startsInFuture = startAt && startAt > new Date();
 
@@ -724,7 +745,7 @@ function ScheduleForm({ date, movies, rooms, showtime, onClose, onSaved }) {
             </div>
           </div>
           <p className="text-xs leading-5 text-on-surface-variant">
-            End time includes the movie runtime and a 15-minute cleaning buffer.
+            End time includes the movie runtime and a 30-minute cleaning buffer.
             The room’s configured format and seat layout version are used for
             this session.
           </p>
@@ -784,6 +805,7 @@ function ManagerShowtimesPage() {
   const [editingShowtime, setEditingShowtime] = useState(null);
   const [selectedShowtime, setSelectedShowtime] = useState(null);
   const [moreShowtimes, setMoreShowtimes] = useState(null);
+  const [activeSection, setActiveSection] = useState("schedule");
   const [cancellingShowtime, setCancellingShowtime] = useState(null);
   const [query, setQuery] = useState("");
   const [cancelling, setCancelling] = useState(false);
@@ -814,6 +836,34 @@ function ManagerShowtimesPage() {
     );
   }, [data?.rooms]);
   const showtimes = data?.showtimes ?? [];
+  const weekDates = getWeekDates(date || getTodayInVietnam());
+  const weekStartAt = new Date(`${weekDates[0]}T00:00:00+07:00`).getTime();
+  const weekEndAt = new Date(
+    `${shiftDate(weekDates[6], 1)}T00:00:00+07:00`,
+  ).getTime();
+  const activeShowtimes = showtimes.filter((showtime) => {
+    const startAt = new Date(showtime.startAt).getTime();
+    const endAt = new Date(showtime.endAt).getTime();
+    return (
+      showtime.status !== "CANCELLED" &&
+      startAt < weekEndAt &&
+      endAt > weekStartAt
+    );
+  });
+  const cancelledShowtimes = showtimes.filter(
+    (showtime) => {
+      const startAt = new Date(showtime.startAt).getTime();
+      return (
+        showtime.status === "CANCELLED" &&
+        startAt >= weekStartAt &&
+        startAt < weekEndAt
+      );
+    },
+  );
+  const scheduleCount = activeShowtimes.filter((showtime) => {
+    const startAt = new Date(showtime.startAt).getTime();
+    return startAt >= weekStartAt && startAt < weekEndAt;
+  }).length;
   const assignedBranch =
     branches.find((branch) => branch.id === branchId) ??
     showtimes.find((showtime) => showtime.cinema.id === branchId)?.cinema;
@@ -822,11 +872,11 @@ function ManagerShowtimesPage() {
     if (branchId) {
       const branch =
         branchById.get(branchId) ??
-        showtimes.find((showtime) => showtime.cinema.id === branchId)?.cinema;
-      return branch ? [{ cinema: branch, showtimes }] : [];
+        activeShowtimes.find((showtime) => showtime.cinema.id === branchId)?.cinema;
+      return branch ? [{ cinema: branch, showtimes: activeShowtimes }] : [];
     }
     const grouped = new Map();
-    for (const showtime of showtimes) {
+    for (const showtime of activeShowtimes) {
       const cinema = branchById.get(showtime.cinema.id) ?? showtime.cinema;
       if (!grouped.has(cinema.id))
         grouped.set(cinema.id, { cinema, showtimes: [] });
@@ -835,8 +885,7 @@ function ManagerShowtimesPage() {
     return [...grouped.values()].sort((a, b) =>
       a.cinema.branchName.localeCompare(b.cinema.branchName),
     );
-  }, [branches, branchId, showtimes]);
-  const weekDates = getWeekDates(date || getTodayInVietnam());
+  }, [branches, branchId, activeShowtimes, showtimes]);
   const activeRooms = branchId
     ? rooms.filter((room) => room.branch.id === branchId)
     : rooms;
@@ -904,7 +953,7 @@ function ManagerShowtimesPage() {
               <span className="text-xs font-semibold">Sessions this week</span>
             </div>
             <p className="mt-2 font-heading text-3xl font-bold">
-              {loading ? "—" : (data?.meta?.total ?? 0).toLocaleString("en-US")}
+              {loading ? "—" : activeShowtimes.length.toLocaleString("en-US")}
             </p>
           </div>
           <div className="rounded-xl border border-white/5 bg-surface-container-low p-4">
@@ -926,6 +975,33 @@ function ManagerShowtimesPage() {
             </p>
           </div>
         </section>
+
+        <nav
+          aria-label="Showtime sections"
+          className="flex w-fit gap-1 rounded-xl border border-white/5 bg-surface-container-low p-1"
+        >
+          {[
+            { id: "schedule", label: "Schedule", count: scheduleCount },
+            { id: "cancelled", label: "Cancelled", count: cancelledShowtimes.length },
+          ].map((section) => (
+            <button
+              key={section.id}
+              type="button"
+              aria-current={activeSection === section.id ? "page" : undefined}
+              onClick={() => setActiveSection(section.id)}
+              className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${
+                activeSection === section.id
+                  ? "bg-surface-container-high text-on-surface"
+                  : "text-on-surface-variant hover:text-on-surface"
+              }`}
+            >
+              {section.label}
+              <span className="ml-2 rounded-full bg-black/20 px-2 py-0.5 text-xs">
+                {section.count}
+              </span>
+            </button>
+          ))}
+        </nav>
 
         <section className="flex flex-col gap-3 rounded-xl border border-white/5 bg-surface-container-low p-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -1041,7 +1117,7 @@ function ManagerShowtimesPage() {
               />
             ))}
           </div>
-        ) : calendarGroups.length ? (
+        ) : activeSection === "schedule" && calendarGroups.length ? (
           <div className="space-y-5">
             {calendarGroups.map(({ cinema, showtimes: cinemaShowtimes }) => (
               <ShowtimeWeekCalendar
@@ -1054,25 +1130,67 @@ function ManagerShowtimesPage() {
               />
             ))}
           </div>
+        ) : activeSection === "cancelled" && cancelledShowtimes.length ? (
+          <section
+            aria-label="Cancelled showtimes for the selected week"
+            className="overflow-hidden rounded-xl border border-white/5 bg-surface-container-low"
+          >
+            <div className="border-b border-white/5 px-4 py-3">
+              <h2 className="font-heading text-lg font-bold">Cancelled showtimes</h2>
+              <p className="mt-1 text-xs text-on-surface-variant">
+                Cancelled sessions for the selected week.
+              </p>
+            </div>
+            <div className="divide-y divide-white/5">
+              {cancelledShowtimes.map((showtime) => (
+                <button
+                  key={showtime.id}
+                  type="button"
+                  onClick={() => setSelectedShowtime(showtime)}
+                  className="flex w-full flex-wrap items-center justify-between gap-3 px-4 py-3 text-left transition hover:bg-surface-container-high/60"
+                >
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm font-semibold text-on-surface">
+                      {showtime.movie.title}
+                    </span>
+                    <span className="mt-1 block text-xs text-on-surface-variant">
+                      {showtime.cinema.branchName} · {showtime.room.roomName} · {sessionDateFormatter.format(new Date(showtime.startAt))}
+                    </span>
+                  </span>
+                  <span className="flex shrink-0 items-center gap-3">
+                    <span className="text-xs font-semibold text-on-surface-variant">
+                      {timeFormatter.format(new Date(showtime.startAt))}–{timeFormatter.format(new Date(showtime.endAt))}
+                    </span>
+                    <StatusPill status="CANCELLED" />
+                  </span>
+                </button>
+              ))}
+            </div>
+          </section>
         ) : (
           <div className="rounded-xl border border-dashed border-white/10 bg-surface-container-low px-5 py-14 text-center">
             <CalendarDays className="mx-auto size-8 text-on-surface-variant" />
             <h2 className="mt-3 font-heading text-lg font-bold">
-              No showtimes for this week
+              {activeSection === "cancelled"
+                ? "No cancelled showtimes this week"
+                : "No showtimes for this week"}
             </h2>
             <p className="mx-auto mt-1 max-w-md text-sm text-on-surface-variant">
-              Choose another week or branch, or create a session for an active
-              room with a seat map.
+              {activeSection === "cancelled"
+                ? "Choose another week to review cancelled sessions."
+                : "Choose another week or branch, or create a session for an active room with a seat map."}
             </p>
-            <button
-              type="button"
-              onClick={() => setShowCreateForm(true)}
-              disabled={!movies.length || !rooms.length}
-              className="mt-4 inline-flex items-center gap-2 rounded-lg bg-primary-container px-4 py-2.5 text-sm font-bold text-white shadow-crimson disabled:opacity-50"
-            >
-              <Plus className="size-4" />
-              Create Showtime
-            </button>
+            {activeSection === "schedule" && (
+              <button
+                type="button"
+                onClick={() => setShowCreateForm(true)}
+                disabled={!movies.length || !rooms.length}
+                className="mt-4 inline-flex items-center gap-2 rounded-lg bg-primary-container px-4 py-2.5 text-sm font-bold text-white shadow-crimson disabled:opacity-50"
+              >
+                <Plus className="size-4" />
+                Create Showtime
+              </button>
+            )}
           </div>
         )}
 

@@ -517,7 +517,7 @@ Owner/Approver: Project owner.
 
 ### Decision A-27
 
-Decision: Manager chọn `startAt`; hệ thống tính `endAt` dùng cho conflict từ Movie duration cộng cleanup buffer cấu hình, mặc định 15 phút. Cùng Room dùng interval `[startAt, endAt)` nên suất sau được phép bắt đầu đúng `endAt` của suất trước.
+Decision: Manager chọn `startAt`; hệ thống tính `endAt` dùng cho conflict từ Movie duration cộng cleanup buffer cố định 30 phút (được Project Owner xác nhận ngày 2026-11-10). Cùng Room dùng interval `[startAt, endAt)` nên suất sau được phép bắt đầu đúng `endAt` của suất trước.
 Reason: Một nguồn tính thời gian thống nhất và có khoảng dọn phòng rõ ràng cho overlap validation.
 Affected modules: `movies`, `rooms`, `showtimes`, Manager Showtime UI.
 Status: APPROVED.
