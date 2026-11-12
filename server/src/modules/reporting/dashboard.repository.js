@@ -25,19 +25,52 @@ const branchScopeStages = (branchId) => [
   { $match: { "room.branchId": branchId } },
 ];
 
+const revenueFacet = (dateField, amountField) => ({
+  $facet: {
+    days: [{ $group: {
+      _id: { $dateToString: { date: dateField, format: "%Y-%m-%d", timezone: "Asia/Ho_Chi_Minh" } },
+      amount: { $sum: amountField },
+    } }],
+    movies: [
+      { $group: { _id: "$showtime.movieId", amount: { $sum: amountField } } },
+      { $lookup: { from: "movies", localField: "_id", foreignField: "_id", as: "movie" } },
+      { $project: { movieId: { $toString: "$_id" }, movieTitle: { $ifNull: [{ $arrayElemAt: ["$movie.title", 0] }, "Unknown movie"] }, amount: 1 } },
+    ],
+  },
+});
+
 export const dashboardRepository = {
   async revenueByTransactionDate({ branchId, fromAt, toAt, session }) {
     const payments = await PaymentView.aggregate([
         { $match: { status: { $in: [PAYMENT_STATUS.PAID, PAYMENT_STATUS.PARTIALLY_REFUNDED, PAYMENT_STATUS.REFUNDED] }, paidAt: { $gte: fromAt, $lt: toAt } } },
         ...branchScopeStages(branchId),
-        { $group: { _id: { $dateToString: { date: "$paidAt", format: "%Y-%m-%d", timezone: "Asia/Ho_Chi_Minh" } }, amount: { $sum: "$amount" } } },
+        revenueFacet("$paidAt", "$amount"),
       ]).session(session).exec();
     const refunds = await RefundView.aggregate([
         { $match: { status: REFUND_STATUS.REFUNDED, processedAt: { $gte: fromAt, $lt: toAt } } },
         ...branchScopeStages(branchId),
-        { $group: { _id: { $dateToString: { date: "$processedAt", format: "%Y-%m-%d", timezone: "Asia/Ho_Chi_Minh" } }, amount: { $sum: "$refundAmount" } } },
+        revenueFacet("$processedAt", "$refundAmount"),
       ]).session(session).exec();
-    return { payments, refunds };
+    const movies = new Map();
+    for (const [rows, field] of [
+      [payments[0]?.movies ?? [], "grossAmount"],
+      [refunds[0]?.movies ?? [], "refundedAmount"],
+    ]) {
+      for (const row of rows) {
+        const item = movies.get(row.movieId) ?? {
+          movieId: row.movieId, movieTitle: row.movieTitle, grossAmount: 0, refundedAmount: 0,
+        };
+        item[field] += row.amount;
+        movies.set(row.movieId, item);
+      }
+    }
+    return {
+      payments: payments[0]?.days ?? [],
+      refunds: refunds[0]?.days ?? [],
+      movies: [...movies.values()]
+        .map((item) => ({ ...item, netAmount: item.grossAmount - item.refundedAmount }))
+        .sort((a, b) => b.netAmount - a.netAmount || a.movieTitle.localeCompare(b.movieTitle)),
+    };
   },
 
   async completedShowtimeOccupancy({ branchId, fromAt, toAt, session }) {

@@ -1,6 +1,6 @@
-import { Building2, ChevronRight, DoorOpen, House, KeyRound, LayoutDashboard, LogOut, Menu, Users, X } from 'lucide-react'
+import { Building2, ChevronRight, DoorOpen, KeyRound, LayoutDashboard, LogOut, Menu, Users, X } from 'lucide-react'
 import { useState } from 'react'
-import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router'
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router'
 import { toast } from 'sonner'
 import AppLogo from '../components/common/AppLogo'
 import { useAuth } from '../features/auth/hooks/useAuth'
@@ -85,13 +85,6 @@ function AdminLayout() {
 
   const footer = (
     <div className="grid gap-1 border-t border-white/5 pt-3">
-      <Link
-        to="/"
-        className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-on-surface-variant transition-colors hover:bg-surface-container hover:text-on-surface"
-      >
-        <House className="size-4" />
-        Back to website
-      </Link>
       <button
         type="button"
         onClick={handleLogout}

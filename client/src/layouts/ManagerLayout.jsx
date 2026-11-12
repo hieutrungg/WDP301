@@ -6,7 +6,6 @@ import {
   ChevronRight,
   DoorOpen,
   Film,
-  House,
   LayoutDashboard,
   LogOut,
   Menu,
@@ -174,13 +173,6 @@ function ManagerLayout() {
 
   const footer = (
     <div className="grid gap-1 border-t border-white/5 pt-3">
-      <Link
-        to="/"
-        className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-on-surface-variant transition-colors hover:bg-surface-container hover:text-on-surface"
-      >
-        <House className="size-4" />
-        Back to website
-      </Link>
       <button
         type="button"
         onClick={handleLogout}
