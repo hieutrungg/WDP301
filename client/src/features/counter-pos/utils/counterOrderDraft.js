@@ -16,6 +16,7 @@ export function readCounterOrderDraft(storage, accountId) {
       typeof value.movieId !== "string" ||
       typeof value.showtimeId !== "string" ||
       typeof value.date !== "string" ||
+      !Number.isFinite(value.selectionDeadline) ||
       !Array.isArray(value.selectedIds) ||
       !value.selectedIds.length ||
       !value.selectedIds.every((id) => typeof id === "string") ||

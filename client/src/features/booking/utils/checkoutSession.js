@@ -6,6 +6,7 @@ export function readCheckout(storage, ownerId, showtimeId) {
     const value = JSON.parse(storage.getItem(key(ownerId, showtimeId)))
     return value?.ownerId === ownerId && value?.showtimeId === showtimeId &&
       typeof value.checkoutKey === 'string' && typeof value.requestKey === 'string' &&
+      (value.selectionDeadline === undefined || Number.isFinite(value.selectionDeadline)) &&
       Array.isArray(value.seatIds) && value.seatIds.length > 0 &&
       value.seatIds.every((id) => typeof id === 'string') &&
       Array.isArray(value.labels) && value.labels.every((seat) =>
@@ -24,20 +25,25 @@ export function clearCheckout(storage, ownerId, showtimeId) {
   storage.removeItem(key(ownerId, showtimeId))
 }
 
-export function newCheckout({ ownerId, showtimeId, seats, createKey = () => crypto.randomUUID() }) {
+export function newCheckout({ ownerId, showtimeId, seats, selectionDeadline, createKey = () => crypto.randomUUID() }) {
   return {
     ownerId, showtimeId, seatIds: seats.map(({ seatId }) => seatId),
     labels: seats.map(({ seatId, row, number, type }) => ({ seatId, row, number, type })),
     checkoutKey: createKey(), requestKey: createKey(), bookingRequested: false,
+    ...(Number.isFinite(selectionDeadline) ? { selectionDeadline } : {}),
   }
 }
 
-export function remainingHoldMs(hold, receivedAt, now = Date.now()) {
+export function remainingHoldMs(hold, receivedAt, now = Date.now(), selectionDeadline) {
   const expiresAt = Date.parse(hold?.expiresAt)
   const serverNow = Date.parse(hold?.serverNow)
   if (![expiresAt, serverNow, receivedAt, now].every(Number.isFinite)) return 0
   // Wall-clock elapsed time includes background tabs and reloads; never reset the server expiry.
-  return Math.max(0, expiresAt - serverNow - Math.max(0, now - receivedAt))
+  const serverRemaining = expiresAt - serverNow - Math.max(0, now - receivedAt)
+  const selectionRemaining = Number.isFinite(selectionDeadline)
+    ? selectionDeadline - now
+    : Number.POSITIVE_INFINITY
+  return Math.max(0, Math.min(serverRemaining, selectionRemaining))
 }
 
 export function validHoldQuote(hold, attempt) {

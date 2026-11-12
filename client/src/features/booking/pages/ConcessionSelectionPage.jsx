@@ -81,7 +81,12 @@ function ConcessionSelectionSession() {
     refresh,
     Boolean(branchId),
   );
-  const remaining = remainingHoldMs(hold, holdQuery.data?.receivedAt, now);
+  const remaining = remainingHoldMs(
+    hold,
+    holdQuery.data?.receivedAt,
+    now,
+    attempt?.selectionDeadline,
+  );
   const expired = Boolean(hold && (remaining <= 0 || hold.status !== "ACTIVE"));
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 1000);

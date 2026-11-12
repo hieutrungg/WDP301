@@ -35,6 +35,7 @@ test('checkout recovery is scoped to the account, showtime and browser tab stora
 test('server countdown includes time in background and never grants a new ten minutes on reload', () => {
   const hold = holdFixture()
   assert.equal(remainingHoldMs(hold, 1000, 31000), 570000)
+  assert.equal(remainingHoldMs(hold, 1000, 31000, 301000), 270000)
   assert.equal(remainingHoldMs(hold, 1000, 601000), 0)
   assert.equal(remainingHoldMs({ ...hold, serverNow: 'invalid' }, 1000, 2000), 0)
 })

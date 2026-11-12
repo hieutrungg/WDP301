@@ -122,7 +122,7 @@ function CheckoutSession() {
   const hold = checkout.data?.hold
   const currentBooking = booking ?? checkout.data?.booking
   const remaining = hold
-    ? remainingHoldMs(hold, checkout.data.receivedAt, now)
+    ? remainingHoldMs(hold, checkout.data.receivedAt, now, attempt?.selectionDeadline)
     : 0
   const confirmed =
     currentBooking?.status === 'CONFIRMED' && paymentState?.status === 'PAID'

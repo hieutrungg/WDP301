@@ -52,6 +52,8 @@ import {
 import { uniqueAvailableCatalogItems } from "../../concessions/utils/catalogDisplay";
 import { withCatalogImageOverride } from "../../concessions/utils/catalogPresentation";
 
+const SEAT_SELECTION_DURATION_MS = 10 * 60 * 1000;
+
 const dateFmt = new Intl.DateTimeFormat("vi-VN", {
   dateStyle: "medium",
   timeZone: "Asia/Ho_Chi_Minh",
@@ -132,6 +134,8 @@ function CounterPosPage() {
   const [movieId, setMovieId] = useState("");
   const [showtimeId, setShowtimeId] = useState("");
   const [selectedIds, setSelectedIds] = useState([]);
+  const [selectionDeadline, setSelectionDeadline] = useState(null);
+  const [now, setNow] = useState(Date.now);
   const [hold, setHold] = useState(null);
   const [refresh, setRefresh] = useState(0);
   const [foodOpen, setFoodOpen] = useState(false);
@@ -152,6 +156,7 @@ function CounterPosPage() {
       showtimeId,
       date,
       selectedIds,
+      selectionDeadline,
       hold,
       foodItems,
       foodContext,
@@ -166,6 +171,7 @@ function CounterPosPage() {
     hold,
     movieId,
     selectedIds,
+    selectionDeadline,
     showtimeId,
   ]);
 
@@ -213,6 +219,13 @@ function CounterPosPage() {
     .filter(Boolean);
   const selectedTotal = sumSeatPrices(selectedSeats);
   const total = hold?.priceQuote?.totalAmount ?? selectedTotal ?? 0;
+  const effectiveDeadline = Math.min(
+    Number.isFinite(selectionDeadline) ? selectionDeadline : Number.POSITIVE_INFINITY,
+    hold?.expiresAt ? Date.parse(hold.expiresAt) : Number.POSITIVE_INFINITY,
+  );
+  const remainingSeconds = Number.isFinite(effectiveDeadline)
+    ? Math.max(0, Math.ceil((effectiveDeadline - now) / 1000))
+    : null;
   const catalog = useCatalogPage(
     { kind: foodKind, branchId: foodContext?.branchId, page: 1, limit: 24 },
     refresh,
@@ -254,12 +267,14 @@ function CounterPosPage() {
       setMovieId(id);
       setShowtimeId("");
       setSelectedIds([]);
+      setSelectionDeadline(null);
     }
   };
   const chooseShowtime = (id) => {
     if (!hold) {
       setShowtimeId(id);
       setSelectedIds([]);
+      setSelectionDeadline(null);
     }
   };
   const toggleSeat = (id) => {
@@ -270,8 +285,12 @@ function CounterPosPage() {
       !hasValidSeatPrice(seat?.price)
     )
       return;
+    const isSelected = selectedIds.includes(id);
+    if (!isSelected && selectedIds.length === 0 && selectionDeadline === null)
+      setSelectionDeadline(Date.now() + SEAT_SELECTION_DURATION_MS);
+    if (isSelected && selectedIds.length === 1) setSelectionDeadline(null);
     setSelectedIds((current) =>
-      current.includes(id)
+      isSelected
         ? current.filter((value) => value !== id)
         : [...current, id],
     );
@@ -288,12 +307,13 @@ function CounterPosPage() {
   };
 
   useEffect(() => {
-    if (!hold?.expiresAt) return undefined;
-    const remaining = new Date(hold.expiresAt).getTime() - Date.now();
+    if (!Number.isFinite(effectiveDeadline)) return undefined;
+    const remaining = effectiveDeadline - Date.now();
     const timer = window.setTimeout(
       () => {
         setHold(null);
         setSelectedIds([]);
+        setSelectionDeadline(null);
         setFoodOpen(false);
         setFoodItems([]);
         setFoodContext(null);
@@ -306,10 +326,23 @@ function CounterPosPage() {
       Math.max(0, remaining),
     );
     return () => window.clearTimeout(timer);
-  }, [account?.id, hold?.expiresAt]);
+  }, [account?.id, effectiveDeadline]);
+
+  useEffect(() => {
+    if (!Number.isFinite(effectiveDeadline)) return undefined;
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [effectiveDeadline]);
 
   const continueSavedOrder = async () => {
     if (!savedDraft) return;
+    if (savedDraft.selectionDeadline <= Date.now()) {
+      clearCounterOrderDraft(sessionStorage, account?.id);
+      setSavedDraft(null);
+      setDraftDecisionPending(false);
+      toast.error("The saved seat selection expired. Please select seats again.");
+      return;
+    }
     const activeHold =
       savedDraft.hold?.expiresAt &&
       Date.parse(savedDraft.hold.expiresAt) > Date.now()
@@ -348,6 +381,7 @@ function CounterPosPage() {
     setMovieId(savedDraft.movieId);
     setShowtimeId(savedDraft.showtimeId);
     setSelectedIds(restoredIds);
+    setSelectionDeadline(savedDraft.selectionDeadline);
     setHold(activeHold);
     setFoodItems(activeHold ? savedDraft.foodItems : []);
     setFoodContext(activeHold ? savedDraft.foodContext : null);
@@ -437,6 +471,7 @@ function CounterPosPage() {
           seats: selectedSeats,
           concessionQuote,
           total: booking.amount,
+          selectionDeadline,
         },
       });
     } catch (error) {
@@ -584,6 +619,7 @@ function CounterPosPage() {
                     setDate(event.target.value);
                     setShowtimeId("");
                     setSelectedIds([]);
+                    setSelectionDeadline(null);
                   }}
                   className="ml-2 rounded-lg bg-surface-container-high px-3 py-2 text-sm text-on-surface disabled:opacity-50"
                 />
@@ -714,6 +750,12 @@ function CounterPosPage() {
             <p className="mt-1 text-right text-[10px] text-on-surface-variant">
               Final price is confirmed automatically when you continue.
             </p>
+            {remainingSeconds !== null && (
+              <p role="timer" className="mt-3 flex items-center justify-end gap-2 font-mono text-sm font-bold text-secondary">
+                <Clock3 className="size-4" />
+                {Math.floor(remainingSeconds / 60)}:{String(remainingSeconds % 60).padStart(2, "0")} remaining
+              </p>
+            )}
             <div className="mt-5 space-y-3">
               <button
                 type="button"

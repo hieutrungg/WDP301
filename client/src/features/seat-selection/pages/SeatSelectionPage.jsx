@@ -136,7 +136,7 @@ function SessionBar({ showtime, savedCheckout, nextStepPath, selectionDeadline, 
           </div>
         </div>
 
-        <div className="flex shrink-0 items-center gap-4 rounded-xl bg-surface-container-high px-5 py-3 shadow-lg">
+        {(savedCheckout || selectionDeadline) && <div className="flex shrink-0 items-center gap-4 rounded-xl bg-surface-container-high px-5 py-3 shadow-lg">
           <span className="relative grid size-4 place-items-center">
             <span className="absolute size-3.5 animate-ping rounded-full bg-primary-container" />
             <span className="relative size-3 rounded-full bg-primary-container" />
@@ -149,7 +149,7 @@ function SessionBar({ showtime, savedCheckout, nextStepPath, selectionDeadline, 
             </p>
           </div>
           <Timer className="size-6 text-on-surface-variant" />
-        </div>
+        </div>}
       </div>
     </section>
   )
@@ -250,7 +250,7 @@ function BookingSummary({ selectedSeats, total, onRemove, onHold, savedCheckout,
       </div>
 
       <div className="mt-4 space-y-2 text-[10px] leading-4 text-on-surface-variant/75">
-        <p className="flex gap-2"><LockKeyhole className="mt-0.5 size-3.5 shrink-0 text-error" />You have 10 minutes to select seats. Seats are reserved only when you continue to checkout; the server sets the reservation expiry.</p>
+        <p className="flex gap-2"><LockKeyhole className="mt-0.5 size-3.5 shrink-0 text-error" />Your 10-minute selection timer starts after you choose the first seat. Seats are reserved only when you continue to checkout; the server sets the reservation expiry.</p>
         <p className="flex gap-2"><AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-secondary" />Age-rating admission rules shown for this movie still apply at the cinema.</p>
         <p className="flex gap-2"><ShieldCheck className="mt-0.5 size-3.5 shrink-0" />Refund and cancellation eligibility is confirmed only by the approved policy workflow.</p>
       </div>
@@ -268,7 +268,7 @@ function SeatSelectionPage() {
   const nextStepPath = `/booking/${showtimeId}/${offersConcessions ? "concessions" : "checkout"}`
   const availability = useSeatAvailability(showtimeId)
   const [selectedSeatIds, setSelectedSeatIds] = useState([])
-  const [selectionDeadline, setSelectionDeadline] = useState(() => Date.now() + SEAT_SELECTION_DURATION_MS)
+  const [selectionDeadline, setSelectionDeadline] = useState(null)
   const [selectionExpired, setSelectionExpired] = useState(false)
 
   const seats = useMemo(() => availability.data?.seats ?? [], [availability.data])
@@ -307,7 +307,7 @@ function SeatSelectionPage() {
   }, [refetchAvailability])
 
   const restartSelection = () => {
-    setSelectionDeadline(Date.now() + SEAT_SELECTION_DURATION_MS)
+    setSelectionDeadline(null)
     setSelectionExpired(false)
     setSelectedSeatIds([])
     refetchAvailability()
@@ -315,10 +315,17 @@ function SeatSelectionPage() {
 
   const toggleSeat = (seatId) => {
     if (savedCheckout || selectionExpired) return
-    if (!selectedSeatIds.includes(seatId) && !hasValidSeatPrice(seatById.get(seatId)?.price)) {
+    const isSelected = selectedSeatIds.includes(seatId)
+    if (!isSelected && !hasValidSeatPrice(seatById.get(seatId)?.price)) {
       return toast.error('Ticket price is not configured for this seat.')
     }
-    setSelectedSeatIds((current) => current.includes(seatId)
+    if (!isSelected && selectedSeatIds.length === 0 && selectionDeadline === null) {
+      setSelectionDeadline(Date.now() + SEAT_SELECTION_DURATION_MS)
+    }
+    if (isSelected && selectedSeatIds.length === 1) {
+      setSelectionDeadline(null)
+    }
+    setSelectedSeatIds((current) => isSelected
       ? current.filter((selectedId) => selectedId !== seatId)
       : [...current, seatId])
   }
@@ -332,7 +339,12 @@ function SeatSelectionPage() {
         navigate(nextStepPath)
         return
       }
-      const attempt = newCheckout({ ownerId: account.id, showtimeId, seats: selectedSeats })
+      const attempt = newCheckout({
+        ownerId: account.id,
+        showtimeId,
+        seats: selectedSeats,
+        selectionDeadline,
+      })
       writeCheckout(sessionStorage, attempt)
       navigate(nextStepPath)
 

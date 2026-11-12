@@ -31,13 +31,26 @@ function CounterPaymentPage() {
   const [attempt, setAttempt] = useState(null);
   const [busy, setBusy] = useState(false);
   const [verifying, setVerifying] = useState(false);
+  const [now, setNow] = useState(Date.now);
   const total = state?.booking?.amount ?? state?.total ?? 0;
+  const effectiveDeadline = Math.min(
+    Number.isFinite(state?.selectionDeadline)
+      ? state.selectionDeadline
+      : Number.POSITIVE_INFINITY,
+    state?.booking?.expiresAt
+      ? Date.parse(state.booking.expiresAt)
+      : Number.POSITIVE_INFINITY,
+  );
+  const remainingSeconds = Number.isFinite(effectiveDeadline)
+    ? Math.max(0, Math.ceil((effectiveDeadline - now) / 1000))
+    : null;
+  const expired = remainingSeconds === 0;
   const tenderedValue = Number(tendered.replaceAll(".", "")) || 0;
   const changeDue = Math.max(0, tenderedValue - total);
   const activeAttempt = attempt?.activeAttempt;
   const realBankTransfer = isBankTransferAttempt(activeAttempt);
   const canConfirm =
-    method === "CASH" ? tenderedValue >= total : Boolean(activeAttempt);
+    !expired && (method === "CASH" ? tenderedValue >= total : Boolean(activeAttempt));
   const paymentMethods = [
     { id: "CASH", label: "Cash", icon: Banknote },
     { id: "BANK_TRANSFER", label: "Bank transfer", icon: Landmark },
@@ -63,7 +76,7 @@ function CounterPaymentPage() {
     return true;
   };
   const verifyProvider = async ({ silent = false } = {}) => {
-    if (!realBankTransfer || !attempt?.payment?.paymentId || !activeAttempt)
+    if (expired || !realBankTransfer || !attempt?.payment?.paymentId || !activeAttempt)
       return;
     if (!silent) setVerifying(true);
     try {
@@ -83,7 +96,7 @@ function CounterPaymentPage() {
     }
   };
   useEffect(() => {
-    if (!realBankTransfer || activeAttempt?.status !== "PENDING")
+    if (expired || !realBankTransfer || activeAttempt?.status !== "PENDING")
       return undefined;
     const timer = window.setInterval(
       () => verifyProvider({ silent: true }),
@@ -92,10 +105,16 @@ function CounterPaymentPage() {
     return () => window.clearInterval(timer);
     // Active attempt identity controls the polling lifecycle.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [realBankTransfer, activeAttempt?.attemptId, activeAttempt?.status]);
+  }, [expired, realBankTransfer, activeAttempt?.attemptId, activeAttempt?.status]);
+  useEffect(() => {
+    if (!Number.isFinite(effectiveDeadline)) return undefined;
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [effectiveDeadline]);
   if (!state?.booking?.bookingId || !state?.film || !state?.seats?.length)
     return <Navigate to="/staff/pos" replace />;
   const chooseMethod = async (id) => {
+    if (expired) return;
     setMethod(id);
     if (id === "CASH") {
       setAttempt(null);
@@ -119,6 +138,7 @@ function CounterPaymentPage() {
     }
   };
   const confirmPayment = async () => {
+    if (expired) return;
     if (method === "BANK_TRANSFER") {
       if (realBankTransfer) await verifyProvider();
       else if (activeAttempt) await simulateSuccess();
@@ -149,7 +169,7 @@ function CounterPaymentPage() {
     }
   };
   const simulateSuccess = async () => {
-    if (!attempt?.payment?.paymentId || !activeAttempt) return;
+    if (expired || !attempt?.payment?.paymentId || !activeAttempt) return;
     setBusy(true);
     try {
       const result = await simulatePaymentAttempt({
@@ -181,6 +201,16 @@ function CounterPaymentPage() {
             Counter payment
           </p>
           <h1 className="mt-1 font-heading text-2xl font-bold">Order review</h1>
+          {remainingSeconds !== null && (
+            <p role="timer" className="mt-3 font-mono text-sm font-bold text-secondary">
+              {Math.floor(remainingSeconds / 60)}:{String(remainingSeconds % 60).padStart(2, "0")} remaining
+            </p>
+          )}
+          {expired && (
+            <p role="alert" className="mt-3 rounded-lg bg-error-container/30 p-3 text-sm text-error">
+              The seat reservation expired. Return to the order and select seats again.
+            </p>
+          )}
           <div className="mt-6 rounded-xl bg-surface-container-lowest p-4">
             <h2 className="font-heading text-lg font-bold">
               {state.film.title}
@@ -224,7 +254,7 @@ function CounterPaymentPage() {
               <button
                 type="button"
                 key={id}
-                disabled={busy}
+                disabled={busy || expired}
                 onClick={() => chooseMethod(id)}
                 className={`rounded-xl p-3 text-sm font-semibold ${method === id ? "bg-primary-container text-white" : "bg-surface-container-high text-tertiary hover:text-on-surface"}`}
               >
@@ -351,7 +381,7 @@ function CounterPaymentPage() {
           {method === "BANK_TRANSFER" && activeAttempt?.status === "PENDING" && (
             <button
               type="button"
-              disabled={busy}
+              disabled={busy || expired}
               onClick={simulateSuccess}
               className="mt-2 w-full rounded-xl border border-white/15 px-4 py-3 text-xs font-bold text-tertiary hover:text-on-surface disabled:opacity-50"
             >

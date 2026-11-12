@@ -21,6 +21,7 @@ const draft = {
   showtimeId: "showtime-1",
   date: "2026-11-10",
   selectedIds: ["seat-a1"],
+  selectionDeadline: Date.now() + 600000,
   foodItems: [{ itemType: "CONCESSION", itemId: "food-1", quantity: 2 }],
   hold: null,
   foodContext: null,
@@ -36,6 +37,12 @@ test("counter order drafts are scoped to the signed-in Staff account", () => {
 test("invalid or empty counter orders are not resumable", () => {
   const target = storage();
   writeCounterOrderDraft(target, { ...draft, selectedIds: [] });
+  assert.equal(readCounterOrderDraft(target, "staff-1"), null);
+});
+
+test("counter order drafts require the original seat-selection deadline", () => {
+  const target = storage();
+  writeCounterOrderDraft(target, { ...draft, selectionDeadline: undefined });
   assert.equal(readCounterOrderDraft(target, "staff-1"), null);
 });
 
