@@ -69,7 +69,7 @@ export function AppRoutes() {
   return (
       <Routes>
         <Route element={<PublicLayout />}>
-          {/* Home stays reachable for every role (logo link). Role redirect (A-16) happens on login only. */}
+          {/* PublicLayout restricts this surface to guests and customer accounts. */}
           <Route index element={<LandingPage />} />
           <Route path="login" element={<LoginPage />} />
           <Route path="internal-login" element={<InternalLoginPage />} />

@@ -76,6 +76,7 @@ export const createDashboardService = ({
               ? Math.round((occupancy.validTickets / occupancy.availableSeatCapacity) * 10000) / 100
               : null,
           },
+          movieRevenue: revenueRows.movies ?? [],
           ticketsSold: trendingShowtimes.ticketsSold,
           trendingShowtimes: trendingShowtimes.items,
         };

@@ -182,3 +182,20 @@ test("TICKET-101 Staff check-in screen needs the STAFF role and ticket.validate"
   assert.match(render("/staff/check-in", actor("STAFF")), /403/);
   assert.match(render("/staff/check-in", actor("CUSTOMER", ["ticket.validate"])), /403/);
 });
+
+
+test("internal accounts cannot render guest and customer pages", () => {
+  const accounts = [
+    actor("ADMIN"), actor("MANAGER"), actor("STAFF"),
+    { ...actor("CUSTOM_STAFF"), roles: [{ name: "CUSTOM_STAFF", baseRole: "STAFF" }] },
+    { ...actor("MANAGER"), roles: [{ name: "CUSTOMER" }, { name: "MANAGER" }] },
+  ];
+  for (const account of accounts) {
+    for (const path of ["/", "/movies", "/showtimes", "/offers", "/concessions", "/profile", "/login", "/booking/example/seats"]) {
+      assert.equal(render(path, account), "", `${account.roles[0].name}: ${path} must redirect`);
+    }
+    assert.match(render("/403", account), /Access Denied/);
+  }
+  assert.match(render("/concessions", actor("CUSTOMER")), /Movie time/);
+  assert.equal(render("/", null, false), '<div class="min-h-screen bg-background"></div>');
+});
