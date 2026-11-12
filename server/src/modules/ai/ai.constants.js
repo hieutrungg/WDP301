@@ -3,8 +3,9 @@
 // v2 (2026-11-09): the assistant is named Popo.
 // v3 (2026-11-09): plain language for guests/customers; never promise features that do not exist.
 // v4 (2026-11-10): per-session list of write actions; cards only after a real tool call.
+// v5 (2026-11-10): internal accounts are told that buying, own bookings and reviews are customer-only.
 // A new version invalidates every cached answer.
-export const PROMPT_VERSION = "ai-001.v4";
+export const PROMPT_VERSION = "ai-001.v5";
 
 export const AI_LIMITS = Object.freeze({
   MAX_INPUT_CHARS: 2000,

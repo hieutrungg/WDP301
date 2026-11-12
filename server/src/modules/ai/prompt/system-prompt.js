@@ -27,7 +27,8 @@ ${RULES_MARKER}
 const PLAIN_LANGUAGE =
   "Đây là khách xem phim, không phải người kỹ thuật: dùng lời lẽ đời thường, gần gũi, câu ngắn (quy tắc 12).";
 const STAFF_LANGUAGE =
-  "Được dùng từ nghiệp vụ của rạp (booking, check-in, tồn kho, báo cáo), nhưng vẫn không nói về API hay công cụ (quy tắc 12).";
+  "Được dùng từ nghiệp vụ của rạp (booking, check-in, tồn kho, báo cáo), nhưng vẫn không nói về API hay công cụ (quy tắc 12). " +
+  "Tài khoản nội bộ không mua vé online, không xem vé/booking cá nhân và không đánh giá phim, kể cả trên trang phim. Khi được nhờ những việc đó, nói rõ chúng chỉ dành cho tài khoản khách hàng (đánh giá phim còn cần đã xem xong phim đó) và đề nghị đăng nhập bằng tài khoản khách hàng; không bảo họ tự làm trên trang phim.";
 
 const ROLE_CONTEXT = {
   [ACTOR_SCOPE.GUEST]:

@@ -208,7 +208,7 @@ test("AI-001 a guest question runs a public tool without a session and is traced
   assert.ok(!llm.requests[0].tools.some((tool) => tool.name === "my_bookings"));
   assert.match(llm.requests[0].instructions, /Vai trò người dùng: GUEST/);
   assert.match(llm.requests[0].instructions, /^Bạn là "Popo"/);
-  assert.match(llm.requests[0].instructions, /phiên bản ai-001.v4/);
+  assert.match(llm.requests[0].instructions, /phiên bản ai-001.v5/);
 
   const [trace] = repository.traces;
   assert.equal(trace.status, "ok");
