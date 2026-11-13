@@ -13,6 +13,10 @@ import {
 } from "lucide-react";
 import { getBookingTickets } from "../../ticket/api/ticketApi";
 import QrCodeImage from "../../../components/ui/QrCode";
+import {
+  getTicketStatusMeta,
+  isTicketAdmissible,
+} from "../../ticket/utils/ticketPresentation";
 
 const formatVnd = (amount) =>
   new Intl.NumberFormat("vi-VN").format(amount) + " ₫";
@@ -159,25 +163,34 @@ function CounterCompletePage() {
             </div>
             {tickets.length ? (
               <div className="mt-5 grid gap-3 md:grid-cols-2">
-                {tickets.map((ticket) => (
-                  <div
-                    key={ticket.ticketId}
-                    className="min-w-0 rounded-xl border border-white/10 bg-white/5 p-3 text-center"
-                  >
-                    <QrCodeImage
-                      value={ticket.qrCode || ticket.ticketCode}
-                      size={120}
-                      label="E-Ticket"
-                      ariaLabel={`Ticket QR ${ticket.ticketCode}`}
-                    />
-                    <p className="mt-2 break-words text-xs font-semibold text-on-surface">
-                      Seat {ticket.seat?.label ?? ticket.seatLabel ?? "—"}
-                    </p>
-                    <p className="mt-1 font-mono text-sm font-bold text-secondary">
-                      {ticket.ticketCode}
-                    </p>
-                  </div>
-                ))}
+                {tickets.map((ticket) => {
+                  const seatLabel = ticket.seat?.label ?? ticket.seatLabel ?? "—";
+                  return (
+                    <div
+                      key={ticket.ticketId}
+                      className="min-w-0 rounded-xl border border-white/10 bg-white/5 p-3 text-center"
+                    >
+                      {isTicketAdmissible(ticket) ? (
+                        <QrCodeImage
+                          value={ticket.qrCode}
+                          size={168}
+                          label="E-TICKET"
+                          ariaLabel={`Admission QR for seat ${seatLabel}`}
+                        />
+                      ) : (
+                        <div className="mx-auto flex size-[200px] items-center justify-center rounded-2xl border border-white/10 bg-surface-container-low p-4 text-xs text-tertiary">
+                          {getTicketStatusMeta(ticket.status).label}
+                        </div>
+                      )}
+                      <p className="mt-3 break-words text-xs font-semibold text-on-surface">
+                        Seat {seatLabel}
+                      </p>
+                      <p className="mt-1 font-mono text-sm font-bold text-secondary">
+                        {ticket.ticketCode}
+                      </p>
+                    </div>
+                  );
+                })}
               </div>
             ) : ticketError ? (
               <div className="mt-5 flex gap-3 rounded-xl border border-amber-300/25 bg-amber-300/10 p-4 text-sm text-amber-100">
