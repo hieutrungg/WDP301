@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Navigate, useLocation, useNavigate } from "react-router";
 import {
   ArrowLeft,
@@ -32,6 +32,7 @@ function CounterPaymentPage() {
   const [busy, setBusy] = useState(false);
   const [verifying, setVerifying] = useState(false);
   const [now, setNow] = useState(Date.now);
+  const selectedMethodRef = useRef(method);
   const total = state?.booking?.amount ?? state?.total ?? 0;
   const effectiveDeadline = Math.min(
     Number.isFinite(state?.selectionDeadline)
@@ -84,6 +85,9 @@ function CounterPaymentPage() {
         paymentId: attempt.payment.paymentId,
         attemptId: activeAttempt.attemptId,
       });
+      // A payOS poll may finish after the cashier has switched back to cash.
+      // Do not let that stale response restore a BANK_TRANSFER attempt in the cash UI.
+      if (selectedMethodRef.current !== "BANK_TRANSFER") return;
       setAttempt(result);
       if (!finishWhenPaid(result, "BANK_TRANSFER") && !silent)
         toast.info(
@@ -115,6 +119,7 @@ function CounterPaymentPage() {
     return <Navigate to="/staff/pos" replace />;
   const chooseMethod = async (id) => {
     if (expired) return;
+    selectedMethodRef.current = id;
     setMethod(id);
     if (id === "CASH") {
       setAttempt(null);
@@ -147,7 +152,7 @@ function CounterPaymentPage() {
     setBusy(true);
     try {
       let current = attempt;
-      if (method === "CASH" && !current) {
+      if (method === "CASH" && current?.activeAttempt?.method !== "CASH") {
         current = await initiatePayment({
           bookingId: state.booking.bookingId,
           method,
