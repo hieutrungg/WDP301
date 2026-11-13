@@ -1,3 +1,4 @@
+import { useAccountNavigation } from '../hooks/useAccountNavigation'
 import { zodResolver } from '@hookform/resolvers/zod'
 import {
   ArrowLeft,
@@ -64,6 +65,7 @@ function PasswordField({ id, label, labelAction, error, errorIcon, visible, onTo
 }
 
 function ChangePasswordPage() {
+  const { profilePath, homePath, accountLabel, internal } = useAccountNavigation()
   const [notice, setNotice] = useState(null)
   const [visible, setVisible] = useState({})
   const {
@@ -134,16 +136,16 @@ function ChangePasswordPage() {
   }
 
   return (
-    <div className="pt-20">
+    <div className={internal ? "" : "pt-20"}>
       <div className="relative w-full overflow-hidden px-4 py-8 md:px-8 md:py-12">
         <div className="pointer-events-none absolute -top-40 left-1/2 h-[400px] w-[700px] -translate-x-1/2 rounded-full bg-primary-container/10 opacity-60 blur-[140px]" />
         <div className="pointer-events-none absolute top-1/3 -right-48 size-[450px] rounded-full bg-secondary-container/5 opacity-40 blur-[120px]" />
 
         <div className="relative mx-auto flex max-w-[760px] flex-col gap-6">
-          <AccountBreadcrumb
+          <AccountBreadcrumb homePath={homePath}
             items={[
-              { label: 'Customer Account' },
-              { label: 'My Profile', to: '/profile' },
+              { label: accountLabel },
+              { label: 'My Profile', to: profilePath },
               { label: 'Change Password' },
             ]}
           />
@@ -241,7 +243,7 @@ function ChangePasswordPage() {
 
               <div className="flex flex-col-reverse items-center justify-end gap-3 pt-4 sm:flex-row">
                 <Link
-                  to="/profile"
+                  to={profilePath}
                   className="flex h-12 w-full items-center justify-center rounded-lg bg-surface-container-high px-6 font-heading text-sm font-semibold text-on-surface transition-colors hover:bg-surface-container-highest sm:w-auto"
                 >
                   Cancel
@@ -270,7 +272,7 @@ function ChangePasswordPage() {
 
           <div className="flex justify-center py-2">
             <Link
-              to="/profile"
+              to={profilePath}
               className="flex items-center gap-1.5 text-xs text-tertiary transition-colors hover:text-on-surface"
             >
               <ArrowLeft className="size-4" />

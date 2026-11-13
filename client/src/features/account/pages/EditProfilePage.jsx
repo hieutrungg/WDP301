@@ -1,3 +1,4 @@
+import { useAccountNavigation } from '../hooks/useAccountNavigation'
 import { zodResolver } from '@hookform/resolvers/zod'
 import {
   BadgeCheck,
@@ -37,6 +38,7 @@ const toFormValues = (account) => ({
 })
 
 function EditProfilePage() {
+  const { profilePath, homePath, accountLabel, internal } = useAccountNavigation()
   const { account } = useAuth()
   const setAccount = useAuthStore((state) => state.setAccount)
   const [notice, setNotice] = useState(null)
@@ -88,16 +90,16 @@ function EditProfilePage() {
   }
 
   return (
-    <div className="pt-20">
+    <div className={internal ? "" : "pt-20"}>
       <div className="relative w-full overflow-hidden px-4 py-6 md:px-8 md:py-10">
         <div className="pointer-events-none absolute -top-40 left-1/2 h-[360px] w-[720px] -translate-x-1/2 rounded-full bg-primary-container/10 blur-[130px]" />
         <div className="pointer-events-none absolute top-48 -right-32 size-80 rounded-full bg-secondary-container/5 blur-[100px]" />
 
         <div className="relative mx-auto flex max-w-[800px] flex-col gap-6">
-          <AccountBreadcrumb
+          <AccountBreadcrumb homePath={homePath}
             items={[
-              { label: 'Customer Account' },
-              { label: 'My Profile', to: '/profile' },
+              { label: accountLabel },
+              { label: 'My Profile', to: profilePath },
               { label: 'Edit Profile' },
             ]}
           />
@@ -254,7 +256,7 @@ function EditProfilePage() {
 
               <div className="flex flex-col-reverse items-center justify-end gap-4 pt-6 sm:flex-row">
                 <Link
-                  to="/profile"
+                  to={profilePath}
                   className="flex h-12 w-full items-center justify-center rounded-lg bg-surface-container px-10 text-sm font-semibold text-on-surface transition-colors hover:bg-surface-container-high sm:w-auto"
                 >
                   Cancel

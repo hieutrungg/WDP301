@@ -199,3 +199,33 @@ test("internal accounts cannot render guest and customer pages", () => {
   assert.match(render("/concessions", actor("CUSTOMER")), /Movie time/);
   assert.equal(render("/", null, false), '<div class="min-h-screen bg-background"></div>');
 });
+
+test("internal personal account screens keep profile and password navigation in each workspace", async () => {
+  for (const role of ["ADMIN", "MANAGER", "STAFF"]) {
+    const prefix = `/${role.toLowerCase()}`;
+    const account = {
+      ...actor(role, ["branch.manage"]),
+      email: "personal@example.com", status: "ACTIVE",
+      profile: { fullName: "Personal Account" },
+    };
+    const profile = render(`${prefix}/profile`, account);
+    assert.match(profile, /My Profile/);
+    assert.match(profile, /My Account/);
+    const edit = render(`${prefix}/profile/edit`, account);
+    assert.match(edit, /Full Name/i);
+    assert.ok(edit.includes(`href="${prefix}/profile"`));
+    const password = render(`${prefix}/profile/change-password`, account);
+    for (const field of ["currentPassword", "newPassword", "confirmPassword"]) {
+      assert.ok(password.includes(`name="${field}"`), `${role}: ${field}`);
+    }
+    assert.equal((password.match(/type="password"/g) ?? []).length, 3);
+    assert.ok(password.includes(`href="${prefix}/profile"`));
+    assert.doesNotMatch(password, /href="\/profile(?:\/|")/);
+    assert.doesNotMatch(render(`${prefix}/profile`, null), /My Profile/);
+  }
+  const { changePasswordSchema } = await vite.ssrLoadModule('/src/features/account/schema/accountSchemas.js');
+  const input = { method: 'password', currentPassword: '', newPassword: 'StrongPassword123!', confirmPassword: 'StrongPassword123!' };
+  assert.equal(changePasswordSchema.safeParse(input).success, false);
+  assert.equal(changePasswordSchema.safeParse({ ...input, currentPassword: 'OldPassword123!', confirmPassword: 'DifferentPassword123!' }).success, false);
+  assert.equal(changePasswordSchema.safeParse({ ...input, currentPassword: 'OldPassword123!' }).success, true);
+});

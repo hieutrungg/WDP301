@@ -1,3 +1,4 @@
+import AccountModalLayout from '../../features/account/components/AccountModalLayout'
 import { useLayoutEffect } from 'react'
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router'
 import AiAssistantWidget from '../../features/ai-assistant/components/AiAssistantWidget'
@@ -122,6 +123,11 @@ export function AppRoutes() {
         <Route path="staff" element={<ProtectedRoute />}>
           <Route element={<PermissionRoute role="STAFF" />}>
             <Route element={<StaffLayout />}>
+              <Route element={<AccountModalLayout />}>
+              <Route path="profile" element={<ProfilePage />} />
+              <Route path="profile/edit" element={<EditProfilePage />} />
+              <Route path="profile/change-password" element={<ChangePasswordPage />} />
+              </Route>
               <Route index element={<Navigate to="dashboard" replace />} />
               <Route path="dashboard" element={<StaffDashboardPage />} />
               <Route path="pos" element={<CounterPosPage />} />
@@ -146,6 +152,11 @@ export function AppRoutes() {
         <Route path="admin" element={<ProtectedRoute />}>
           <Route element={<PermissionRoute permission="branch.manage" role="ADMIN" />}>
             <Route element={<AdminLayout />}>
+              <Route element={<AccountModalLayout />}>
+              <Route path="profile" element={<ProfilePage />} />
+              <Route path="profile/edit" element={<EditProfilePage />} />
+              <Route path="profile/change-password" element={<ChangePasswordPage />} />
+              </Route>
               <Route index element={<Navigate to="dashboard" replace />} />
               <Route path="dashboard" element={<AdminDashboardPage />} />
               <Route path="branches" element={<BranchManagementPage />} />
@@ -168,6 +179,11 @@ export function AppRoutes() {
         <Route path="manager" element={<ProtectedRoute />}>
           <Route element={<PermissionRoute role="MANAGER" />}>
             <Route element={<ManagerLayout />}>
+              <Route element={<AccountModalLayout />}>
+              <Route path="profile" element={<ProfilePage />} />
+              <Route path="profile/edit" element={<EditProfilePage />} />
+              <Route path="profile/change-password" element={<ChangePasswordPage />} />
+              </Route>
               <Route index element={<Navigate to="dashboard" replace />} />
               <Route element={<PermissionRoute permission="analytics.view" />}>
                 <Route path="dashboard" element={<ManagerDashboardPage />} />
