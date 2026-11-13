@@ -1,12 +1,13 @@
-import { Building2, ChevronRight, DoorOpen, KeyRound, LayoutDashboard, LogOut, Menu, Users, X } from 'lucide-react'
+import InternalAccountMenu from '../components/common/InternalAccountMenu'
+import { Building2, ChevronRight, DoorOpen, KeyRound, LayoutDashboard, Menu, Users, X } from 'lucide-react'
 import { useState } from 'react'
-import { NavLink, Outlet, useLocation, useNavigate } from 'react-router'
-import { toast } from 'sonner'
+import { NavLink, Outlet, useLocation } from 'react-router'
 import AppLogo from '../components/common/AppLogo'
 import { useAuth } from '../features/auth/hooks/useAuth'
 
 // Items without `to` are planned admin screens from SCREEN_FLOW §5 that have no route yet.
 const BREADCRUMBS = [
+  ['/admin/profile', 'My Account'],
   ['/admin/dashboard', 'System overview'],
   ['/admin/rooms', 'Room management'],
   ['/admin/staff-accounts', 'Staff account management'],
@@ -14,6 +15,7 @@ const BREADCRUMBS = [
 ]
 
 const navItems = [
+
   { label: 'Dashboard', icon: LayoutDashboard, to: '/admin/dashboard', end: true },
   { label: 'Staff Accounts', icon: Users, to: '/admin/staff-accounts', permission: 'account.manage' },
   { label: 'Roles & Permissions', icon: KeyRound, to: '/admin/roles', permission: 'role.view' },
@@ -62,40 +64,8 @@ function SidebarNav({ onNavigate, permissions }) {
 function AdminLayout() {
   const { pathname } = useLocation()
   const [menuOpen, setMenuOpen] = useState(false)
-  const [isLoggingOut, setIsLoggingOut] = useState(false)
-  const { account, logout } = useAuth()
-  const navigate = useNavigate()
-  const displayName = account?.profile?.fullName || account?.username || ''
-  const roleLabel = account?.roles?.map(({ name }) => name).join(', ')
+  const { account } = useAuth()
   const permissions = new Set(account?.permissions?.map(({ name }) => name))
-
-  const handleLogout = async () => {
-    setIsLoggingOut(true)
-
-    try {
-      await logout()
-      toast.success('Signed out successfully')
-      navigate('/', { replace: true })
-    } catch {
-      toast.error('Unable to sign out. Please try again.')
-    } finally {
-      setIsLoggingOut(false)
-    }
-  }
-
-  const footer = (
-    <div className="grid gap-1 border-t border-white/5 pt-3">
-      <button
-        type="button"
-        onClick={handleLogout}
-        disabled={isLoggingOut}
-        className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-primary transition-colors hover:bg-primary-container/15 disabled:cursor-wait disabled:opacity-60"
-      >
-        <LogOut className="size-4" />
-        {isLoggingOut ? 'Signing out...' : 'Logout'}
-      </button>
-    </div>
-  )
 
   return (
     <div className="min-h-screen bg-background text-on-surface lg:grid lg:grid-cols-[16rem_minmax(0,1fr)]">
@@ -107,7 +77,7 @@ function AdminLayout() {
         <div className="flex-1 overflow-y-auto">
           <SidebarNav permissions={permissions} />
         </div>
-        {footer}
+
       </aside>
 
       <div className="min-w-0">
@@ -129,21 +99,13 @@ function AdminLayout() {
             </nav>
           </div>
 
-          <div className="flex min-w-0 items-center gap-3">
-            <div className="hidden min-w-0 text-right sm:block">
-              <p className="truncate text-sm font-semibold text-on-surface">{displayName}</p>
-              {roleLabel && <p className="truncate text-[11px] text-on-surface-variant">{roleLabel}</p>}
-            </div>
-            <span className="grid size-9 shrink-0 place-items-center rounded-full bg-primary text-sm font-bold text-on-primary">
-              {displayName.charAt(0).toUpperCase()}
-            </span>
-          </div>
+          <InternalAccountMenu profilePath="/admin/profile" />
         </header>
 
         {menuOpen && (
           <div className="grid gap-4 border-b border-white/5 bg-surface-container-lowest p-4 lg:hidden">
             <SidebarNav permissions={permissions} onNavigate={() => setMenuOpen(false)} />
-            {footer}
+
           </div>
         )}
 

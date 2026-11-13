@@ -1,3 +1,4 @@
+import { useAccountNavigation } from '../hooks/useAccountNavigation'
 import { ChevronRight, House, KeyRound, Pencil } from 'lucide-react'
 import { Link, useNavigate } from 'react-router'
 import { useAuth } from '../../auth/hooks/useAuth'
@@ -5,24 +6,25 @@ import PersonalInfoSection from '../components/PersonalInfoSection'
 import ProfileSummaryCard from '../components/ProfileSummaryCard'
 
 function ProfilePage() {
+  const { profilePath, homePath, accountLabel, portalLabel, internal } = useAccountNavigation()
   const { account } = useAuth()
   const navigate = useNavigate()
-  const openEditProfile = () => navigate('/profile/edit')
-  const openChangePassword = () => navigate('/profile/change-password')
+  const openEditProfile = () => navigate(`${profilePath}/edit`)
+  const openChangePassword = () => navigate(`${profilePath}/change-password`)
 
   return (
-    <div className="relative w-full overflow-hidden bg-gradient-to-b from-surface-container-lowest to-background pt-20">
+    <div className={`relative w-full overflow-hidden bg-gradient-to-b from-surface-container-lowest to-background ${internal ? "" : "pt-20"}`}>
       <div className="pointer-events-none absolute -top-32 right-1/4 size-96 rounded-full bg-primary-container/10 blur-[140px]" />
       <div className="pointer-events-none absolute top-1/2 -left-20 size-80 rounded-full bg-surface-container-high/40 blur-[120px]" />
 
       <div className="relative mx-auto flex max-w-[1440px] flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
         <nav aria-label="Breadcrumb" className="flex items-center gap-1 text-xs text-on-surface-variant">
-          <Link to="/" className="flex items-center gap-1 transition-colors hover:text-on-surface">
+          <Link to={homePath} className="flex items-center gap-1 transition-colors hover:text-on-surface">
             <House className="size-4" />
             Home
           </Link>
           <ChevronRight className="size-3.5 opacity-40" />
-          <span>Customer Account</span>
+          <span>{accountLabel}</span>
           <ChevronRight className="size-3.5 opacity-40" />
           <span className="font-semibold text-on-surface">My Profile</span>
         </nav>
@@ -32,7 +34,7 @@ function ProfilePage() {
             <div className="flex items-center gap-1.5">
               <span className="size-2 rounded-full bg-primary-container shadow-[0_0_8px_rgba(229,9,20,0.8)]" />
               <span className="text-[11px] leading-[14px] font-bold tracking-widest text-primary uppercase">
-                Customer Portal
+                {portalLabel}
               </span>
             </div>
             <h1 className="font-heading text-[28px] leading-9 font-bold tracking-tight text-on-surface">

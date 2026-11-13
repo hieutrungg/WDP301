@@ -1,3 +1,4 @@
+import InternalAccountMenu from '../components/common/InternalAccountMenu'
 import {
   Armchair,
   Boxes,
@@ -7,21 +8,20 @@ import {
   DoorOpen,
   Film,
   LayoutDashboard,
-  LogOut,
   Menu,
   TicketPercent,
   ReceiptText,
   X,
 } from "lucide-react";
 import { useState } from "react";
-import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router";
-import { toast } from "sonner";
+import { Link, NavLink, Outlet, useLocation } from "react-router";
 import AppLogo from "../components/common/AppLogo";
 import { useAuth } from "../features/auth/hooks/useAuth";
 
 // Items without `to` are planned manager screens from SCREEN_FLOW §4 that have no route yet.
 // `permission` only hides navigation; the API still enforces access.
 const navItems = [
+
   { label: "Dashboard", icon: LayoutDashboard, to: "/manager/dashboard", permission: "analytics.view" },
   {
     label: "Movies",
@@ -130,12 +130,8 @@ function SidebarNav({ permissions, onNavigate }) {
 
 function ManagerLayout() {
   const [menuOpen, setMenuOpen] = useState(false);
-  const [isLoggingOut, setIsLoggingOut] = useState(false);
-  const { account, logout } = useAuth();
+  const { account } = useAuth();
   const location = useLocation();
-  const navigate = useNavigate();
-  const displayName = account?.profile?.fullName || account?.username || "";
-  const roleLabel = account?.roles?.map(({ name }) => name).join(", ");
   const permissions = new Set(account?.permissions?.map(({ name }) => name));
   const showtimePage = location.pathname.startsWith("/manager/showtimes");
   const inventoryPage = location.pathname.startsWith("/manager/inventory");
@@ -157,33 +153,7 @@ function ManagerLayout() {
     breadcrumb = ["Movie catalog & distribution", screen];
   }
 
-  const handleLogout = async () => {
-    setIsLoggingOut(true);
-
-    try {
-      await logout();
-      toast.success("Signed out successfully");
-      navigate("/", { replace: true });
-    } catch {
-      toast.error("Unable to sign out. Please try again.");
-    } finally {
-      setIsLoggingOut(false);
-    }
-  };
-
-  const footer = (
-    <div className="grid gap-1 border-t border-white/5 pt-3">
-      <button
-        type="button"
-        onClick={handleLogout}
-        disabled={isLoggingOut}
-        className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-primary transition-colors hover:bg-primary-container/15 disabled:cursor-wait disabled:opacity-60"
-      >
-        <LogOut className="size-4" />
-        {isLoggingOut ? "Signing out..." : "Logout"}
-      </button>
-    </div>
-  );
+  if (location.pathname.startsWith("/manager/profile")) breadcrumb = ["Personal account", "My Account"];
 
   return (
     <div className="min-h-screen bg-background text-on-surface lg:grid lg:grid-cols-[16rem_minmax(0,1fr)]">
@@ -197,7 +167,7 @@ function ManagerLayout() {
         <div className="flex-1 overflow-y-auto">
           <SidebarNav permissions={permissions} />
         </div>
-        {footer}
+
       </aside>
 
       <div className="min-w-0">
@@ -230,21 +200,7 @@ function ManagerLayout() {
             </nav>
           </div>
 
-          <div className="flex min-w-0 items-center gap-3">
-            <div className="hidden min-w-0 text-right sm:block">
-              <p className="truncate text-sm font-semibold text-on-surface">
-                {displayName}
-              </p>
-              {roleLabel && (
-                <p className="truncate text-[11px] font-bold uppercase text-secondary">
-                  {roleLabel}
-                </p>
-              )}
-            </div>
-            <span className="grid size-9 shrink-0 place-items-center rounded-full bg-primary text-sm font-bold text-on-primary">
-              {displayName.charAt(0).toUpperCase()}
-            </span>
-          </div>
+          <InternalAccountMenu profilePath="/manager/profile" />
         </header>
 
         {menuOpen && (
@@ -253,7 +209,7 @@ function ManagerLayout() {
               permissions={permissions}
               onNavigate={() => setMenuOpen(false)}
             />
-            {footer}
+
           </div>
         )}
 

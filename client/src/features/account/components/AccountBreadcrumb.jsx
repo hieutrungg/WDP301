@@ -3,10 +3,10 @@ import { Fragment } from 'react'
 import { Link } from 'react-router'
 
 // `items` after Home: [{ label, to? }]; the last one is the current page.
-function AccountBreadcrumb({ items }) {
+function AccountBreadcrumb({ items, homePath = "/" }) {
   return (
     <nav aria-label="Breadcrumb" className="flex flex-wrap items-center gap-1 text-xs text-tertiary">
-      <Link to="/" className="flex items-center gap-1 transition-colors hover:text-on-surface">
+      <Link to={homePath} className="flex items-center gap-1 transition-colors hover:text-on-surface">
         <House className="size-4" />
         Home
       </Link>
