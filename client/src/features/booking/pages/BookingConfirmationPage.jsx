@@ -26,6 +26,7 @@ import { getBookingPaymentDetails } from '../api/paymentApi'
 import QrCodeImage from '../../../components/ui/QrCode'
 import { getPaymentMethodOption } from '../utils/mockQrCode'
 import { getBookingTickets } from '../../ticket/api/ticketApi'
+import BookingProgress from '../components/BookingProgress'
 import {
   buildTicketQrPayload,
   formatVnDateTime,
@@ -239,40 +240,13 @@ function BookingConfirmationPage() {
 
   return (
     <main className="min-h-screen bg-background pb-20 pt-20 text-on-surface">
-      {/* C15 Progress Stepper */}
-      <nav
-        aria-label="Booking progress"
-        className="border-y border-white/10 bg-[#131315]/95 px-4 py-4 backdrop-blur-xl sm:px-6"
-      >
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 text-xs sm:text-sm">
-          <div className="flex items-center gap-2 sm:gap-4">
-            <span className="inline-flex items-center gap-1.5 font-medium text-emerald-400">
-              <CheckCircle2 className="size-4" />
-              1. Select Seats
-            </span>
-            <span className="text-on-surface-variant">›</span>
-            <span className="inline-flex items-center gap-1.5 font-medium text-emerald-400">
-              <CheckCircle2 className="size-4" />
-              2. Concessions
-            </span>
-            <span className="text-on-surface-variant">›</span>
-            <span className="inline-flex items-center gap-1.5 font-medium text-emerald-400">
-              <CheckCircle2 className="size-4" />
-              3. Payment
-            </span>
-            <span className="text-on-surface-variant">›</span>
-            <strong className="inline-flex items-center gap-1.5 font-bold text-secondary">
-              <Ticket className="size-4" />
-              4. Confirmation &amp; E-Ticket
-            </strong>
-          </div>
-
-          <span className="rounded-full border border-white/10 bg-surface-container px-3 py-1 font-mono text-xs text-on-surface-variant">
+      <BookingProgress
+        currentStep={4}
+        aside={<span className="rounded-full border border-white/10 bg-surface-container px-3 py-1 font-mono text-xs text-on-surface-variant">
             Booking Status: <strong className="text-white">{booking?.status}</strong> • Payment:{' '}
             <strong className="text-secondary">{payment?.status || 'NONE'}</strong>
-          </span>
-        </div>
-      </nav>
+          </span>}
+      />
 
       <div className="mx-auto max-w-5xl px-4 py-10 sm:px-6">
         {/* CASE 1: Confirmed Booking & Settled Payment (C15 Screen) */}
