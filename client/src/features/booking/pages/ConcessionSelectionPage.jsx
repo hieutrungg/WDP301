@@ -93,6 +93,19 @@ function ConcessionSelectionSession() {
     return () => clearInterval(timer);
   }, []);
 
+  useEffect(() => {
+    if (!hold || expired || !items.length) return undefined;
+    const timer = window.setTimeout(() => {
+      quoteConcessions({ holdId: hold.holdId, items })
+        .then(setQuote)
+        .catch((cause) => {
+          setQuote(null);
+          setError(cause);
+        });
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [hold, expired, items]);
+
   if (!attempt)
     return (
       <main className="mx-auto max-w-5xl px-6 pb-20 pt-32 text-white">
@@ -303,7 +316,7 @@ function ConcessionSelectionSession() {
                 </div>
               )}
               <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                {catalog.data?.items.map((item) => {
+                {catalog.data?.items.filter((item) => item.available).map((item) => {
                   const quantity =
                     items.find(
                       (line) =>
@@ -329,6 +342,11 @@ function ConcessionSelectionSession() {
                       </div>
                       <div className="p-4">
                         <h2 className="min-h-12 font-bold">{item.name}</h2>
+                        {item.lowStock && (
+                          <p className="mt-1 text-xs font-semibold text-amber-400">
+                            Low in stock — order soon
+                          </p>
+                        )}
                         {item.size && (
                           <p className="mt-1 text-xs text-on-surface-variant">
                             {item.size}
@@ -478,14 +496,14 @@ function ConcessionSelectionSession() {
                 <button
                   type="button"
                   className={`${primary} mt-3 w-full`}
-                  disabled={busy || !hold || !branchId}
+                  disabled={busy || !hold || !branchId || !quote}
                   onClick={() => continueCheckout()}
                 >
                   {busy
                     ? "Checking…"
                     : quote
-                      ? "Confirm selection & continue"
-                      : "Review prices"}
+                      ? "Continue to payment"
+                      : "Calculating total…"}
                 </button>
               ) : (
                 <button

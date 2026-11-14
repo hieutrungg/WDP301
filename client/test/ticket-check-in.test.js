@@ -12,6 +12,10 @@ test('TICKET-101 ticket code is typed or pasted; spaces and case are ignored', (
   assert.equal(validateTicketCode('tk-1a2b3c4d5e'), '')
   assert.equal(validateTicketCode('   '), 'The Ticket code field is required.')
   assert.equal(validateTicketCode('TK-123'), 'The Ticket code format is invalid.')
+  assert.equal(
+    normalizeTicketCode('F-CINEMA E-TICKET\nCode: TK-ABCDEF1234\nMovie: Dune'),
+    'TK-ABCDEF1234',
+  )
 })
 
 test('TICKET-101 failures map to a clear title and keep the server message', () => {

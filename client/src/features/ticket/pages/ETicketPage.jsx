@@ -17,6 +17,7 @@ import { getApiErrorMessage } from '../../../lib/api/apiError'
 import QrCodeImage from '../../../components/ui/QrCode'
 import { getBookingTickets, getTicket } from '../api/ticketApi'
 import {
+  buildTicketQrPayload,
   formatScreeningDateTime,
   formatSeatType,
   getSiblingTickets,
@@ -127,7 +128,7 @@ function ETicketPage() {
         <section className="flex flex-col items-center px-6 py-7">
           {admissible ? (
             <QrCodeImage
-              value={ticket.qrCode}
+              value={buildTicketQrPayload(ticket)}
               size={232}
               label="E-TICKET"
               ariaLabel={`Admission QR for ticket ${ticket.ticketCode}`}

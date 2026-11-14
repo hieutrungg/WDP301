@@ -7,7 +7,9 @@ function QrCode({ value, size = 200, label, ariaLabel = 'QR code', className = '
   const matrix = useMemo(() => {
     if (!value) return null
     try {
-      return QRCode.create(String(value), { errorCorrectionLevel: 'M' }).modules
+      // Level L keeps information-rich ticket payloads less dense and easier
+      // to scan from thermal prints while retaining standard QR encoding.
+      return QRCode.create(String(value), { errorCorrectionLevel: 'L' }).modules
     } catch {
       return null
     }
@@ -26,7 +28,8 @@ function QrCode({ value, size = 200, label, ariaLabel = 'QR code', className = '
     )
   }
 
-  const quiet = 2
+  // Printed admission codes need the standard four-module quiet zone.
+  const quiet = 4
   const dimension = matrix.size + quiet * 2
   const cells = []
   for (let row = 0; row < matrix.size; row += 1) {

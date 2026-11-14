@@ -14,6 +14,7 @@ import {
 import { getBookingTickets } from "../../ticket/api/ticketApi";
 import QrCodeImage from "../../../components/ui/QrCode";
 import {
+  buildTicketQrPayload,
   getTicketStatusMeta,
   isTicketAdmissible,
 } from "../../ticket/utils/ticketPresentation";
@@ -65,8 +66,14 @@ function CounterCompletePage() {
   const ticketSubtotal = state.seats.reduce((sum, seat) => sum + seat.price, 0);
   const receiptNumber = `RC-${paymentId.slice(-8).toUpperCase()}`;
   const paidAt = state.settlement.payment.paidAt ?? new Date().toISOString();
-  const printReceipt = () => {
+  const printSection = (target) => {
     setPrintRequested(true);
+    document.body.dataset.counterPrint = target;
+    const cleanup = () => {
+      delete document.body.dataset.counterPrint;
+      window.removeEventListener("afterprint", cleanup);
+    };
+    window.addEventListener("afterprint", cleanup);
     window.setTimeout(() => window.print(), 0);
   };
 
@@ -110,7 +117,7 @@ function CounterCompletePage() {
       </section>
 
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1.05fr)_minmax(360px,.95fr)]">
-        <section className="ticket-print-section rounded-2xl bg-surface-container-low p-6 shadow-xl">
+        <section id="counter-issued-tickets" className="ticket-print-section rounded-2xl bg-surface-container-low p-6 shadow-xl">
           <div className="flex items-center justify-between gap-3">
             <div>
               <p className="text-xs font-bold uppercase tracking-wider text-primary">
@@ -162,18 +169,18 @@ function CounterCompletePage() {
               </p>
             </div>
             {tickets.length ? (
-              <div className="mt-5 grid gap-3 md:grid-cols-2">
+              <div className="ticket-qr-grid mt-5 grid gap-3 md:grid-cols-2">
                 {tickets.map((ticket) => {
                   const seatLabel = ticket.seat?.label ?? ticket.seatLabel ?? "—";
                   return (
                     <div
                       key={ticket.ticketId}
-                      className="min-w-0 rounded-xl border border-white/10 bg-white/5 p-3 text-center"
+                      className="ticket-qr-card min-w-0 rounded-xl border border-white/10 bg-white/5 p-3 text-center"
                     >
                       {isTicketAdmissible(ticket) ? (
                         <QrCodeImage
-                          value={ticket.qrCode}
-                          size={168}
+                          value={buildTicketQrPayload(ticket)}
+                          size={200}
                           label="E-TICKET"
                           ariaLabel={`Admission QR for seat ${seatLabel}`}
                         />
@@ -312,9 +319,9 @@ function CounterCompletePage() {
             </div>
             <footer className="border-t border-dashed border-neutral-400 pt-5 text-center text-xs text-neutral-600">
               <p className="font-bold text-neutral-900">
-                Cảm ơn quý khách đã lựa chọn F-Cinema!
+                Thank you for choosing F-Cinema!
               </p>
-              <p className="mt-2">Vui lòng giữ hóa đơn để đối chiếu khi cần.</p>
+              <p className="mt-2">Please keep this receipt for reference.</p>
             </footer>
           </article>
         </section>
@@ -323,14 +330,14 @@ function CounterCompletePage() {
       <section className="no-print sticky bottom-4 z-10 flex flex-col gap-3 rounded-2xl border border-white/10 bg-surface-container-low/95 p-4 shadow-2xl backdrop-blur sm:flex-row sm:items-center">
         <button
           type="button"
-          onClick={printReceipt}
+          onClick={() => printSection("receipt")}
           className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-secondary px-5 py-3.5 font-extrabold text-neutral-950 hover:brightness-105"
         >
           <Printer className="size-5" /> Print receipt / Save PDF
         </button>
         <button
           type="button"
-          onClick={printReceipt}
+          onClick={() => printSection("tickets")}
           disabled={!tickets.length}
           className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-surface-container-high px-5 py-3.5 font-bold text-on-surface disabled:cursor-not-allowed disabled:opacity-50"
         >

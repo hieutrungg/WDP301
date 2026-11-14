@@ -57,7 +57,10 @@ function CounterPaymentPage() {
     { id: "BANK_TRANSFER", label: "Bank transfer", icon: Landmark },
   ];
   const presets = useMemo(
-    () => [total, Math.ceil(total / 50000) * 50000, 500000],
+    () => {
+      const first = (Math.floor(total / 50000) + 1) * 50000;
+      return [first, first + 50000, first + 100000, first + 150000];
+    },
     [total],
   );
   const setAmount = (amount) => setTendered(String(amount));
@@ -121,6 +124,7 @@ function CounterPaymentPage() {
     if (expired) return;
     selectedMethodRef.current = id;
     setMethod(id);
+    if (id !== "CASH") setTendered("");
     if (id === "CASH") {
       setAttempt(null);
       return;

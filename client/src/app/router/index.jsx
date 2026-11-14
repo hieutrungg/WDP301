@@ -41,6 +41,7 @@ import BookingConfirmationPage from '../../features/booking/pages/BookingConfirm
 import CustomerBookingsPage from '../../features/booking/pages/CustomerBookingsPage'
 import ETicketPage from '../../features/ticket/pages/ETicketPage'
 import TicketCheckInPage from '../../features/ticket/pages/TicketCheckInPage'
+import TicketInfoPage from '../../features/ticket/pages/TicketInfoPage'
 import StockInPage from '../../features/inventory/pages/StockInPage'
 import StockLevelsPage from '../../features/inventory/pages/StockLevelsPage'
 import RolesPage from '../../features/access-control/pages/RolesPage'
@@ -69,6 +70,7 @@ function ScrollToTop() {
 export function AppRoutes() {
   return (
       <Routes>
+        <Route path="ticket-info" element={<TicketInfoPage />} />
         <Route element={<PublicLayout />}>
           {/* PublicLayout restricts this surface to guests and customer accounts. */}
           <Route index element={<LandingPage />} />

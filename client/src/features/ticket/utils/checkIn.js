@@ -4,7 +4,8 @@
 export const TICKET_CODE_PATTERN = /^TK-[A-F0-9]{10}$/
 
 export function normalizeTicketCode(value) {
-  return String(value ?? '').replace(/\s+/g, '').toUpperCase()
+  const normalized = String(value ?? '').toUpperCase()
+  return normalized.match(/TK-[A-F0-9]{10}/)?.[0] ?? normalized.replace(/\s+/g, '')
 }
 
 // SRS 5.3 MSG01 / MSG03.

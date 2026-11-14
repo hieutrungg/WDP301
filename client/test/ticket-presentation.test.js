@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
+  buildTicketQrPayload,
   formatScreeningDateTime,
   formatSeatType,
   formatVnDateTime,
@@ -8,6 +9,26 @@ import {
   getTicketStatusMeta,
   isTicketAdmissible,
 } from '../src/features/ticket/utils/ticketPresentation.js'
+
+test('ticket QR opens the F-Cinema ticket information page', () => {
+  const payload = buildTicketQrPayload({
+    ticketCode: 'TK-ABCDEF1234',
+    screening: {
+      movieTitle: 'DUNE: Part 3',
+      cinemaName: 'F-Cinema Central',
+      roomName: 'Room 01',
+      startAt: '2026-11-14T04:00:00.000Z',
+    },
+    seat: { label: 'C3' },
+  }, 'https://demo.fcinema.vn')
+  const url = new URL(payload)
+  assert.equal(url.origin, 'https://demo.fcinema.vn')
+  assert.equal(url.pathname, '/ticket-info')
+  assert.equal(url.searchParams.get('code'), 'TK-ABCDEF1234')
+  assert.equal(url.searchParams.get('movie'), 'DUNE: Part 3')
+  assert.equal(url.searchParams.get('showtime'), '11:00 14/11/2026')
+  assert.equal(url.searchParams.get('seat'), 'C3')
+})
 
 test('only an ISSUED ticket with a QR payload is shown as admissible', () => {
   assert.equal(isTicketAdmissible({ status: 'ISSUED', qrCode: 'FCINEMA-TICKET:v1:TK-1:x' }), true)

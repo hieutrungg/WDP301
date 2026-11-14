@@ -110,12 +110,15 @@
 
   #counter-sale-receipt,
   #counter-sale-receipt *,
+  #counter-issued-tickets,
+  #counter-issued-tickets *,
   #counter-concession-receipt,
   #counter-concession-receipt * {
     visibility: visible !important;
   }
 
   #counter-sale-receipt,
+  #counter-issued-tickets,
   #counter-concession-receipt {
     position: absolute;
     inset: 0 auto auto 0;
@@ -130,6 +133,38 @@
 
   .no-print {
     display: none !important;
+  }
+
+  body[data-counter-print="receipt"] #counter-issued-tickets,
+  body[data-counter-print="tickets"] #counter-sale-receipt {
+    display: none !important;
+  }
+
+  body[data-counter-print="tickets"] #counter-issued-tickets {
+    left: 50%;
+    right: auto;
+    width: min(180mm, calc(100vw - 20mm));
+    height: auto !important;
+    min-height: 0 !important;
+    padding: 6mm;
+    transform: translateX(-50%);
+    overflow: visible !important;
+  }
+
+  body[data-counter-print="tickets"] #counter-issued-tickets > div:last-child {
+    overflow: visible !important;
+  }
+
+  body[data-counter-print="tickets"] .ticket-qr-grid {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  body[data-counter-print="tickets"] .ticket-qr-card {
+    break-inside: avoid;
+    page-break-inside: avoid;
   }
 }
 

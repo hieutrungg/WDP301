@@ -70,6 +70,26 @@ export function formatSeatType(type) {
     .join(' ')
 }
 
+// A URL makes phone cameras open the F-Cinema ticket view directly instead of
+// treating multiline ticket text as a web-search query.
+export function buildTicketQrPayload(ticket, baseUrl) {
+  const screening = ticket?.screening ?? {}
+  const seat = ticket?.seat ?? {}
+  const schedule = formatScreeningDateTime(screening.startAt)
+  const origin = baseUrl ?? (typeof window === 'undefined' ? 'https://fcinema.local' : window.location.origin)
+  const url = new URL('/ticket-info', origin)
+  const fields = {
+    code: ticket?.ticketCode ?? '',
+    movie: screening.movieTitle ?? 'F-Cinema Screening',
+    cinema: screening.cinemaName ?? 'F-Cinema',
+    room: screening.roomName ?? '-',
+    showtime: schedule ? `${schedule.time} ${schedule.date}` : '-',
+    seat: seat.label ?? '-',
+  }
+  Object.entries(fields).forEach(([key, value]) => url.searchParams.set(key, value))
+  return url.toString()
+}
+
 // Neighbouring tickets of the same booking, for prev/next navigation on the fullscreen view.
 export function getSiblingTickets(tickets, ticketId) {
   const index = (tickets ?? []).findIndex((ticket) => ticket.ticketId === ticketId)

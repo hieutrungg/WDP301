@@ -123,6 +123,16 @@ export default function CounterConcessionPosPage() {
     0,
   );
   const cashValue = Number(cash || 0);
+  const changeDue = Math.max(0, cashValue - total);
+  const cashPresets = useMemo(() => {
+    const values = [];
+    let next = (Math.floor(total / 50000) + 1) * 50000;
+    while (values.length < 4) {
+      values.push(next);
+      next += 50000;
+    }
+    return values;
+  }, [total]);
   const visible = useMemo(
     () =>
       uniqueAvailableCatalogItems(products).filter((item) => {
@@ -403,7 +413,10 @@ export default function CounterConcessionPosPage() {
                 Cash
               </button>
               <button
-                onClick={() => setMethod("BANK_TRANSFER")}
+                onClick={() => {
+                  setMethod("BANK_TRANSFER");
+                  setCash("");
+                }}
                 className={`rounded-xl p-3 text-sm font-semibold ${method === "BANK_TRANSFER" ? "bg-primary-container text-white" : "bg-surface-container-high"}`}
               >
                 <QrCode className="mx-auto mb-1 size-5" />
@@ -426,10 +439,29 @@ export default function CounterConcessionPosPage() {
                   className="mt-1 w-full rounded-xl bg-surface-container-high px-4 py-3 text-lg font-bold outline-none"
                   placeholder="0"
                 />
-                <p className="mt-2 text-xs text-tertiary">
-                  The system only verifies that the amount is sufficient. Change
-                  is handled outside the system.
-                </p>
+                <div className="mt-2 grid grid-cols-2 gap-2">
+                  {cashPresets.map((value) => (
+                    <button
+                      type="button"
+                      key={value}
+                      onClick={() => setCash(String(value))}
+                      className="rounded-lg bg-surface-container-highest px-2 py-2 text-xs font-semibold text-tertiary hover:text-white"
+                    >
+                      {money(value)}
+                    </button>
+                  ))}
+                </div>
+                <div
+                  className={`mt-2 rounded-lg px-3 py-2 text-sm ${cashValue >= total ? "bg-emerald-500/10 text-emerald-300" : "bg-amber-400/10 text-amber-300"}`}
+                  aria-live="polite"
+                >
+                  <span className="text-xs font-semibold">
+                    {cashValue >= total ? "Change due" : "Still required"}
+                  </span>
+                  <strong className="block text-lg">
+                    {money(cashValue >= total ? changeDue : total - cashValue)}
+                  </strong>
+                </div>
               </div>
             )}
             <button
