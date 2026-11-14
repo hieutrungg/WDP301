@@ -771,6 +771,9 @@ function CounterPosPage() {
             <p className="mt-1 text-right text-[10px] text-on-surface-variant">
               Final price is confirmed automatically when you continue.
             </p>
+            <p className="mt-1 text-right text-[10px] text-on-surface-variant">
+              Voucher codes are available for online ticket bookings only.
+            </p>
             {remainingSeconds !== null && (
               <p role="timer" className="mt-3 flex items-center justify-end gap-2 font-mono text-sm font-bold text-secondary">
                 <Clock3 className="size-4" />

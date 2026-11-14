@@ -16,9 +16,47 @@ const managerBranchStages = (branchId) => [
   { $lookup: { from: "rooms", localField: "showtime.roomId", foreignField: "_id", as: "room" } },
   { $unwind: "$room" },
   { $match: { "room.branchId": new mongoose.Types.ObjectId(branchId) } },
+  { $lookup: { from: "movies", localField: "showtime.movieId", foreignField: "_id", as: "movie" } },
+  {
+    $lookup: {
+      from: "room_layout_versions",
+      let: { roomId: "$room._id", layoutVersion: "$showtime.roomLayoutVersion" },
+      pipeline: [
+        { $match: { $expr: { $and: [
+          { $eq: ["$roomId", "$$roomId"] },
+          { $eq: ["$layoutVersion", "$$layoutVersion"] },
+        ] } } },
+        { $limit: 1 },
+      ],
+      as: "historicalRoomLayout",
+    },
+  },
+  {
+    $set: {
+      movieTitle: { $ifNull: [{ $arrayElemAt: ["$movie.title", 0] }, "F-Cinema screening"] },
+      resolvedSeats: {
+        $cond: [
+          { $eq: ["$room.layoutVersion", "$showtime.roomLayoutVersion"] },
+          "$room.seats",
+          { $ifNull: [{ $arrayElemAt: ["$historicalRoomLayout.seats", 0] }, []] },
+        ],
+      },
+    },
+  },
+  {
+    $set: {
+      seatLabels: {
+        $map: {
+          input: { $filter: { input: "$resolvedSeats", as: "seat", cond: { $in: ["$$seat._id", "$booking.seatIds"] } } },
+          as: "seat",
+          in: { $concat: ["$$seat.row", { $toString: "$$seat.number" }] },
+        },
+      },
+    },
+  },
 ];
 
-const withoutBranchJoins = { $project: { booking: 0, showtime: 0, room: 0 } };
+const withoutBranchJoins = { $project: { booking: 0, showtime: 0, room: 0, movie: 0, historicalRoomLayout: 0, resolvedSeats: 0 } };
 export const refundRepository = {
   async loadEligibility(bookingId) {
     const booking = await Booking.findById(bookingId).lean();

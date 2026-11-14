@@ -5,7 +5,6 @@ import {
   ArrowLeft,
   ArrowRight,
   BadgeCheck,
-  CheckCircle2,
   DoorOpen,
   Info,
   LoaderCircle,
@@ -20,7 +19,7 @@ import {
   X,
   Zap,
 } from 'lucide-react'
-import { Link, useLocation, useNavigate, useParams } from 'react-router'
+import { Link, Navigate, useLocation, useNavigate, useParams } from 'react-router'
 import { toast } from 'sonner'
 import EmptyState from '../../../components/common/EmptyState'
 import ErrorState from '../../../components/common/ErrorState'
@@ -30,6 +29,8 @@ import SeatLegend from '../components/SeatLegend'
 import { formatSeatMoney, hasValidSeatPrice, sumSeatPrices } from '../utils/seatPricing'
 import { useAuth } from '../../auth/hooks/useAuth'
 import { newCheckout, readCheckout, writeCheckout } from '../../booking/utils/checkoutSession'
+import BookingProgress from '../../booking/components/BookingProgress'
+import BookingExpiryDialog from '../../booking/components/BookingExpiryDialog'
 import { useSeatAvailability } from '../hooks/useSeatAvailability'
 
 const formatVnd = formatSeatMoney
@@ -70,34 +71,13 @@ const timeFormatter = new Intl.DateTimeFormat('en-GB', {
 })
 
 function BookingStepper() {
-  const completeSteps = ['Movie', 'Cinema', 'Date', 'Showtime']
-
   return (
-    <section className="border-b border-white/5 bg-surface-container-lowest px-4 py-4 shadow-lg sm:px-6">
-      <div className="mx-auto flex max-w-[1400px] flex-col items-center justify-between gap-4 xl:flex-row">
-        <nav aria-label="Booking progress" className="flex max-w-full items-center gap-1 overflow-x-auto pb-1 text-xs">
-          {completeSteps.map((step, index) => (
-            <Fragment key={step}>
-              <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-surface-container-low px-3 py-1.5 font-semibold">
-                <CheckCircle2 className="size-3.5 fill-secondary/20 text-secondary" />
-                {index + 1}. {step}
-              </span>
-              <span className="text-surface-variant">›</span>
-            </Fragment>
-          ))}
-          <span className="inline-flex shrink-0 items-center gap-2 rounded-full bg-primary-container px-3 py-1.5 font-bold uppercase tracking-wider text-white shadow-crimson">
-            <span className="size-2 animate-pulse rounded-full bg-white" />5. Seats · Selecting
-          </span>
-          <span className="text-surface-variant">›</span>
-          <span className="shrink-0 rounded-full px-3 py-1.5 text-on-surface-variant/60">6. Food & Drink (optional)</span>
-          <span className="text-surface-variant/50">›</span>
-          <span className="shrink-0 rounded-full px-3 py-1.5 text-on-surface-variant/60">7. Checkout & Payment</span>
-        </nav>
-        <span className="inline-flex shrink-0 items-center gap-2 rounded-full bg-surface-container px-3 py-1.5 text-xs font-medium">
+    <BookingProgress
+      currentStep={1}
+      aside={<span className="inline-flex shrink-0 items-center gap-2 rounded-full bg-surface-container px-3 py-1.5 text-xs font-medium">
           <Zap className="size-4 fill-secondary text-secondary" />Live Seat Availability · Real-time Updates
-        </span>
-      </div>
-    </section>
+        </span>}
+    />
   )
 }
 
@@ -303,7 +283,6 @@ function SeatSelectionPage() {
     setSelectionExpired(true)
     setSelectedSeatIds([])
     refetchAvailability()
-    toast.error('Your seat selection time expired. Select seats again to continue.')
   }, [refetchAvailability])
 
   const restartSelection = () => {
@@ -353,6 +332,10 @@ function SeatSelectionPage() {
     }
   }
 
+  if (savedCheckout && !selectionExpired) {
+    return <Navigate to={nextStepPath} replace />
+  }
+
   if (availability.isPending) {
     return <main className="grid min-h-screen place-items-center bg-background pt-20"><div className="text-center text-on-surface-variant"><LoaderCircle className="mx-auto size-9 animate-spin text-primary" /><p className="mt-3 text-sm">Loading live seat matrix…</p></div></main>
   }
@@ -367,6 +350,7 @@ function SeatSelectionPage() {
 
   return (
     <main className="min-h-screen bg-background pt-20 text-on-surface">
+      {selectionExpired && <BookingExpiryDialog onRestart={restartSelection} />}
       <BookingStepper />
       <SessionBar showtime={showtime} savedCheckout={savedCheckout} nextStepPath={nextStepPath} selectionDeadline={selectionDeadline} onExpire={handleSelectionExpired} />
 

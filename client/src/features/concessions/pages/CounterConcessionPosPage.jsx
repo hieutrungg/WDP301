@@ -402,6 +402,9 @@ export default function CounterConcessionPosPage() {
           <span>Total</span>
           <span>{money(total)}</span>
         </div>
+        <p className="mt-1 text-right text-[10px] text-on-surface-variant">
+          Voucher codes are available for online ticket bookings only.
+        </p>
         {!checkout && (
           <>
             <div className="mt-4 grid grid-cols-2 gap-2">
