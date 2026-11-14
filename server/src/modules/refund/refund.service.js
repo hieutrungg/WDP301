@@ -20,6 +20,8 @@ const findManagerRefund = async (repository, refundId, branchId) => {
 };
 const serialize = (refund) => refund && ({
   refundId: id(refund._id), bookingId: id(refund.bookingId), paymentId: id(refund.paymentId), showtimeId: refund.showtimeId ? id(refund.showtimeId) : null, requestType: refund.requestType ?? REFUND_REQUEST_TYPE.CUSTOMER_REQUEST,
+  ...(refund.movieTitle ? { movieTitle: refund.movieTitle } : {}),
+  ...(refund.seatLabels ? { seatLabels: refund.seatLabels } : {}),
   status: refund.status, reason: refund.reason, ticketAmount: refund.ticketAmount,
   concessionAmount: refund.concessionAmount, refundAmount: refund.refundAmount,
   currency: refund.currency, paymentMethod: refund.paymentMethod,
