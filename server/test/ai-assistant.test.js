@@ -535,3 +535,18 @@ test("AI-001 a movie becomes one public chunk with a stable id", () => {
   assert.equal(chunk.audience, "public");
   assert.match(chunk.text, /Thể loại: Animation\nThời lượng: 99 phút\nNội dung: Một cậu bé/);
 });
+
+test("AI-001 a refused or empty knowledge search is still visible in the trace", async () => {
+  const { service, repository } = setup({ script: [callTool("search_knowledge", { query: "giữ ghế" }), say("Popo chưa tra được.")] });
+  repository.searchKnowledge = async () => {
+    throw new Error("Path 'audience' needs to be indexed as filter");
+  };
+  await service.chat({ actor: GUEST_ACTOR, message: "Ghế được giữ bao lâu?" });
+  assert.deepEqual(repository.traces[0].retrieval, [
+    { tool: "search_knowledge", query: "giữ ghế", error: "Path 'audience' needs to be indexed as filter" },
+  ]);
+
+  const empty = setup({ script: [callTool("search_knowledge", { query: "xyz" }), say("Không thấy.")] });
+  await empty.service.chat({ actor: GUEST_ACTOR, message: "xyz?" });
+  assert.deepEqual(empty.repository.traces[0].retrieval, [{ tool: "search_knowledge", query: "xyz", hits: 0 }]);
+});

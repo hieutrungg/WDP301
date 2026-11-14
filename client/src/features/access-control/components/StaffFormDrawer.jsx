@@ -1,5 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod'
-import { AtSign, History, Mail, MailCheck, Phone, Power, PowerOff, RefreshCw, ShieldCheck, User, UserPlus, UserRoundPen } from 'lucide-react'
+import { AtSign, Building2, History, Mail, MailCheck, Phone, Power, PowerOff, RefreshCw, ShieldCheck, User, UserPlus, UserRoundPen } from 'lucide-react'
 import { useState } from 'react'
 import { Controller, useForm, useWatch } from 'react-hook-form'
 import { toast } from 'sonner'
@@ -23,7 +23,8 @@ import FormField, { inputClass } from './FormField'
 import { primaryButton, RoleChip, secondaryButton, StatusBadge } from './ListParts'
 import RolePicker from './RolePicker'
 
-const PROFILE_FIELDS = ['fullName', 'email', 'phone', 'branchId']
+// The branch is fixed after creation, so the update form sends only these fields.
+const PROFILE_FIELDS = ['fullName', 'email', 'phone']
 
 function StaffForm({ account, options, onClose, onSaved, onChangeStatus, isSelf, blocked }) {
   const isEdit = Boolean(account)
@@ -50,7 +51,7 @@ function StaffForm({ account, options, onClose, onSaved, onChangeStatus, isSelf,
 
   const onSubmit = async (values) => {
     setServerError('')
-    if (branchRule === 'REQUIRED' && !values.branchId) {
+    if (!isEdit && branchRule === 'REQUIRED' && !values.branchId) {
       setError('branchId', { message: 'Select the cinema branch this employee works at.' })
       return
     }
@@ -64,7 +65,6 @@ function StaffForm({ account, options, onClose, onSaved, onChangeStatus, isSelf,
           onClose()
           return
         }
-        if ('branchId' in changes) changes.branchId = changes.branchId || null
         const result = await updateStaffAccountRequest(account.id, changes)
         toast.success(result.message, { description: `${result.account.fullName ?? result.account.username} was updated.` })
         onSaved(result.account)
@@ -235,7 +235,21 @@ function StaffForm({ account, options, onClose, onSaved, onChangeStatus, isSelf,
             </FormField>
           </div>
 
-          {isEdit && branchField}
+          {isEdit && (
+            <FormField
+              id="staff-branch-readonly"
+              label="Branch"
+              hint="The branch cannot be changed. For work at another cinema, create a separate staff account there."
+              icon={Building2}
+            >
+              <input
+                id="staff-branch-readonly"
+                value={account.branch ? account.branch.branchName ?? 'Unavailable branch' : 'No branch assigned'}
+                readOnly
+                className={`${inputClass} h-12 pl-10`}
+              />
+            </FormField>
+          )}
 
           {!isEdit && (
             <>
@@ -269,14 +283,12 @@ function StaffForm({ account, options, onClose, onSaved, onChangeStatus, isSelf,
 
               {branchField}
 
-              {/* The account gets every permission of its role; exceptions are made later in
-                  Assign access, so no permission list is shown here. */}
+              {/* The account gets every permission of its role, so no permission list is shown. */}
               <p className="flex items-start gap-3 rounded-xl border border-white/5 bg-surface-container p-4 text-xs text-on-surface-variant">
                 <ShieldCheck className="mt-0.5 size-4 shrink-0 text-secondary" />
                 <span>
                   <span className="block font-semibold text-on-surface">Permissions come from the role</span>
-                  The account gets every permission of the selected role. An Admin can adjust access later
-                  with Assign access.
+                  The account gets every permission of the selected role.
                 </span>
               </p>
 

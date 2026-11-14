@@ -89,9 +89,17 @@ export const createTracer = ({
         log("cache", cache);
       },
 
-      addRetrieval(tool, hits) {
+      // One entry per hit. A search with no hit, or one the vector index refused, still leaves an
+      // entry, so an empty `retrieval` always means the knowledge tools were not called.
+      addRetrieval(tool, hits, { query, error } = {}) {
         for (const hit of hits) {
           state.retrieval.push({ tool, chunkId: hit._id, source: hit.sourceId, heading: hit.heading, score: hit.score });
+        }
+        if (error) {
+          state.retrieval.push({ tool, query, error: String(error).slice(0, 500) });
+          log("retrieval.failed", { tool, error: String(error).slice(0, 500) });
+        } else if (!hits.length) {
+          state.retrieval.push({ tool, query, hits: 0 });
         }
       },
 

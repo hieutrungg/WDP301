@@ -1,4 +1,4 @@
-import { Pencil, Plus, Power, PowerOff, RefreshCw, RotateCcw, SearchX, ShieldCheck, UserCog, Users } from 'lucide-react'
+import { Pencil, Plus, Power, PowerOff, RefreshCw, RotateCcw, SearchX, ShieldCheck, Users } from 'lucide-react'
 import { useState } from 'react'
 import { useSearchParams } from 'react-router'
 import { toast } from 'sonner'
@@ -17,7 +17,6 @@ import {
   StatusBadge,
 } from '../components/ListParts'
 import SearchBox from '../components/SearchBox'
-import StaffAccessDrawer from '../components/StaffAccessDrawer'
 import StaffFormDrawer from '../components/StaffFormDrawer'
 import { useRefreshAccessControl, useStaffFormOptions, useStaffList } from '../hooks/useAccessControl'
 import { formatAdminDateTime } from '../utils/accessControl'
@@ -61,7 +60,7 @@ function SummaryCards({ counts }) {
   )
 }
 
-function StaffRow({ account, isSelf, onEdit, onAccess, onChangeStatus }) {
+function StaffRow({ account, isSelf, onEdit, onChangeStatus }) {
   const canToggle = account.status === 'ACTIVE' || account.status === 'DISABLED'
   const disablingSelf = isSelf && account.status === 'ACTIVE'
 
@@ -98,10 +97,6 @@ function StaffRow({ account, isSelf, onEdit, onAccess, onChangeStatus }) {
         <button type="button" onClick={() => onEdit(account)} className={`${secondaryButton} px-3 py-2`} aria-label={`Edit ${account.username}`}>
           <Pencil className="size-4" />
           Edit
-        </button>
-        <button type="button" onClick={() => onAccess(account)} className={`${secondaryButton} px-3 py-2`} aria-label={`Roles and permissions of ${account.username}`}>
-          <UserCog className="size-4" />
-          Access
         </button>
         {canToggle && (
           <button
@@ -239,7 +234,6 @@ function StaffAccountsPage() {
               account={account}
               isSelf={isSelf(account)}
               onEdit={(target) => setDrawer({ kind: 'edit', accountId: target.id })}
-              onAccess={(target) => setDrawer({ kind: 'access', accountId: target.id })}
               onChangeStatus={openStatusDialog}
             />
           ))}
@@ -261,8 +255,8 @@ function StaffAccountsPage() {
           Staff Account Management
         </h1>
         <p className="mt-2 text-sm text-on-surface-variant">
-          Create staff accounts, keep their details up to date, assign roles and direct permissions,
-          and disable accounts that should no longer sign in. Accounts are never deleted.
+          Create staff accounts with a role, keep their details up to date, and disable accounts that
+          should no longer sign in. Accounts are never deleted.
         </p>
       </section>
 
@@ -324,8 +318,7 @@ function StaffAccountsPage() {
         </span>
         <p className="text-xs text-on-surface-variant">
           <span className="block font-heading text-sm font-bold text-on-surface">Changes take effect immediately</span>
-          A disabled account cannot sign in, and its open session is refused on its next request. Role
-          and permission changes apply on the account&apos;s next request.
+          A disabled account cannot sign in, and its open session is refused on its next request.
         </p>
       </div>
 
@@ -351,15 +344,6 @@ function StaffAccountsPage() {
           onClose={() => setDrawer(null)}
           onSaved={handleSaved}
           onChangeStatus={openStatusDialog}
-        />
-      )}
-
-      {drawer?.kind === 'access' && (
-        <StaffAccessDrawer
-          accountId={drawer.accountId}
-          isSelf={drawer.accountId === currentAccount?.id}
-          onClose={() => setDrawer(null)}
-          onSaved={handleSaved}
         />
       )}
 

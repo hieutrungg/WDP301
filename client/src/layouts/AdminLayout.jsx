@@ -1,4 +1,4 @@
-import { Building2, ChevronRight, DoorOpen, House, KeyRound, LayoutDashboard, LogOut, Menu, Users, X } from 'lucide-react'
+import { Building2, ChevronRight, DoorOpen, House, LayoutDashboard, LogOut, Menu, Users, X } from 'lucide-react'
 import { useState } from 'react'
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router'
 import { toast } from 'sonner'
@@ -16,7 +16,6 @@ const BREADCRUMBS = [
 const navItems = [
   { label: 'Dashboard', icon: LayoutDashboard, to: '/admin/dashboard', end: true },
   { label: 'Staff Accounts', icon: Users, to: '/admin/staff-accounts', permission: 'account.manage' },
-  { label: 'Roles & Permissions', icon: KeyRound, to: '/admin/roles', permission: 'role.view' },
   { label: 'Branches', icon: Building2, to: '/admin/branches', permission: 'branch.manage' },
   { label: 'Rooms', icon: DoorOpen, to: '/admin/rooms', permission: 'room.view' },
 ]
