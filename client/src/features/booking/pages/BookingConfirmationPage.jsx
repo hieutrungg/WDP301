@@ -27,6 +27,7 @@ import QrCodeImage from '../../../components/ui/QrCode'
 import { getPaymentMethodOption } from '../utils/mockQrCode'
 import { getBookingTickets } from '../../ticket/api/ticketApi'
 import {
+  buildTicketQrPayload,
   formatVnDateTime,
   getTicketStatusMeta,
   isTicketAdmissible,
@@ -89,7 +90,7 @@ function IssuedTicketsStub({ ticketsQuery }) {
       <div className="my-5 flex flex-col items-center">
         {isTicketAdmissible(primary) ? (
           <QrCodeImage
-            value={primary.qrCode}
+            value={buildTicketQrPayload(primary)}
             size={168}
             label="E-TICKET"
             ariaLabel={`Admission QR for seat ${primary.seat.label}`}

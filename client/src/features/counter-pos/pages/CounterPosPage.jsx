@@ -81,10 +81,29 @@ function SeatMatrix({ rows, selected, locked, onToggle }) {
   return (
     <div className="min-w-0 rounded-xl bg-surface-container-low p-4 sm:p-6">
       <div className="mb-7 text-center">
-        <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-on-surface-variant">
+        <svg
+          viewBox="0 0 600 40"
+          aria-hidden="true"
+          className="mx-auto h-8 w-[min(90%,52rem)] overflow-visible drop-shadow-[0_6px_18px_rgba(229,9,20,0.35)]"
+        >
+          <defs>
+            <linearGradient id="counter-pos-screen" x1="0" x2="1">
+              <stop offset="0" stopColor="#e50914" stopOpacity="0.2" />
+              <stop offset="0.5" stopColor="#ffffff" />
+              <stop offset="1" stopColor="#e50914" stopOpacity="0.2" />
+            </linearGradient>
+          </defs>
+          <path
+            d="M10 34 Q300 0 590 34"
+            fill="none"
+            stroke="url(#counter-pos-screen)"
+            strokeWidth="4"
+            strokeLinecap="round"
+          />
+        </svg>
+        <p className="-mt-1 text-[10px] font-bold uppercase tracking-[0.22em] text-on-surface-variant">
           Cinema screen
         </p>
-        <div className="mx-auto mt-2 h-1.5 w-[min(90%,52rem)] rounded-full bg-gradient-to-r from-transparent via-primary to-transparent opacity-70" />
       </div>
       <div className="w-full overflow-x-auto pb-3">
         <div className="mx-auto flex w-max min-w-max flex-col gap-3 px-2 sm:px-4">
@@ -392,16 +411,18 @@ function CounterPosPage() {
 
   const discardSavedOrder = async () => {
     const activeHold = savedDraft?.hold;
-    clearCounterOrderDraft(sessionStorage, account?.id);
-    setSavedDraft(null);
-    setDraftDecisionPending(false);
     if (activeHold?.holdId && Date.parse(activeHold.expiresAt) > Date.now()) {
       try {
         await releaseSeatHold(activeHold.holdId);
-      } catch {
-        toast.warning("The saved order was cleared; its seat hold will expire automatically.");
+      } catch (error) {
+        toast.error(getApiErrorMessage(error));
+        return;
       }
     }
+    clearCounterOrderDraft(sessionStorage, account?.id);
+    setSavedDraft(null);
+    setDraftDecisionPending(false);
+    toast.success("Saved order discarded and seats released.");
   };
 
   const openFood = async () => {

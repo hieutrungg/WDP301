@@ -27,6 +27,7 @@ import { getApiErrorMessage } from '../../../lib/api/apiError'
 import { formatSeatMoney } from '../../seat-selection/utils/seatPricing'
 import { getBookingTickets } from '../../ticket/api/ticketApi'
 import {
+  buildTicketQrPayload,
   describeTicketIssuance,
   formatSeatType,
   formatVnDateTime,
@@ -194,7 +195,7 @@ function BookingTicketsPanel({ bookingId }) {
       <div className="my-5 flex flex-col items-center">
         {isTicketAdmissible(ticket) ? (
           <QrCodeImage
-            value={ticket.qrCode}
+            value={buildTicketQrPayload(ticket)}
             size={185}
             label="E-TICKET"
             ariaLabel={`Admission QR for seat ${ticket.seat.label}`}
