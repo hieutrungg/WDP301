@@ -45,7 +45,14 @@ export const createSeatHoldService = ({
   clock = () => new Date(),
   holdDurationMs = DEFAULT_SEAT_HOLD_DURATION_MS,
 } = {}) => {
-  const acquireSeatHold = async ({ ownerId, checkoutKey, showtimeId, seatIds }) => {
+  const acquireSeatHold = async ({
+    ownerId,
+    checkoutKey,
+    showtimeId,
+    seatIds,
+    enforceBranchScope = false,
+    branchId,
+  }) => {
     if (!Array.isArray(seatIds) || seatIds.length === 0) {
       throw error(400, "Select at least one seat", SEAT_HOLD_ERROR.INVALID_SEAT_IDS);
     }
@@ -56,6 +63,24 @@ export const createSeatHoldService = ({
     const hash = commandHash({ showtimeId, seatIds: normalizedSeatIds });
     const now = clock();
     const existing = await repository.findByOwnerAndCheckoutKey(ownerId, checkoutKey);
+
+    let showtime;
+    if (enforceBranchScope) {
+      if (!branchId) {
+        throw error(
+          403,
+          "Your account is not assigned to a cinema branch",
+          "BRANCH_NOT_ASSIGNED",
+        );
+      }
+      showtime = await showtimeReader.getBookableShowtime(showtimeId, now);
+      if (!showtime) {
+        throw error(409, "Showtime is not available for booking", SEAT_HOLD_ERROR.SHOWTIME_NOT_BOOKABLE);
+      }
+      if (String(showtime.cinema?.id ?? "") !== String(branchId)) {
+        throw error(403, "This showtime belongs to another branch", "ROOM_WRONG_BRANCH");
+      }
+    }
 
     if (existing) {
       if (existing.commandHash !== hash) {
@@ -68,7 +93,7 @@ export const createSeatHoldService = ({
       return serializeHold(existing, now, true);
     }
 
-    const showtime = await showtimeReader.getBookableShowtime(showtimeId, now);
+    showtime ??= await showtimeReader.getBookableShowtime(showtimeId, now);
     if (!showtime) {
       throw error(409, "Showtime is not available for booking", SEAT_HOLD_ERROR.SHOWTIME_NOT_BOOKABLE);
     }
