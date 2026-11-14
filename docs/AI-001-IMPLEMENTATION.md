@@ -282,4 +282,9 @@ The "broken button" was the user's own typed "Xác nhận" messages. The user bu
 - `client`: eslint clean on the feature; `ai-message.test.js` 4/4 pass; `npm run build` succeeds.
 - Not run against the live model or in a browser.
 
+**Follow-up (prompt `ai-001.v5`)**
+- A test on 07:55 UTC from the ADMIN account `bocuong` asked Popo to post a review. Popo correctly had no review tool and created no phantom card.
+- But it told the admin to "post it yourself on the movie page", which an admin cannot do.
+- The role context for STAFF, MANAGER and ADMIN now says that buying tickets, own bookings and movie reviews are customer-only, and that Popo should suggest signing in with a customer account.
+
 No commit, push, merge or task-board/Google Sheet update was made.

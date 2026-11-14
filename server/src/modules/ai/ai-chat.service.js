@@ -119,7 +119,7 @@ export const createAiChatService = ({
         audiences: knowledgeAudiences(context.actor),
       });
       context.trace.addEmbeddingTokens(result.tokens);
-      context.trace.addRetrieval(tool.name, result.hits);
+      context.trace.addRetrieval(tool.name, result.hits, { query: args.query, error: result.error });
       if (!result.available) {
         return {
           ok: false,
@@ -145,7 +145,7 @@ export const createAiChatService = ({
     // with current data are returned.
     const result = await retriever.searchMovies({ query: args.description });
     context.trace.addEmbeddingTokens(result.tokens);
-    context.trace.addRetrieval(tool.name, result.hits);
+    context.trace.addRetrieval(tool.name, result.hits, { query: args.description, error: result.error });
     if (!result.available) {
       return {
         ok: false,

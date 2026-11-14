@@ -84,13 +84,13 @@ export const createStaffSchema = z.strictObject({
   position: positionField.optional(),
 });
 
-// UC36. Username is the sign-in identifier and stays fixed; roles have their own endpoint (UC37).
+// UC36. Username and branch are fixed after creation (another branch means another account);
+// roles have their own endpoint (UC37).
 export const updateStaffSchema = z
   .strictObject({
     fullName: fullNameField.optional(),
     email: emailField.optional(),
     phone: phoneField.optional(),
-    branchId: branchIdField.optional(),
     position: positionField.optional(),
   })
   .refine((data) => Object.values(data).some((value) => value !== undefined), {

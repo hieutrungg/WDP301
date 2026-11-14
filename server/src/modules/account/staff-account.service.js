@@ -108,9 +108,11 @@ const assertBranchExists = async (branchId) => {
   }
 };
 
-// BR-01: email, username and phone are unique across all accounts. Reports every clash at once.
-const assertIdentitiesAvailable = async ({ email, username, phone, excludeId }) => {
-  const conflicts = await findIdentityConflicts({ email, username, phone, excludeId });
+// Email and username are unique across all accounts. The phone number is not checked for staff
+// accounts: one person (e.g. a Manager) may hold one account per cinema branch, each with the
+// same phone. Reports every clash at once.
+const assertIdentitiesAvailable = async ({ email, username, excludeId }) => {
+  const conflicts = await findIdentityConflicts({ email, username, excludeId });
   const errors = [];
 
   if (email && conflicts.some((account) => sameIdentity(account.email, email))) {
@@ -118,9 +120,6 @@ const assertIdentitiesAvailable = async ({ email, username, phone, excludeId }) 
   }
   if (username && conflicts.some((account) => sameIdentity(account.username, username))) {
     errors.push({ field: "username", message: STAFF_MESSAGE.USERNAME_TAKEN });
-  }
-  if (phone && conflicts.some((account) => account.phone === phone)) {
-    errors.push({ field: "phone", message: STAFF_MESSAGE.PHONE_TAKEN });
   }
 
   if (errors.length > 0) {
@@ -355,7 +354,7 @@ export const createStaffAccount = async (actorAccountId, input) => {
 
 // UC36 Update Staff Account (personal/contact information).
 export const updateStaffAccount = async (actorAccountId, accountId, input) => {
-  const { account, roles } = await requireStaffAccount(accountId);
+  const { account } = await requireStaffAccount(accountId);
   const set = {};
   const unset = {};
   const audit = {};
@@ -376,13 +375,8 @@ export const updateStaffAccount = async (actorAccountId, accountId, input) => {
     track("phone", account.phone, input.phone);
   }
 
-  const currentBranchId = account.employeeProfile?.branchId ? String(account.employeeProfile.branchId) : null;
-  if (input.branchId !== undefined && (input.branchId ?? null) !== currentBranchId) {
-    assertBranchMatchesRole(roles, input.branchId);
-    if (input.branchId) set["employeeProfile.branchId"] = input.branchId;
-    else unset["employeeProfile.branchId"] = "";
-    track("branchId", currentBranchId, input.branchId);
-  }
+  // The branch is fixed once the account is created: an employee who also works at another
+  // cinema gets a separate account there (updateStaffSchema does not accept branchId).
 
   const currentPosition = account.employeeProfile?.position ?? null;
   if (input.position !== undefined && (input.position ?? null) !== currentPosition) {
@@ -393,14 +387,13 @@ export const updateStaffAccount = async (actorAccountId, accountId, input) => {
 
   if (Object.keys(audit).length === 0) return getStaffDetail(account._id);
 
-  await assertBranchExists(set["employeeProfile.branchId"]);
-  await assertIdentitiesAvailable({ email: set.email, phone: set.phone, excludeId: account._id });
+  await assertIdentitiesAvailable({ email: set.email, excludeId: account._id });
 
   try {
     await updateAccountById(account._id, { set: { ...set, updatedBy: actorAccountId }, unset });
   } catch (error) {
     if (error?.code !== 11000) throw error;
-    await assertIdentitiesAvailable({ email: set.email, phone: set.phone, excludeId: account._id });
+    await assertIdentitiesAvailable({ email: set.email, excludeId: account._id });
     throw error;
   }
 

@@ -3,8 +3,88 @@ import { useLocation } from 'react-router'
 import { Loader2, RotateCcw, Send, X } from 'lucide-react'
 import popoAvatar from '../../../assets/icons/popo.svg'
 import { useAiChat } from '../hooks/useAiChat'
+import {
+  clampLauncherPosition,
+  defaultLauncherPosition,
+  DRAG_THRESHOLD,
+  LAUNCHER_SIZE,
+  panelLayout,
+  parseStoredPosition,
+} from '../utils/widgetPosition'
 import AiMessageContent from './AiMessageContent'
 import PendingActionCard from './PendingActionCard'
+
+const POSITION_STORAGE_KEY = 'fcinema.popo.position'
+
+const readViewport = () => ({ width: window.innerWidth, height: window.innerHeight })
+
+const readStoredPosition = () => {
+  try {
+    return parseStoredPosition(window.localStorage.getItem(POSITION_STORAGE_KEY))
+  } catch {
+    return null
+  }
+}
+
+// Lets the viewer drag Popo (the launcher or the panel header) anywhere on screen so it does not
+// cover the page. The spot is remembered per browser; a drag never counts as a click.
+function useDraggablePosition() {
+  const [viewport, setViewport] = useState(readViewport)
+  const [stored, setStored] = useState(readStoredPosition)
+  const dragRef = useRef(null)
+  const suppressClickRef = useRef(false)
+  const position = clampLauncherPosition(stored ?? defaultLauncherPosition(viewport), viewport)
+
+  useEffect(() => {
+    const onResize = () => setViewport(readViewport())
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
+
+  useEffect(() => {
+    if (!stored) return
+    try {
+      window.localStorage.setItem(POSITION_STORAGE_KEY, JSON.stringify(stored))
+    } catch {
+      // Storage may be blocked; the position then lasts for this page view only.
+    }
+  }, [stored])
+
+  const onPointerDown = (event) => {
+    if (event.button !== 0 || event.target.closest('[data-no-drag]')) return
+    dragRef.current = { startX: event.clientX, startY: event.clientY, origin: position, moved: false }
+    event.currentTarget.setPointerCapture?.(event.pointerId)
+  }
+
+  const onPointerMove = (event) => {
+    const drag = dragRef.current
+    if (!drag) return
+    const dx = event.clientX - drag.startX
+    const dy = event.clientY - drag.startY
+    if (!drag.moved && Math.hypot(dx, dy) < DRAG_THRESHOLD) return
+    drag.moved = true
+    setStored(clampLauncherPosition({ x: drag.origin.x + dx, y: drag.origin.y + dy }, readViewport()))
+  }
+
+  const onPointerUp = () => {
+    if (dragRef.current?.moved) suppressClickRef.current = true
+    dragRef.current = null
+  }
+
+  // Returns true once for the click that ends a drag, so the launcher does not toggle.
+  const consumeDragClick = () => {
+    const wasDrag = suppressClickRef.current
+    suppressClickRef.current = false
+    return wasDrag
+  }
+
+  return {
+    position,
+    viewport,
+    consumeDragClick,
+    dragHandlers: { onPointerDown, onPointerMove, onPointerUp, onPointerCancel: onPointerUp },
+  }
+}
 
 const SUGGESTIONS = {
   guest: ['Popo là ai?', 'Hôm nay có phim gì?', 'Chính sách hoàn tiền thế nào?'],
@@ -28,6 +108,8 @@ function AiAssistantWidget() {
   const listRef = useRef(null)
   const inputRef = useRef(null)
   const { open, messages, isSending } = chat
+  const { position, viewport, consumeDragClick, dragHandlers } = useDraggablePosition()
+  const panel = panelLayout(position, viewport)
 
   useEffect(() => {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: 'smooth' })
@@ -47,22 +129,27 @@ function AiAssistantWidget() {
   const close = () => chat.setOpen(false)
 
   return (
-    <div className="fixed bottom-4 right-4 z-[60] flex flex-col items-end gap-3 sm:bottom-6 sm:right-6">
+    <>
       {open ? (
         <section
           aria-label="Popo – trợ lý ảo F-Cinema"
-          className="flex h-[min(620px,calc(100dvh-6rem))] w-[calc(100vw-2rem)] max-w-[400px] flex-col overflow-hidden rounded-2xl border border-white/10 bg-surface-container-low text-sm text-on-surface shadow-[0_8px_32px_rgba(0,0,0,0.6)]"
+          style={{ left: panel.left, top: panel.top, width: panel.width, height: panel.height }}
+          className="fixed z-[60] flex flex-col overflow-hidden rounded-2xl border border-white/10 bg-surface-container-low text-sm text-on-surface shadow-[0_8px_32px_rgba(0,0,0,0.6)]"
         >
-          <header className="flex items-center gap-3 border-b border-white/5 px-4 py-3">
+          <header
+            {...dragHandlers}
+            title="Kéo để di chuyển Popo"
+            className="flex cursor-grab touch-none select-none items-center gap-3 border-b border-white/5 px-4 py-3 active:cursor-grabbing"
+          >
             <PopoAvatar className="size-10" />
             <div className="min-w-0 flex-1">
               <p className="font-heading font-bold text-white">Popo</p>
               <p className="text-[11px] text-on-surface-variant">Trợ lý ảo của F-Cinema</p>
             </div>
-            <button type="button" onClick={chat.newConversation} aria-label="Cuộc trò chuyện mới" title="Cuộc trò chuyện mới" className="grid size-8 place-items-center rounded-lg text-on-surface-variant hover:bg-surface-container-high hover:text-white">
+            <button type="button" data-no-drag onClick={chat.newConversation} aria-label="Cuộc trò chuyện mới" title="Cuộc trò chuyện mới" className="grid size-8 place-items-center rounded-lg text-on-surface-variant hover:bg-surface-container-high hover:text-white">
               <RotateCcw className="size-4" aria-hidden="true" />
             </button>
-            <button type="button" onClick={close} aria-label="Đóng Popo" className="grid size-8 place-items-center rounded-lg text-on-surface-variant hover:bg-surface-container-high hover:text-white">
+            <button type="button" data-no-drag onClick={close} aria-label="Đóng Popo" className="grid size-8 place-items-center rounded-lg text-on-surface-variant hover:bg-surface-container-high hover:text-white">
               <X className="size-4" aria-hidden="true" />
             </button>
           </header>
@@ -137,15 +224,19 @@ function AiAssistantWidget() {
 
       <button
         type="button"
-        onClick={() => chat.setOpen(!open)}
+        {...dragHandlers}
+        onClick={() => {
+          if (!consumeDragClick()) chat.setOpen(!open)
+        }}
         aria-expanded={open}
         aria-label={open ? 'Đóng Popo' : 'Mở Popo – trợ lý ảo F-Cinema'}
-        title={open ? undefined : 'Hỏi Popo'}
-        className={`grid size-14 place-items-center overflow-hidden rounded-full shadow-[0_8px_24px_rgba(229,9,20,0.45)] ring-2 ring-primary-container transition-transform hover:scale-105 ${open ? 'bg-primary-container text-white' : 'bg-[#fff6e2]'}`}
+        title={open ? undefined : 'Hỏi Popo · kéo để di chuyển'}
+        style={{ left: position.x, top: position.y, width: LAUNCHER_SIZE, height: LAUNCHER_SIZE }}
+        className={`fixed z-[60] grid cursor-grab touch-none select-none place-items-center overflow-hidden rounded-full shadow-[0_8px_24px_rgba(229,9,20,0.45)] ring-2 ring-primary-container transition-transform hover:scale-105 active:cursor-grabbing ${open ? 'bg-primary-container text-white' : 'bg-[#fff6e2]'}`}
       >
         {open ? <X className="size-6" aria-hidden="true" /> : <img src={popoAvatar} alt="" aria-hidden="true" className="size-11 object-contain" draggable="false" />}
       </button>
-    </div>
+    </>
   )
 }
 

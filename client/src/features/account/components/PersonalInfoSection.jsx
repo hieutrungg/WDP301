@@ -1,5 +1,5 @@
-import { CalendarDays, CircleCheck, IdCard, Info, KeyRound, MapPin, Pencil } from 'lucide-react'
-import { formatAccountStatus, formatDate } from '../utils/accountFormat'
+import { CircleCheck, IdCard, Info, KeyRound, Pencil } from 'lucide-react'
+import { formatAccountStatus } from '../utils/accountFormat'
 
 function InfoCard({ label, value, hint, badge }) {
   return (
@@ -72,18 +72,6 @@ function PersonalInfoSection({ account, onEditProfile, onChangePassword }) {
           label="Phone Number"
           value={account.phone}
           hint="Used for booking contact"
-        />
-        <InfoCard
-          label="Date of Birth"
-          value={formatDate(account.profile?.dateOfBirth)}
-          hint="Used for age-rated screenings"
-          badge={<CalendarDays className="size-4 text-on-surface-variant" />}
-        />
-        <InfoCard
-          label="Address"
-          value={account.profile?.address}
-          hint="Your contact address"
-          badge={<MapPin className="size-4 text-on-surface-variant" />}
         />
         <InfoCard
           label="Account Status"
