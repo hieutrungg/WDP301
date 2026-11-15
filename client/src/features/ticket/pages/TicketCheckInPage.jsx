@@ -1,5 +1,6 @@
 import { CircleAlert, CircleCheck, Clock3, History, Info, LogIn, TicketCheck, TriangleAlert } from 'lucide-react'
 import { useRef, useState } from 'react'
+import CameraTicketScanner from '../components/CameraTicketScanner'
 import { checkInTicket } from '../api/ticketApi'
 import {
   bookingProgressLabel,
@@ -74,9 +75,10 @@ function ResultCard({ result }) {
   )
 }
 
-// TICKET-101: the Staff member types or pastes the ticket code from the customer's E-Ticket.
+// Reader/camera scans and manual entry share the same server-authorized check-in flow.
 function TicketCheckInPage() {
   const inputRef = useRef(null)
+  const submittingRef = useRef(false)
   const [code, setCode] = useState('')
   const [fieldError, setFieldError] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -88,13 +90,14 @@ function TicketCheckInPage() {
     setHistory((items) => [{ ...entry, at: new Date().toISOString() }, ...items].slice(0, HISTORY_LIMIT))
   }
 
-  const handleSubmit = async (event) => {
-    event.preventDefault()
-    const error = validateTicketCode(code)
+  const submitCode = async (value) => {
+    if (submittingRef.current) return
+    const error = validateTicketCode(value)
     setFieldError(error)
     if (error) return
 
-    const ticketCode = normalizeTicketCode(code)
+    const ticketCode = normalizeTicketCode(value)
+    submittingRef.current = true
     setSubmitting(true)
     try {
       const data = await checkInTicket(ticketCode)
@@ -103,9 +106,15 @@ function TicketCheckInPage() {
     } catch (failure) {
       record({ ticketCode, ...describeCheckInFailure(failure) })
     } finally {
+      submittingRef.current = false
       setSubmitting(false)
       inputRef.current?.focus()
     }
+  }
+
+  const handleSubmit = (event) => {
+    event.preventDefault()
+    void submitCode(code)
   }
 
   return (
@@ -119,7 +128,7 @@ function TicketCheckInPage() {
           Ticket Check-in
         </h1>
         <p className="mt-2 text-sm text-on-surface-variant">
-          Type or paste the ticket code shown on the customer&apos;s E-Ticket, for example{' '}
+          Scan the ticket QR with a reader or camera, or enter its code, for example{' '}
           <span className="font-mono text-on-surface">TK-1A2B3C4D5E</span>. Each code admits one seat, once.
         </p>
       </section>
@@ -132,13 +141,16 @@ function TicketCheckInPage() {
           <input
             id="ticket-code"
             ref={inputRef}
+            disabled={submitting}
             autoFocus
             autoComplete="off"
             spellCheck={false}
-            maxLength={40}
+            maxLength={200}
             value={code}
             onChange={(event) => {
-              setCode(event.target.value.toUpperCase())
+              const value = event.target.value
+              setCode(value.toUpperCase())
+              if (!validateTicketCode(value)) void submitCode(value)
               if (fieldError) setFieldError('')
             }}
             aria-invalid={Boolean(fieldError)}
@@ -161,6 +173,8 @@ function TicketCheckInPage() {
           </p>
         )}
       </form>
+
+      <CameraTicketScanner onScan={submitCode} disabled={submitting} />
 
       {result && <ResultCard result={result} />}
 

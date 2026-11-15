@@ -83,7 +83,7 @@ test("verified payment success issues exactly one ISSUED ticket per seat with an
     assert.equal(ticket.bookingId, booking.bookingId);
     assert.equal(ticket.showtimeId, harness.showtimeId);
     assert.match(ticket.ticketCode, /^TK-[0-9A-F]{10}$/);
-    assert.ok(ticket.qrCode.startsWith(`${QR_PAYLOAD_PREFIX}:${ticket.ticketCode}:`));
+    assert.equal(ticket.qrCode, ticket.ticketCode);
     assert.equal(ticket.seat.type, "VIP");
     assert.equal(ticket.seat.unitPrice, 95000);
     assert.equal(ticket.screening.movieTitle, "Dune: Part Two");
@@ -252,7 +252,7 @@ test("toTicketDto exposes the QR payload only for an admissible ticket", () => {
     seat: { label: "A1" },
     issuedAt: new Date("2026-10-27T00:00:00.000Z"),
   };
-  assert.equal(toTicketDto({ ...base, status: TICKET_STATUS.ISSUED }).qrCode, base.qrCode);
+  assert.equal(toTicketDto({ ...base, status: TICKET_STATUS.ISSUED }).qrCode, base.ticketCode);
   assert.equal(toTicketDto({ ...base, status: TICKET_STATUS.USED }).qrCode, null);
   assert.equal(toTicketDto({ ...base, status: TICKET_STATUS.INVALIDATED }).qrCode, null);
 });

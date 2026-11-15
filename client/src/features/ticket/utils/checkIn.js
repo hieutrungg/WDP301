@@ -1,4 +1,4 @@
-// TICKET-101 Staff check-in by ticket code (typed or pasted, no camera scan). The server decides
+// TICKET-101 Staff check-in by ticket code (reader, camera, or manual entry). The server decides
 // admission; these helpers only normalize input and label the outcome.
 
 export const TICKET_CODE_PATTERN = /^TK-[A-F0-9]{10}$/

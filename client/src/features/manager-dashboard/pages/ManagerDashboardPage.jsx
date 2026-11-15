@@ -1,8 +1,10 @@
 import { useQuery } from '@tanstack/react-query'
-import { Activity, Armchair, Banknote, CalendarDays, CircleAlert, Clock3, RotateCw, TicketCheck, TrendingUp } from 'lucide-react'
+import { Activity, Armchair, Banknote, CalendarDays, CircleAlert, Clock3, MapPin, RotateCw, TicketCheck, TrendingUp } from 'lucide-react'
 import { useState } from 'react'
 import { getApiErrorMessage } from '../../../lib/api/apiError'
 import { getManagerDashboard } from '../api/managerDashboardApi'
+import { useAuth } from '../../auth/hooks/useAuth'
+import { getCatalogBranches } from '../../concessions/api/concessionApi'
 
 const periods = [
   { value: 'TODAY', label: 'Today' },
@@ -75,6 +77,17 @@ function TrendingList({ items }) {
 }
 
 function ManagerDashboardPage() {
+  const { account } = useAuth()
+  const branchId = account?.employeeProfile?.branchId
+  const branchQuery = useQuery({
+    queryKey: ['manager-dashboard-branch', branchId],
+    queryFn: async ({ signal }) => {
+      const branches = await getCatalogBranches(signal)
+      return branches.find(({ id }) => id === branchId) ?? null
+    },
+    enabled: Boolean(branchId),
+  })
+  const branch = branchQuery.data
   const [period, setPeriod] = useState('TODAY')
   const query = useQuery({ queryKey: ['manager-dashboard', period], queryFn: ({ signal }) => getManagerDashboard(period, signal) })
   const data = query.data
@@ -83,6 +96,17 @@ function ManagerDashboardPage() {
       <section className="flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
         <div><div className="mb-2 flex flex-wrap items-center gap-2"><span className="rounded bg-secondary/10 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-secondary">B2B Theatrical Intelligence</span><span className="text-xs text-outline">Assigned branch scope</span></div><h1 className="font-heading text-2xl font-extrabold tracking-tight sm:text-3xl">Manager Dashboard &amp; Analytics</h1><p className="mt-2 max-w-2xl text-sm leading-relaxed text-on-surface-variant">Branch revenue, completed-screening occupancy, and ticket sales trends.</p></div>
         <div className="flex flex-wrap items-center gap-2"><span className="flex items-center gap-2 rounded-lg bg-surface-container px-3 py-2 text-xs text-on-surface-variant"><span className="size-2 rounded-full bg-emerald-400" />Snapshot ready</span><button type="button" onClick={() => query.refetch()} disabled={query.isFetching} className="flex items-center gap-2 rounded-lg bg-surface-container-high px-3 py-2 text-sm font-semibold transition-colors hover:bg-surface-container-highest disabled:cursor-wait disabled:opacity-60"><RotateCw className={`size-4 ${query.isFetching ? 'animate-spin' : ''}`} />Refresh Metrics</button></div>
+      </section>
+
+      <section aria-label="Assigned cinema" className="flex items-start gap-3 rounded-xl bg-surface-container p-4 sm:p-5">
+        <span className="shrink-0 rounded-lg bg-primary-container/15 p-2.5 text-primary"><MapPin className="size-5" aria-hidden="true" /></span>
+        <div className="min-w-0 flex-1" aria-live="polite">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-outline">Assigned cinema</p>
+          <p className="mt-1 break-words font-heading text-lg font-bold">{!branchId ? 'No cinema branch assigned' : branchQuery.isPending ? 'Loading cinema…' : branch?.branchName || 'Cinema information unavailable'}</p>
+          {branch?.address && <p className="mt-1 break-words text-sm text-on-surface-variant">{branch.address}</p>}
+          {branchId && !branchQuery.isPending && !branch && <p className="mt-1 text-xs text-on-surface-variant">Unable to display the assigned cinema. Dashboard metrics remain scoped to your account’s assigned branch.</p>}
+        </div>
+        {branchId && !branchQuery.isPending && !branch && <button type="button" onClick={() => branchQuery.refetch()} disabled={branchQuery.isFetching} className="shrink-0 rounded-lg bg-surface-container-high px-3 py-2 text-xs font-semibold disabled:opacity-60">{branchQuery.isFetching ? 'Retrying…' : 'Retry'}</button>}
       </section>
 
       <section className="flex flex-col justify-between gap-4 rounded-xl bg-surface-container p-4 sm:flex-row sm:items-center sm:p-5">
