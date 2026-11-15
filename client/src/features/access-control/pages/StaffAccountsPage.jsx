@@ -18,6 +18,11 @@ import {
 } from '../components/ListParts'
 import SearchBox from '../components/SearchBox'
 import StaffFormDrawer from '../components/StaffFormDrawer'
+// "Assign roles & permissions" (UC37) is hidden for now. To show it again, uncomment the two
+// imports below, the `onAccess` prop and Access button in StaffRow, the `onAccess` handler passed
+// to StaffRow, and the StaffAccessDrawer block. PUT /api/staff-accounts/:id/access is unchanged.
+// import { UserCog } from 'lucide-react'
+// import StaffAccessDrawer from '../components/StaffAccessDrawer'
 import { useRefreshAccessControl, useStaffFormOptions, useStaffList } from '../hooks/useAccessControl'
 import { formatAdminDateTime } from '../utils/accessControl'
 
@@ -60,7 +65,7 @@ function SummaryCards({ counts }) {
   )
 }
 
-function StaffRow({ account, isSelf, onEdit, onChangeStatus }) {
+function StaffRow({ account, isSelf, onEdit, /* onAccess, */ onChangeStatus }) {
   const canToggle = account.status === 'ACTIVE' || account.status === 'DISABLED'
   const disablingSelf = isSelf && account.status === 'ACTIVE'
 
@@ -98,6 +103,10 @@ function StaffRow({ account, isSelf, onEdit, onChangeStatus }) {
           <Pencil className="size-4" />
           Edit
         </button>
+        {/* <button type="button" onClick={() => onAccess(account)} className={`${secondaryButton} px-3 py-2`} aria-label={`Roles and permissions of ${account.username}`}>
+          <UserCog className="size-4" />
+          Access
+        </button> */}
         {canToggle && (
           <button
             type="button"
@@ -234,6 +243,7 @@ function StaffAccountsPage() {
               account={account}
               isSelf={isSelf(account)}
               onEdit={(target) => setDrawer({ kind: 'edit', accountId: target.id })}
+              // onAccess={(target) => setDrawer({ kind: 'access', accountId: target.id })}
               onChangeStatus={openStatusDialog}
             />
           ))}
@@ -346,6 +356,15 @@ function StaffAccountsPage() {
           onChangeStatus={openStatusDialog}
         />
       )}
+
+      {/* {drawer?.kind === 'access' && (
+        <StaffAccessDrawer
+          accountId={drawer.accountId}
+          isSelf={drawer.accountId === currentAccount?.id}
+          onClose={() => setDrawer(null)}
+          onSaved={handleSaved}
+        />
+      )} */}
 
       {statusTarget && (
         <ConfirmDialog

@@ -1,5 +1,5 @@
 import InternalAccountMenu from '../components/common/InternalAccountMenu'
-import { Building2, ChevronRight, DoorOpen, LayoutDashboard, Menu, Users, X } from 'lucide-react'
+import { Building2, ChevronRight, DoorOpen, KeyRound, LayoutDashboard, Menu, Users, X } from 'lucide-react'
 import { useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router'
 import AppLogo from '../components/common/AppLogo'
@@ -18,6 +18,7 @@ const navItems = [
 
   { label: 'Dashboard', icon: LayoutDashboard, to: '/admin/dashboard', end: true },
   { label: 'Staff Accounts', icon: Users, to: '/admin/staff-accounts', permission: 'account.manage' },
+  { label: 'Roles & Permissions', icon: KeyRound, to: '/admin/roles', permission: 'role.view' },
   { label: 'Branches', icon: Building2, to: '/admin/branches', permission: 'branch.manage' },
   { label: 'Rooms', icon: DoorOpen, to: '/admin/rooms', permission: 'room.view' },
 ]
