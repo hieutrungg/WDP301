@@ -3,7 +3,6 @@ import { useQuery } from '@tanstack/react-query'
 import {
   AlertTriangle,
   ArrowLeft,
-  CheckCircle2,
   Clock3,
   CreditCard,
   LoaderCircle,
@@ -20,6 +19,8 @@ import { acquireSeatHold, releaseSeatHold } from '../../seat-selection/api/seatH
 import { useSeatAvailability } from '../../seat-selection/hooks/useSeatAvailability'
 import { formatSeatMoney } from '../../seat-selection/utils/seatPricing'
 import { getApiErrorMessage } from '../../../lib/api/apiError'
+import BookingProgress from '../components/BookingProgress'
+import BookingExpiryDialog from '../components/BookingExpiryDialog'
 import ConcessionOrderSummary from '../components/ConcessionOrderSummary'
 import CheckoutVoucher from '../../promotions/components/CheckoutVoucher'
 import { applyVoucher, removeVoucher } from '../../promotions/api/promotionApi'
@@ -464,34 +465,11 @@ function CheckoutSession() {
 
   return (
     <main className="min-h-screen bg-background pb-20 pt-20 text-on-surface">
-      {/* C14 Progress Stepper Header */}
-      <nav
-        aria-label="Booking progress"
-        className="border-y border-white/10 bg-[#131315]/95 px-4 py-4 backdrop-blur-xl sm:px-6"
-      >
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center gap-2 text-xs sm:gap-4 sm:text-sm">
-            <span className="inline-flex items-center gap-1.5 font-medium text-emerald-400">
-              <CheckCircle2 className="size-4" />
-              1. Select Seats
-            </span>
-            <span className="text-on-surface-variant">›</span>
-            <span className="inline-flex items-center gap-1.5 font-medium text-emerald-400">
-              <CheckCircle2 className="size-4" />
-              2. Concessions
-            </span>
-            <span className="text-on-surface-variant">›</span>
-            <strong className="inline-flex items-center gap-1.5 font-bold text-white">
-              <span className="flex size-5 items-center justify-center rounded-full bg-primary text-[11px] font-black text-white">
-                3
-              </span>
-              Checkout &amp; Payment
-            </strong>
-            <span className="text-on-surface-variant">›</span>
-            <span className="text-on-surface-variant">4. Confirmation</span>
-          </div>
-
-          {!confirmed && hold && (
+      {expired && !isReviewRequired && <BookingExpiryDialog onRestart={returnToSeats} />}
+      <BookingProgress
+        currentStep={3}
+        stepLinks={editableFood ? { 2: `/booking/${showtimeId}/concessions` } : {}}
+        aside={!confirmed && hold && (
             <div className="flex items-center gap-2.5 rounded-xl border border-primary/30 bg-primary/10 px-3.5 py-1.5">
               <Clock3 className="size-4 text-primary" />
               <span className="text-[11px] font-semibold uppercase tracking-wider text-on-surface-variant">
@@ -506,8 +484,7 @@ function CheckoutSession() {
               </strong>
             </div>
           )}
-        </div>
-      </nav>
+      />
 
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
         <div className="mb-6">

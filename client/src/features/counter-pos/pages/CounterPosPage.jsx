@@ -142,6 +142,7 @@ function SeatMatrix({ rows, selected, locked, onToggle }) {
 function CounterPosPage() {
   const navigate = useNavigate();
   const account = useAuthStore((state) => state.account);
+  const branchId = account?.employeeProfile?.branchId;
   const [savedDraft, setSavedDraft] = useState(() =>
     readCounterOrderDraft(sessionStorage, account?.id),
   );
@@ -200,14 +201,16 @@ function CounterPosPage() {
     () =>
       new URLSearchParams({
         limit: "24",
+        ...(branchId ? { cinemaId: branchId } : {}),
         ...(query.trim() ? { q: query.trim() } : {}),
       }).toString(),
-    [query],
+    [branchId, query],
   );
-  const movies = useMovies(movieQuery);
+  const movies = useMovies(movieQuery, { enabled: Boolean(branchId) });
   const schedule = useShowtimes({
     movieId: movieId || undefined,
     date,
+    cinemaId: branchId || undefined,
     refreshToken: refresh,
   });
   const availability = useSeatAvailability(showtimeId);
@@ -770,6 +773,9 @@ function CounterPosPage() {
             </div>
             <p className="mt-1 text-right text-[10px] text-on-surface-variant">
               Final price is confirmed automatically when you continue.
+            </p>
+            <p className="mt-1 text-right text-[10px] text-on-surface-variant">
+              Voucher codes are available for online ticket bookings only.
             </p>
             {remainingSeconds !== null && (
               <p role="timer" className="mt-3 flex items-center justify-end gap-2 font-mono text-sm font-bold text-secondary">

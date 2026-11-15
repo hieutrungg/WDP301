@@ -12,9 +12,12 @@ import {
 } from "../../concessions/components/CatalogCard";
 import { formatSeatMoney } from "../../seat-selection/utils/seatPricing";
 import { getApiErrorMessage } from "../../../lib/api/apiError";
+import BookingProgress from "../components/BookingProgress";
+import BookingExpiryDialog from "../components/BookingExpiryDialog";
 import { quoteConcessions } from "../api/bookingApi";
 import { restoreCheckout } from "../utils/checkoutFlow";
 import {
+  clearCheckout,
   readCheckout,
   remainingHoldMs,
   writeCheckout,
@@ -183,16 +186,23 @@ function ConcessionSelectionSession() {
   const seconds = Math.ceil(remaining / 1000);
   const failure = error ?? holdQuery.error ?? context.error ?? catalog.error;
   return (
-    <main className="min-h-screen bg-background px-4 pb-20 pt-28 text-on-surface sm:px-8">
-      <div className="mx-auto max-w-7xl">
-        <nav
-          aria-label="Booking progress"
-          className="mb-8 text-sm text-on-surface-variant"
-        >
-          Seats <span className="px-3">/</span>
-          <strong className="text-secondary">Food &amp; Drink</strong>
-          <span className="px-3">/</span>Payment
-        </nav>
+    <main className="min-h-screen bg-background pb-20 pt-20 text-on-surface">
+      {expired && (
+        <BookingExpiryDialog onRestart={() => {
+          clearCheckout(sessionStorage, account.id, showtimeId);
+          navigate(`/booking/${showtimeId}/seats`, { replace: true });
+        }} />
+      )}
+      <BookingProgress
+        currentStep={2}
+        aside={hold && (
+          <span role="timer" className="flex items-center gap-2 rounded-xl border border-primary/30 bg-primary/10 px-3.5 py-1.5 font-mono text-primary">
+            <Clock3 className="size-4" />
+            {Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, "0")} remaining
+          </span>
+        )}
+      />
+      <div className="mx-auto max-w-[1500px] px-4 pt-8 sm:px-8">
         <div className="mb-8 flex flex-wrap items-end justify-between gap-5">
           <div>
             <p className="mb-2 text-xs font-bold uppercase tracking-[0.25em] text-secondary">
@@ -258,8 +268,8 @@ function ConcessionSelectionSession() {
             </Link>
           </section>
         ) : (
-          <div className="grid items-start gap-8 lg:grid-cols-[1fr_340px]">
-            <section aria-label="Food menu">
+          <div className="grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_320px]">
+            <section aria-label="Food menu" className="min-w-0">
               <div className="mb-6 flex gap-3">
                 {[
                   ["items", "Food & Drinks"],
@@ -315,7 +325,7 @@ function ConcessionSelectionSession() {
                   </p>
                 </div>
               )}
-              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
                 {catalog.data?.items.filter((item) => item.available).map((item) => {
                   const quantity =
                     items.find(
@@ -391,22 +401,24 @@ function ConcessionSelectionSession() {
               {catalog.data?.meta.totalPages > 1 && (
                 <nav
                   aria-label="Menu pages"
-                  className="mt-6 flex justify-between"
+                  className="mt-8 flex items-center justify-center gap-4"
                 >
                   <button
                     type="button"
                     disabled={page <= 1}
                     onClick={() => setPage((value) => value - 1)}
+                    className="min-w-24 rounded-xl border border-white/10 bg-surface-container px-4 py-2 text-sm font-semibold transition hover:bg-surface-container-high disabled:cursor-not-allowed disabled:opacity-35"
                   >
                     Previous
                   </button>
-                  <span>
-                    {page} / {catalog.data.meta.totalPages}
+                  <span className="min-w-20 text-center text-sm font-semibold text-on-surface-variant">
+                    Page {page} of {catalog.data.meta.totalPages}
                   </span>
                   <button
                     type="button"
                     disabled={page >= catalog.data.meta.totalPages}
                     onClick={() => setPage((value) => value + 1)}
+                    className="min-w-24 rounded-xl border border-white/10 bg-surface-container px-4 py-2 text-sm font-semibold transition hover:bg-surface-container-high disabled:cursor-not-allowed disabled:opacity-35"
                   >
                     Next
                   </button>

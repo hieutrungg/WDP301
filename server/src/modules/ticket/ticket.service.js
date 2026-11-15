@@ -5,7 +5,6 @@ import { BOOKING_STATUS } from "../booking/booking.constants.js";
 import { ticketRepository as defaultTicketRepository } from "./ticket.repository.js";
 import {
   CHECK_IN_OPENS_BEFORE_MINUTES,
-  QR_PAYLOAD_PREFIX,
   TICKET_ERROR,
   TICKET_ISSUANCE_STATUS,
   TICKET_STATUS,
@@ -20,10 +19,8 @@ const ticketError = (status, message, code) => new AppError(status, message, [],
 const defaultGenerateCode = () =>
   `TK-${crypto.randomBytes(5).toString("hex").toUpperCase()}`;
 
-// The QR payload carries an unguessable token in addition to the readable code, so a ticket code
-// seen on a screen or receipt is not enough to forge an admission QR.
-const defaultGenerateQrCode = (ticketCode) =>
-  `${QR_PAYLOAD_PREFIX}:${ticketCode}:${crypto.randomBytes(16).toString("base64url")}`;
+// Admission is authorized by the server using the ticket code and Staff session.
+const defaultGenerateQrCode = (ticketCode) => ticketCode;
 
 const toDate = (value) => (value ? new Date(value) : null);
 
@@ -49,7 +46,7 @@ export const toTicketDto = (ticket) => ({
   ticketId: idString(ticket._id),
   ticketCode: ticket.ticketCode,
   // Only an admissible ticket exposes its QR payload.
-  qrCode: ticket.status === TICKET_STATUS.ISSUED ? ticket.qrCode : null,
+  qrCode: ticket.status === TICKET_STATUS.ISSUED ? ticket.ticketCode : null,
   bookingId: idString(ticket.bookingId),
   showtimeId: idString(ticket.showtimeId),
   seatId: idString(ticket.seatId),

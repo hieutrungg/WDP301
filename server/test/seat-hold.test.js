@@ -158,6 +158,57 @@ test("acquire creates one 10-minute hold with normalized seats and integer VND q
   assert.equal(fixture.calls.acquire, 1);
 });
 
+test("Staff seat holds are restricted to the assigned cinema branch", async () => {
+  const fixture = makeFixture();
+  const assignedBranchId = objectId();
+  const otherBranchId = objectId();
+  fixture.service = createSeatHoldService({
+    repository: fixture.repository,
+    showtimeReader: {
+      async getBookableShowtime() {
+        return {
+          showtimeId: fixture.showtimeId,
+          roomId: objectId(),
+          roomLayoutVersion: 1,
+          cinema: { id: otherBranchId },
+        };
+      },
+    },
+    roomLayoutReader: { async getLayoutVersion() { return { seats: [] }; } },
+    priceQuoter: { async quote() { throw new Error("must not quote"); } },
+    clock: () => new Date(fixture.now),
+  });
+
+  await assert.rejects(
+    fixture.service.acquireSeatHold({
+      ownerId: fixture.ownerId,
+      checkoutKey: "counter-wrong-branch",
+      showtimeId: fixture.showtimeId,
+      seatIds: [fixture.seatIds[0]],
+      enforceBranchScope: true,
+      branchId: assignedBranchId,
+    }),
+    (error) => error.statusCode === 403 && error.code === "ROOM_WRONG_BRANCH",
+  );
+  assert.equal(fixture.calls.acquire, 0);
+});
+
+test("Staff without an assigned cinema cannot acquire a seat hold", async () => {
+  const fixture = makeFixture();
+
+  await assert.rejects(
+    fixture.service.acquireSeatHold({
+      ownerId: fixture.ownerId,
+      checkoutKey: "counter-no-branch",
+      showtimeId: fixture.showtimeId,
+      seatIds: [fixture.seatIds[0]],
+      enforceBranchScope: true,
+    }),
+    (error) => error.statusCode === 403 && error.code === "BRANCH_NOT_ASSIGNED",
+  );
+  assert.equal(fixture.calls.acquire, 0);
+});
+
 test("an identical checkout retry returns the same hold without extending expiry", async () => {
   const fixture = makeFixture();
   const command = {
